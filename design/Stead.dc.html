@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Ibarra+Real+Nueva:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&display=swap" rel="stylesheet">
+  <style>
+    body{margin:0;background:#E8E3D6;color:#17201B;font-family:'Hanken Grotesk',system-ui,sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+    a{color:#1E4034}a:hover{color:#B58B3E}
+    summary{list-style:none;cursor:pointer}summary::-webkit-details-marker{display:none}
+    summary svg{transition:transform .25s ease}details[open] summary svg{transform:rotate(45deg)}
+    input[type="range"]{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:999px;background:#DAD1BD;outline:none;margin:0}
+    input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:28px;height:28px;border-radius:50%;background:#1E4034;border:4px solid #FBFAF7;box-shadow:0 0 0 1px rgba(23,32,27,.22),0 2px 6px rgba(23,32,27,.3);cursor:pointer}
+    input[type="range"]::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:#1E4034;border:4px solid #FBFAF7;box-shadow:0 0 0 1px rgba(23,32,27,.22),0 2px 6px rgba(23,32,27,.3);cursor:pointer}
+    @media (prefers-reduced-motion:reduce){*{transition-duration:.01ms !important;animation-duration:.01ms !important}}
+  </style>
+  <script src="image-slot.js"></script>
+</helmet>
+
+<section data-screen-label="Deliverable 1 — Web landing page" style="display:flex;justify-content:center;padding:72px 72px 40px">
+  <div id="1a" style="display:flex;flex-direction:column;gap:18px">
+    <div style="display:flex;align-items:center;gap:12px">
+      <span style="background:#17201B;color:#FBFAF7;font-weight:700;font-size:13px;padding:4px 11px;border-radius:8px;letter-spacing:.02em">1a</span>
+      <span style="color:rgba(23,32,27,.6);font-size:14px;font-weight:600;letter-spacing:.02em">Web landing page — desktop · 1440</span>
+    </div>
+    <div style="width:1440px;background:#FBFAF7;border-radius:20px;overflow:hidden;box-shadow:0 2px 6px rgba(23,32,27,.08),0 32px 80px rgba(23,32,27,.16)">
+
+      <div data-screen-label="Nav" style="display:flex;align-items:center;justify-content:space-between;padding:0 64px;height:82px;border-bottom:1px solid #EEE7D8;background:#FBFAF7">
+        <div style="display:flex;align-items:center;gap:11px">
+          <svg width="27" height="27" viewBox="0 0 24 24" fill="none"><path d="M3.5 10.6 L12 3.4 L20.5 10.6 V20.5 H3.5 Z" stroke="#1E4034" stroke-width="1.8" stroke-linejoin="round"></path><circle cx="12" cy="12.6" r="2.1" fill="#B58B3E"></circle><path d="M12 14.6 V17.2" stroke="#B58B3E" stroke-width="2" stroke-linecap="round"></path></svg>
+          <span style="font-family:'Ibarra Real Nueva',Georgia,serif;font-size:27px;font-weight:700;letter-spacing:-.01em">{{brand}}</span>
+        </div>
+        <div style="display:flex;gap:38px;font-size:15.5px;font-weight:600;color:rgba(23,32,27,.72)">
+          <span>The math</span><span>Deposits</span><span>Trust Passport</span><span>For hosts</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:22px">
+          <span style="font-size:15.5px;font-weight:600;color:rgba(23,32,27,.72)">Sign in</span>
+          <a href="#1b" style="display:inline-flex;align-items:center;background:#1E4034;color:#FBFAF7;font-weight:600;font-size:15.5px;padding:12px 22px;border-radius:10px;text-decoration:none" style-hover="background:#16332A;color:#FBFAF7">Find a stay</a>
+        </div>
+      </div>
+
+      <div data-screen-label="Hero" style="position:relative;height:740px">
+        <div style="position:absolute;inset:0">
+          <image-slot id="hero-home" shape="rect" placeholder="Hero photo — a real, lived-in home in morning light"></image-slot>
+        </div>
+        <div style="position:absolute;inset:0;pointer-events:none;background:linear-gradient(199deg,rgba(23,32,27,0) 34%,rgba(23,32,27,.5) 74%,rgba(23,32,27,.74) 100%)"></div>
+        <div style="position:absolute;left:64px;right:64px;bottom:60px;display:flex;justify-content:space-between;align-items:flex-end;gap:56px;pointer-events:none">
+          <div style="max-width:830px;display:flex;flex-direction:column;gap:22px">
+            <div style="font-size:12.5px;font-weight:700;letter-spacing:.2em;color:#DDB672;text-transform:uppercase">Member-owned home rentals</div>
+            <h1 style="margin:0;font-family:'Ibarra Real Nueva',Georgia,serif;font-size:66px;line-height:1.04;font-weight:700;color:#FBFAF7;letter-spacing:-.005em;text-wrap:balance">Stay in homes. Skip the toll booth.</h1>
+            <p style="margin:0;font-size:19px;line-height:1.55;color:rgba(251,250,247,.88);max-width:620px;text-wrap:pretty">A home rental network owned by its members. A flat 2% fee you can check by hand, deposits held in neutral escrow, and a reputation that belongs to you — not to a platform.</p>
+            <div style="display:flex;gap:14px;margin-top:8px">
+              <a href="#1b" style="pointer-events:auto;display:inline-flex;align-items:center;background:#FBFAF7;color:#17201B;font-weight:700;font-size:16.5px;padding:16px 30px;border-radius:12px;text-decoration:none;box-shadow:0 10px 28px rgba(23,32,27,.38)" style-hover="background:#EFE9DF;color:#17201B">Find a stay</a>
+              <a href="#1a-hosts" style="pointer-events:auto;display:inline-flex;align-items:center;color:#FBFAF7;font-weight:600;font-size:16.5px;padding:16px 30px;border-radius:12px;text-decoration:none;border:1.5px solid rgba(251,250,247,.65)" style-hover="border-color:#FBFAF7;color:#FBFAF7;background:rgba(251,250,247,.1)">List your place</a>
+            </div>
+          </div>
+          <div style="width:152px;height:152px;flex-shrink:0;border-radius:50%;border:1.5px solid rgba(251,250,247,.85);outline:1px solid rgba(251,250,247,.38);outline-offset:5px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:#FBFAF7;transform:rotate(7deg)">
+            <span style="font-family:'Ibarra Real Nueva',Georgia,serif;font-size:46px;font-weight:700;line-height:1">2%</span>
+            <span style="font-size:9.5px;font-weight:700;letter-spacing:.24em">FLAT · FOREVER</span>
+          </div>
+        </div>
+      </div>
+
+      <div data-screen-label="The Math" style="padding:108px 64px 96px;display:flex;flex-direction:column;gap:52px;background:#FBFAF7">
+        <div style="display:flex;flex-direction:column;gap:16px;align-items:center;text-align:center">
+          <div style="font-size:12.5px;font-weight:700;letter-spacing:.2em;color:#B58B3E;text-transform:uppercase">The math, in the open</div>
+          <h2 style="margin:0;font-family:'Ibarra Real Nueva',Georgia,serif;font-size:46px;font-weight:600;letter-spacing:-.005em">Same stay. Different arithmetic.</h2>
+          <p style="margin:0;font-size:17.5px;color:rgba(23,32,27,.62);max-width:560px;line-height:1.55">Drag the sliders — the difference isn't subtle. Every price in the product shows this working.</p>
+        </div>
+        <div style="display:grid;grid-template-columns:392px 1fr;gap:36px;align-items:stretch">
+          <div style="background:#EFE9DF;border-radius:16px;padding:36px;display:flex;flex-direction:column;gap:34px">
+            <div style="display:flex;flex-direction:column;gap:18px">
+              <div style="display:flex;justify-content:space-between;align-items:baseline">
+                <span style="font-size:15px;font-weight:600;color:rgba(23,32,27,.62)">Nightly rate</span>
+                <span style="font-size:28px;font-weight:700;font-variant-numeric:tabular-nums">{{rateF}}</span>
+              </div>
+              <input type="range" min="40" max="1000" step="5" value="{{rateVal}}" onChange="{{setRate}}">
+            </div>
+            <div style="display:flex;flex-direction:column;gap:18px">
+              <div style="display:flex;justify-content:space-between;align-items:baseline">
+                <span style="font-size:15px;font-weight:600;color:rgba(23,32,27,.62)">Nights</span>
+                <span style="font-size:28px;font-weight:700;font-variant-numeric:tabular-nums">{{nightsF}}</span>
+              </div>
+              <input type="range" min="1" max="30" step="1" value="{{nightsVal}}" onChange="{{setNights}}">
+            </div>
+            <div style="background:#FBFAF7;border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:4px;align-items:center;margin-top:auto">
+              <span style="font-size:23px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.01em">{{mathLine}}</span>
+              <span style="font-size:13.5px;color:rgba(23,32,27,.55)">what the stay is actually worth</span>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:20px">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+              <div style="background:#1E4034;color:#FBFAF7;border-radius:16px;padding:30px 32px;display:flex;flex-direction:column;gap:20px">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <span style="font-family:'Ibarra Real Nueva',Georgia,serif;font-size:23px;font-weight:600">{{brand}}</span>
+                  <span style="font-size:12px;font-weight:700;letter-spacing:.14em;color:#17201B;background:#DDB672;padding:5px 10px;border-radius:999px">2% FLAT</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:baseline">
+                  <span style="font-size:15.5px;color:rgba(251,250,247,.72)">Guest pays, all-in</span>
+                  <span style="font-size:30px;font-weight:700;font-variant-numeric:tabular-nums">{{steadGuestF}}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:baseline">
+                  <span style="font-size:15.5px;color:rgba(251,250,247,.72)">Host receives</span>
+                  <span style="font-size:30px;font-weight:700;font-variant-numeric:tabular-nums">{{steadHostF}}</span>
+                </div>
+                <div style="height:1px;background:rgba(251,250,247,.18)"></div>
+                <div style="display:flex;justify-content:space-between;align-items:baseline">
+                  <span style="font-size:14.5px;color:rgba(251,250,247,.72)">Network fee — payments, verification, arbitration</span>
+                  <span style="font-size:18px;font-weight:700;font-variant-numeric:tabular-nums">{{steadFeeF}}</span>
+                </div>
+              </div>
+              <div style="background:#FBFAF7;border:1px solid #E5DDCA;border-radius:16px;padding:30px 32px;display:flex;flex-direction:column;gap:20px">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <span style="font-family:'Ibarra Real Nueva',Georgia,serif;font-size:23px;font-weight:600;color:rgba(23,32,27,.75)">A typical platform</span>
+                  <span style="font-size:12px;font-weight:700;letter-spacing:.14em;color:rgba(23,32,27,.6);border:1px solid #D8CDB6;padding:5px 10px;border-radius:999px">{{takeLabel}} TAKE</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:baseline">
+                  <span style="font-size:15.5px;color:rgba(23,32,27,.6)">Guest pays, all-in</span>
+                  <span style="font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;color:rgba(23,32,27,.82)">{{otherGuestF}}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:baseline">
+                  <span style="font-size:15.5px;color:rgba(23,32,27,.6)">Host receives</span>
+                  <span style="font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;color:rgba(23,32,27,.82)">{{otherHostF}}</span>
+                </div>
+                <div style="height:1px;background:#EAE2D0"></div>
+                <div style="display:flex;justify-content:space-between;align-items:baseline">
+                  <span style="font-size:14.5px;color:rgba(23,32,27,.6)">Lost to the middle</span>
+                  <span style="font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;color:rgba(23,32,27,.55);text-decoration:line-through;text-decoration-color:rgba(179,64,42,.55)">{{otherTakeF}}</span>
+                </div>
+              </div>
+            </div>
+            <div style="background:#EFE9DF;border-radius:16px;padding:26px 40px;display:flex;align-items:center;gap:36px">
+              <span style="font-family:'Ibarra Real Nueva',Georgia,serif;font-size:64px;font-weight:700;color:#1E4034;font-variant-numeric:tabular-nums;line-height:1;flex-shrink:0">{{diffF}}</span>
+              <div style="display:flex;flex-direction:column;gap:5px">
+                <span style="font-size:19px;font-weight:700">stays between you and your host — every single stay.</span>
+                <span style="font-size:15px;color:rgba(23,32,27,.62);font-variant-numeric:tabular-nums">{{guestSavesF}} back in the guest's pocket · {{hostGainsF}} more to the host.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding:0 64px;background:#FBFAF7">
+        <svg width="100%" height="22" viewBox="0 0 1200 22" preserveAspectRatio="none" style="display:block">
+          <path d="M0 11 Q30 1 60 11 T120 11 T180 11 T240 11 T300 11 T360 11 T420 11 T480 11 T540 11 T600 11 T660 11 T720 11 T780 11 T840 11 T900 11 T960 11 T1020 11 T1080 11 T1140 11 T1200 11" fill="none" stroke="#B58B3E" stroke-width="0.9" opacity="0.4"></path>
+          <path d="M0 11 Q30 21 60 11 T120 11 T180 11 T240 11 T300 11 T360 11 T420 11 T480 11 T540 11 T600 11 T660 11 T720 11 T780 11 T840 11 T900 11 T960 11 T1020 11 T1080 11 T1140 11 T1200 11" fill="none" stroke="#B58B3E" stroke-width="0.9" opacity="0.26"></path>
+        </svg>
+      </div>
+
+      <div data-screen-label="How the deposit works" style="background:#FBFAF7;padding:96px 64px 108px;display:flex;flex-direction:column;gap:44px">
+        <div style="display:flex;flex-direction:column;gap:16px;max-width:900px">
+          <div style="font-size:12.5px;font-weight:700;letter-spacing:.2em;color:#B58B3E;text-transform:uppercase">Deposits done right</div>
+          <h2 style="margin:0;font-family:'Ibarra Real Nueva',Georgia,serif;font-size:46px;font-weight:600;letter-spacing:-.005em;text-wrap:balance">Your deposit isn't ours to keep. It isn't theirs either.</h2>
+          <p style="margin:0;font-size:17.5px;color:rgba(23,32,27,.62);max-width:680px;line-height:1.55">A $300 incidentals deposit rides along with every booking — held in neutral escrow, moved only by rules both of you agreed to. Click through its life:</p>
+        </div>
+        <div style="background:#EFE9DF;border-radius:16px;padding:44px 48px;display:flex;flex-direction:column;gap:40px;box-shadow:0 1px 2px rgba(23,32,27,.05),0 12px 32px rgba(23,32,27,.06)">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:24px;flex-wrap:wrap">
+            <div style="display:flex;gap:10px">
+              <sc-for list="{{escrowSteps}}" as="st" hint-placeholder-count="4">
+                <button onClick="{{st.go}}" style="{{st.chipStyle}}">{{st.t}}</button>
+              </sc-for>
+            </div>
+            <span style="{{escrowStatusChip}}">
+              <svg width="15" height="17" viewBox="0 0 15 17" fill="none"><path d="M7.5 1 L14 3.5 V8 C14 12.5 11.2 15 7.5 16 C3.8 15 1 12.5 1 8 V3.5 Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"></path><path d="M4.8 8.2 L6.8 10.2 L10.4 6.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              {{escrowStatus}}
+            </span>
+          </div>
+          <div style="position:relative">
+            <div style="position:absolute;left:11px;right:11px;top:10px;height:3px;background:#DFD5BE;border-radius:99px"></div>
+            <div style="position:absolute;left:11px;top:10px;height:3px;background:#1E4034;border-radius:99px;width:{{escrowPctW}};transition:width .5s ease"></div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:28px;position:relative">
+              <sc-for list="{{escrowSteps}}" as="st" hint-placeholder-count="4">
+                <div style="display:flex;flex-direction:column;gap:14px">
+                  <div style="{{st.dotStyle}}"></div>
+                  <div style="{{st.titleStyle}}">{{st.t}}</div>
+                  <div style="font-size:14.5px;line-height:1.55;color:rgba(23,32,27,.62);max-width:270px;text-wrap:pretty">{{st.d}}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:12px;border-top:1px solid #E2D8C2;padding-top:24px">
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" style="flex-shrink:0;margin-top:2px"><path d="M10 2 V4 M4 4.5 L10 4 L16 4.5 M4 4.5 L2 10 H6 L4 4.5 M16 4.5 L14 10 H18 L16 4.5 M10 4 V16 M6.5 16 H13.5" stroke="#B58B3E" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path><path d="M2 10 C2 11.4 2.9 12.2 4 12.2 C5.1 12.2 6 11.4 6 10 M14 10 C14 11.4 14.9 12.2 16 12.2 C17.1 12.2 18 11.4 18 10" stroke="#B58B3E" stroke-width="1.4"></path></svg>
+            <p style="margin:0;font-size:15px;line-height:1.6;color:rgba(23,32,27,.62);max-width:880px">Claims require photo evidence. Dispute one, and it goes to independent arbitration — both sides see the identical file, the decision is binding, and it executes automatically. Median time to resolution: 5 days.</p>
+          </div>
+        </div>
+      </div>
+
+
+      <div data-screen-label="Trust Passport showcase" style="background:#1E4034;padding:108px 64px;display:grid;grid-template-columns:400px 560px 300px;gap:44px;align-items:center;justify-content:space-between">
+        <div style="display:flex;flex-direction:column;gap:20px">
+          <div style="font-size:12.5px;font-weight:700;letter-spacing:.2em;color:#DDB672;text-transform:uppercase">Reputation you own</div>
+          <h2 style="margin:0;font-family:'Ibarra Real Nueva',Georgia,serif;font-size:46px;font-weight:600;color:#FBFAF7;letter-spacing:-.005em;text-wrap:balance">One passport. Every door.</h2>
+          <p style="margin:0;font-size:17px;line-height:1.6;color:rgba(251,250,247,.75);text-wrap:pretty">Your verified identity and earned reputation live in a Trust Passport that belongs to you — not to a platform's database.</p>
+          <div style="display:flex;flex-direction:column;gap:14px;margin-top:6px">
+            <div style="display:flex;gap:12px;align-items:flex-start"><svg width="17" height="17" viewBox="0 0 16 16" fill="none" style="margin-top:3px;flex-shrink:0"><path d="M2 8.5 L6 12.5 L14 3.5" stroke="#DDB672" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg><span style="font-size:16px;color:rgba(251,250,247,.9)"><b>Portable</b> — it travels with you, host or guest, city to city.</span></div>
+            <div style="display:flex;gap:12px;align-items:flex-start"><svg width="17" height="17" viewBox="0 0 16 16" fill="none" style="margin-top:3px;flex-shrink:0"><path d="M2 8.5 L6 12.5 L14 3.5" stroke="#DDB672" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg><span style="font-size:16px;color:rgba(251,250,247,.9)"><b>Permanent</b> — no corporation can delete it. Ever.</span></div>
+            <div style="display:flex;gap:12px;align-items:flex-start"><svg width="17" height="17" viewBox="0 0 16 16" fill="none" style="margin-top:3px;flex-shrink:0"><path d="M2 8.5 L6 12.5 L14 3.5" stroke="#DDB672" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg><span style="font-size:16px;color:rgba(251,250,247,.9)"><b>Two-sided</b> — you carry ratings as a guest and as a host.</span></div>
+          </div>
+        </div>
+        <div data-screen-label="Passport card" style="position:relative;width:560px;background:#F8F3E9;border-radius:16px;border:1px solid rgba(181,139,62,.6);box-shadow:0 2px 4px rgba(0,0,0,.15),0 30px 70px rgba(0,0,0,.35);overflow:hidden">
+          <svg width="230" height="230" viewBox="0 0 200 200" style="position:absolute;right:-52px;top:44px;pointer-events:none">
+            <g fill="none" stroke="#B58B3E" stroke-width="0.55" opacity="0.5">
+              <ellipse cx="100" cy="100" rx="96" ry="32"></ellipse>
+              <ellipse cx="100" cy="100" rx="96" ry="32" transform="rotate(22.5 100 100)"></ellipse>
+              <ellipse cx="100" cy="100" rx="96" ry="32" transform="rotate(45 100 100)"></ellipse>
+              <ellipse cx="100" cy="100" rx="96" ry="32" transform="rotate(67.5 100 100)"></ellipse>
+              <ellipse cx="100" cy="100" rx="96" ry="32" transform="rotate(90 100 100)"></ellipse>
+              <ellipse cx="100" cy="100" rx="96" ry="32" transform="rotate(112.5 100 100)"></ellipse>
+              <ellipse cx="100" cy="100" rx="96" ry="32" transform="rotate(135 100 100)"></ellipse>
+              <ellipse cx="100" cy="100" rx="96" ry="32" transform="rotate(157.5 100 100)"></ellipse>
+              <circle cx="100" cy="100" r="60"></circle>
+              <circle cx="100" cy="100" r="30"></circle>
+            </g>
+          </svg>
+          <svg width="190" height="190" viewBox="0 0 200 200" style="position:absolute;left:-70px;bottom:-40px;pointer-events:none">
+            <g fill="none" stroke="#1E4034" stroke-width="0.55" opacity="0.28">
+              <ellipse cx="100" cy="100" rx="96" ry="30"></ellipse>
+              <ellipse cx="100" cy="100" rx="96" ry="30" transform="rotate(30 100 100)"></ellipse>
+              <ellipse cx="100" cy="100" rx="96" ry="30" transform="rotate(60 100 100)"></ellipse>
+              <ellipse cx="100" cy="100" rx="96" ry="30" transform="rotate(90 100 100)"></ellipse>
+              <ellipse cx="100" cy="100" rx="96" ry="30" transform="rotate(120 100 100)"></ellipse>
+              <ellipse cx="100" cy="100" rx="96" ry="30" transform="rotate(150 100 100)"></ellipse>
+            </g>
+          </svg>
+          <div style="padding:8px 0 7px;text-align:center;font-size:6.5px;letter-spacing:.32em;color:rgba(30,64,52,.55);font-weight:700;white-space:nowrap;overflow:hidden;border-bottom:1px solid rgba(181,139,62,.35)">TRUST PASSPORT · MEMBER OWNED · PORTABLE REPUTATION · NEUTRAL ESCROW · TRUST PASSPORT · MEMBER OWNED · PORTABLE REPUTATION · NEUTRAL ESCROW</div>
+          <div style="position:relative;padding:28px 36px 24px;display:flex;flex-direction:column;gap:24px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline">
+              <span style="font-size:13px;font-weight:700;letter-spacing:.24em;color:#1E4034">TRUST PASSPORT</span>
+              <span style="font-size:13.5px;font-weight:600;letter-spacing:.08em;color:#B58B3E;font-variant-numeric:tabular-nums">Nº TP-2193-0047</span>
+            </div>
+            <div style="display:flex;gap:20px;align-items:center">
+              <div style="width:78px;height:78px;border-radius:50%;background:#1E4034;color:#F8F3E9;display:flex;align-items:center;justify-content:center;font-family:'Ibarra Real Nueva',Georgia,serif;font-size:30px;font-weight:600;border:2px solid #B58B3E;outline:1px solid rgba(181,139,62,.45);outline-offset:4px;flex-shrink:0">NB</div>
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <span style="font-family:'Ibarra Real Nueva',Georgia,serif;font-size:31px;font-weight:600;line-height:1">Nora Bennett</span>
+                <span style="font-size:14.5px;color:rgba(23,32,27,.6)">Member since March 2023 · Hudson, NY</span>
+                <div style="display:flex;gap:8px;margin-top:3px">
+                  <span style="display:inline-flex;align-items:center;gap:6px;background:#B58B3E;color:#FBFAF7;font-size:12.5px;font-weight:700;letter-spacing:.04em;padding:5px 11px;border-radius:999px"><svg width="11" height="13" viewBox="0 0 15 17" fill="none"><path d="M7.5 1 L14 3.5 V8 C14 12.5 11.2 15 7.5 16 C3.8 15 1 12.5 1 8 V3.5 Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path><path d="M4.8 8.2 L6.8 10.2 L10.4 6.4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>Tier 3 verified</span>
+                  <span style="display:inline-flex;align-items:center;font-size:12.5px;font-weight:600;color:#1E4034;border:1px solid rgba(30,64,52,.4);padding:5px 11px;border-radius:999px">Hosts & travels</span>
+                </div>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:18px 24px">
+              <div style="display:flex;flex-direction:column;gap:3px"><span style="font-size:26px;font-weight:700;font-variant-numeric:tabular-nums">21</span><span style="font-size:12px;font-weight:600;letter-spacing:.1em;color:rgba(23,32,27,.55);text-transform:uppercase">Stays completed</span></div>
+              <div style="display:flex;flex-direction:column;gap:3px"><span style="font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;color:#1E4034">21</span><span style="font-size:12px;font-weight:600;letter-spacing:.1em;color:rgba(23,32,27,.55);text-transform:uppercase">Damage-free streak</span></div>
+              <div style="display:flex;flex-direction:column;gap:3px"><span style="font-size:26px;font-weight:700;font-variant-numeric:tabular-nums">0</span><span style="font-size:12px;font-weight:600;letter-spacing:.1em;color:rgba(23,32,27,.55);text-transform:uppercase">Claims against</span></div>
+              <div style="display:flex;flex-direction:column;gap:3px"><span style="font-size:26px;font-weight:700;font-variant-numeric:tabular-nums">4.93 <span style="font-size:14px;color:#B58B3E">★</span></span><span style="font-size:12px;font-weight:600;letter-spacing:.1em;color:rgba(23,32,27,.55);text-transform:uppercase">As guest</span></div>
+              <div style="display:flex;flex-direction:column;gap:3px"><span style="font-size:26px;font-weight:700;font-variant-numeric:tabular-nums">4.88 <span style="font-size:14px;color:#B58B3E">★</span></span><span style="font-size:12px;font-weight:600;letter-spacing:.1em;color:rgba(23,32,27,.55);text-transform:uppercase">As host</span></div>
+              <div style="display:flex;flex-direction:column;gap:3px"><span style="font-size:26px;font-weight:700;font-variant-numeric:tabular-nums">98%</span><span style="font-size:12px;font-weight:600;letter-spacing:.1em;color:rgba(23,32,27,.55);text-transform:uppercase">Response rate</span></div>
+            </div>
+            <div style="background:rgba(30,64,52,.07);border-radius:8px;padding:12px 16px;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12.5px;letter-spacing:.16em;color:rgba(30,64,52,.62);line-height:1.7;white-space:nowrap;overflow:hidden">P&lt;STEAD&lt;&lt;BENNETT&lt;&lt;NORA&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;<br>TP21930047&lt;2303&lt;21STAYS&lt;0CLAIMS&lt;493&lt;488&lt;&lt;98</div>
+          </div>
+          <div style="padding:7px 0 8px;text-align:center;font-size:6.5px;letter-spacing:.32em;color:rgba(30,64,52,.55);font-weight:700;white-space:nowrap;overflow:hidden;border-top:1px solid rgba(181,139,62,.35)">ISSUED BY THE MEMBERS · REVIEWS WITH RECEIPTS · INSTANT PAYOUT · INDEPENDENT ARBITRATION · ISSUED BY THE MEMBERS · REVIEWS WITH RECEIPTS</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:44px">
+          <div style="display:flex;align-items:flex-start;gap:14px"><div style="width:44px;height:1.5px;background:#B58B3E;margin-top:10px;flex-shrink:0"></div><div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:15.5px;font-weight:700;color:#FBFAF7">Verification tier</span><span style="font-size:13.5px;line-height:1.5;color:rgba(251,250,247,.65)">Tier 3 = government ID + address + payment history.</span></div></div>
+          <div style="display:flex;align-items:flex-start;gap:14px"><div style="width:44px;height:1.5px;background:#B58B3E;margin-top:10px;flex-shrink:0"></div><div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:15.5px;font-weight:700;color:#FBFAF7">Damage-free streak</span><span style="font-size:13.5px;line-height:1.5;color:rgba(251,250,247,.65)">21 stays, zero deductions. Hosts read this first.</span></div></div>
+          <div style="display:flex;align-items:flex-start;gap:14px"><div style="width:44px;height:1.5px;background:#B58B3E;margin-top:10px;flex-shrink:0"></div><div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:15.5px;font-weight:700;color:#FBFAF7">Rated both ways</span><span style="font-size:13.5px;line-height:1.5;color:rgba(251,250,247,.65)">Guest score and host score, on one document.</span></div></div>
+          <div style="display:flex;align-items:flex-start;gap:14px"><div style="width:44px;height:1.5px;background:#B58B3E;margin-top:10px;flex-shrink:0"></div><div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:15.5px;font-weight:700;color:#FBFAF7">Security print</span><span style="font-size:13.5px;line-height:1.5;color:rgba(251,250,247,.65)">Guilloché linework and microtext — a passport page crossed with a deed.</span></div></div>
+        </div>
+      </div>
+
+      <div data-screen-label="Reviews with receipts" style="background:#FBFAF7;padding:108px 64px;display:flex;flex-direction:column;gap:52px">
+        <div style="display:flex;flex-direction:column;gap:16px;align-items:center;text-align:center">
+          <div style="font-size:12.5px;font-weight:700;letter-spacing:.2em;color:#B58B3E;text-transform:uppercase">Reviews with receipts</div>
+          <h2 style="margin:0;font-family:'Ibarra Real Nueva',Georgia,serif;font-size:46px;font-weight:600;letter-spacing:-.005em">Reviews that can't be bought, buried, or deleted.</h2>
+          <p style="margin:0;font-size:17.5px;color:rgba(23,32,27,.62);max-width:620px;line-height:1.55">Double-blind, written only from completed paid stays, tied to a booking receipt, permanent once published.</p>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:24px">
+          <div style="background:#FBFAF7;border:1px solid #E5DDCA;border-radius:16px;padding:30px;display:flex;flex-direction:column;gap:18px;box-shadow:0 1px 2px rgba(23,32,27,.04),0 10px 28px rgba(23,32,27,.05)">
+            <div style="display:flex;gap:3px"><svg width="17" height="16" viewBox="0 0 17 16"><path d="M8.5 0.8 L10.6 5.6 L15.8 6.1 L11.9 9.6 L13 14.7 L8.5 12.1 L4 14.7 L5.1 9.6 L1.2 6.1 L6.4 5.6 Z" fill="#B58B3E"></path></svg><svg width="17" height="16" viewBox="0 0 17 16"><path d="M8.5 0.8 L10.6 5.6 L15.8 6.1 L11.9 9.6 L13 14.7 L8.5 12.1 L4 14.7 L5.1 9.6 L1.2 6.1 L6.4 5.6 Z" fill="#B58B3E"></path></svg><svg width="17" height="16" viewBox="0 0 17 16"><path d="M8.5 0.8 L10.6 5.6 L15.8 6.1 L11.9 9.6 L13 14.7 L8.5 12.1 L4 14.7 L5.1 9.6 L1.2 6.1 L6.4 5.6 Z" fill="#B58B3E"></path></svg><svg width="17" height="16" viewBox="0 0 17 16"><path d="M8.5 0.8 L10.6 5.6 L15.8 6.1 L11.9 9.6 L13 14.7 L8.5 12.1 L4 14.7 L5.1 9.6 L1.2 6.1 L6.4 5.6 Z" fill="#B58B3E"></path></svg><svg width="17" height="16" viewBox="0 0 17 16"><path d="M8.5 0.8 L10.6 5.6 L15.8 6.1 L11.9 9.6 L13 14.7 L8.5 12.1 L4 14.7 L5.1 9.6 L1.2 6.1 L6.4 5.6 Z" fill="#B58B3E"></path></svg></div>
+            <p style="margin:0;font-size:16px;line-height:1.6;color:rgba(23,32,27,.85)">"The house smells like cedar and the coffee was where the listing said it would be. Checkout took four minutes, and the deposit was back before our flight boarded."</p>
+            <div style="display:flex;align-items:center;gap:12px;margin-top:auto">
+              <div style="width:40px;height:40px;border-radius:50%;background:#EFE9DF;color:#1E4034;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px">MR</div>
+              <div style="display:flex;flex-direction:column"><span style="font-size:15px;font-weight:700">Maya R.</span><span style="font-size:13.5px;color:rgba(23,32,27,.55)">5 nights · Hudson, NY · June 2026</span></div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <span style="display:inline-flex;align-items:center;gap:6px;background:#EFE9DF;font-size:12.5px;font-weight:600;padding:6px 11px;border-radius:999px;font-variant-numeric:tabular-nums"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2 8.5 L6 12.5 L14 3.5" stroke="#1E4034" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg>Verified stay · Receipt #S-49213</span>
+              <span style="display:inline-flex;align-items:center;font-size:12.5px;font-weight:600;color:rgba(23,32,27,.65);border:1px solid #DDD3BE;padding:6px 11px;border-radius:999px">Double-blind</span>
+            </div>
+          </div>
+          <div style="background:#FBFAF7;border:1px solid #E5DDCA;border-radius:16px;padding:30px;display:flex;flex-direction:column;gap:18px;box-shadow:0 1px 2px rgba(23,32,27,.04),0 10px 28px rgba(23,32,27,.05)">
+            <div style="display:flex;gap:3px"><svg width="17" height="16" viewBox="0 0 17 16"><path d="M8.5 0.8 L10.6 5.6 L15.8 6.1 L11.9 9.6 L13 14.7 L8.5 12.1 L4 14.7 L5.1 9.6 L1.2 6.1 L6.4 5.6 Z" fill="#B58B3E"></path></svg><svg width="17" height="16" viewBox="0 0 17 16"><path d="M8.5 0.8 L10.6 5.6 L15.8 6.1 L11.9 9.6 L13 14.7 L8.5 12.1 L4 14.7 L5.1 9.6 L1.2 6.1 L6.4 5.6 Z" fill="#B58B3E"></path></svg><svg width="17" height="16" viewBox="0 0 17 16"><path d="M8.5 0.8 L10.6 5.6 L15.8 6.1 L11.9 9.6 L13 14.7 L8.5 12.1 L4 14.7 L5.1 9.6 L1.2 6.1 L6.4 5.6 Z" fill="#B58B3E"></path></svg><svg width="17" height="16" viewBox="0 0 17 16"><path d="M8.5 0.8 L10.6 5.6 L15.8 6.1 L11.9 9.6 L13 14.7 L8.5 12.1 L4 14.7 L5.1 9.6 L1.2 6.1 L6.4 5.6 Z" fill="#B58B3E"></path></svg><svg width="17" height="16" viewBox="0 0 17 16"><path d="M8.5 0.8 L10.6 5.6 L15.8 6.1 L11.9 9.6 L13 14.7 L8.5 12.1 L4 14.7 L5.1 9.6 L1.2 6.1 L6.4 5.6 Z" fill="#B58B3E"></path></svg></div>
+            <p style="margin:0;font-size:16px;line-height:1.6;color:rgba(23,32,27,.85)">"Twelve nights for the price the search page showed. No fee reveal at checkout — which honestly felt like a typo. It wasn't."</p>
+            <div style="display:flex;align-items:center;gap:12px;margin-top:auto">
+              <div style="width:40px;height:40px;border-radius:50%;background:#EFE9DF;color:#1E4034;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px">TP</div>
+              <div style="display:flex;flex-direction:column"><span style="font-size:15px;font-weight:700">Tom & Priya S.</span><span style="font-size:13.5px;color:rgba(23,32,27,.55)">12 nights · Asheville, NC · May 2026</span></div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <span style="display:inline-flex;align-items:center;gap:6px;background:#EFE9DF;font-size:12.5px;font-weight:600;padding:6px 11px;border-radius:999px;font-variant-numeric:tabular-nums"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2 8.5 L6 12.5 L14 3.5" stroke="#1E4034" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg>Verified stay · Receipt #S-48771</span>
+              <span style="display:inline-flex;align-items:center;font-size:12.5px;font-weight:600;color:rgba(23,32,27,.65);border:1px solid #DDD3BE;padding:6px 11px;border-radius:999px">Double-blind</span>
+            </div>
+          </div>
+          <div style="background:#FBFAF7;border:1px solid #E5DDCA;border-radius:16px;padding:30px;display:flex;flex-direction:column;gap:18px;box-shadow:0 1px 2px rgba(23,32,27,.04),0 10px 28px rgba(23,32,27,.05)">
+            <div style="display:flex;gap:3px"><svg width="17" height="16" viewBox="0 0 17 16"><path d="M8.5 0.8 L10.6 5.6 L15.8 6.1 L11.9 9.6 L13 14.7 L8.5 12.1 L4 14.7 L5.1 9.6 L1.2 6.1 L6.4 5.6 Z" fill="#B58B3E"></path></svg><svg width="17" height="16" viewBox="0 0 17 16"><path d="M8.5 0.8 L10.6 5.6 L15.8 6.1 L11.9 9.6 L13 14.7 L8.5 12.1 L4 14.7 L5.1 9.6 L1.2 6.1 L6.4 5.6 Z" fill="#B58B3E"></path></svg><svg width="17" height="16" viewBox="0 0 17 16"><path d="M8.5 0.8 L10.6 5.6 L15.8 6.1 L11.9 9.6 L13 14.7 L8.5 12.1 L4 14.7 L5.1 9.6 L1.2 6.1 L6.4 5.6 Z" fill="#B58B3E"></path></svg><svg width="17" height="16" viewBox="0 0 17 16"><path d="M8.5 0.8 L10.6 5.6 L15.8 6.1 L11.9 9.6 L13 14.7 L8.5 12.1 L4 14.7 L5.1 9.6 L1.2 6.1 L6.4 5.6 Z" fill="#B58B3E"></path></svg><svg width="17" height="16" viewBox="0 0 17 16"><path d="M8.5 0.8 L10.6 5.6 L15.8 6.1 L11.9 9.6 L13 14.7 L8.5 12.1 L4 14.7 L5.1 9.6 L1.2 6.1 L6.4 5.6 Z" fill="rgba(181,139,62,.28)"></path></svg></div>
+            <p style="margin:0;font-size:16px;line-height:1.6;color:rgba(23,32,27,.85)">"Left the place tidier than the photos. Streak intact — mine and theirs. Would hand them the keys again without thinking."</p>
+            <div style="display:flex;align-items:center;gap:12px;margin-top:auto">
+              <div style="width:40px;height:40px;border-radius:50%;background:#1E4034;color:#FBFAF7;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px">NB</div>
+              <div style="display:flex;flex-direction:column"><span style="font-size:15px;font-weight:700">Nora B. — host</span><span style="font-size:13.5px;color:rgba(23,32,27,.55)">Reviewed her guest · April 2026</span></div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <span style="display:inline-flex;align-items:center;gap:6px;background:#EFE9DF;font-size:12.5px;font-weight:600;padding:6px 11px;border-radius:999px;font-variant-numeric:tabular-nums"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2 8.5 L6 12.5 L14 3.5" stroke="#1E4034" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg>Verified stay · Receipt #S-47102</span>
+              <span style="display:inline-flex;align-items:center;font-size:12.5px;font-weight:600;color:rgba(23,32,27,.65);border:1px solid #DDD3BE;padding:6px 11px;border-radius:999px">Host → guest</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="1a-hosts" data-screen-label="For hosts" style="background:#EFE9DF;padding:108px 64px;display:grid;grid-template-columns:1fr 480px;gap:64px;align-items:center">
+        <div style="display:flex;flex-direction:column;gap:22px">
+          <div style="font-size:12.5px;font-weight:700;letter-spacing:.2em;color:#B58B3E;text-transform:uppercase">For hosts</div>
+          <h2 style="margin:0;font-family:'Ibarra Real Nueva',Georgia,serif;font-size:46px;font-weight:600;letter-spacing:-.005em;text-wrap:balance">Paid at check-in. Not in 3–5 business days.</h2>
+          <div style="display:flex;flex-direction:column;gap:16px;margin-top:4px">
+            <div style="display:flex;gap:14px;align-items:flex-start"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" style="flex-shrink:0;margin-top:2px"><path d="M11 1 L3 11.5 H9 L8 19 L17 8 H10.5 Z" stroke="#B58B3E" stroke-width="1.6" stroke-linejoin="round"></path></svg><span style="font-size:16.5px;line-height:1.5;color:rgba(23,32,27,.85)"><b>Instant payout</b> — your money lands the moment your guest checks in.</span></div>
+            <div style="display:flex;gap:14px;align-items:flex-start"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" style="flex-shrink:0;margin-top:2px"><circle cx="10" cy="10" r="8.2" stroke="#B58B3E" stroke-width="1.6"></circle><path d="M10 5.2 V14.8 M12.6 7.2 C12.6 7.2 11.8 6.2 10 6.2 C8.2 6.2 7.3 7.1 7.3 8.1 C7.3 10.8 12.7 9.4 12.7 11.9 C12.7 13 11.7 13.8 10 13.8 C8.2 13.8 7.4 12.8 7.4 12.8" stroke="#B58B3E" stroke-width="1.4" stroke-linecap="round"></path></svg><span style="font-size:16.5px;line-height:1.5;color:rgba(23,32,27,.85)"><b>Keep 100% of your rate</b> — the flat 2% rides on top, on the guest's side of the receipt.</span></div>
+            <div style="display:flex;gap:14px;align-items:flex-start"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" style="flex-shrink:0;margin-top:2px"><path d="M10 2 V4 M4 4.5 L10 4 L16 4.5 M4 4.5 L2 10 H6 Z M16 4.5 L14 10 H18 Z M10 4 V16 M6.5 16 H13.5" stroke="#B58B3E" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path></svg><span style="font-size:16.5px;line-height:1.5;color:rgba(23,32,27,.85)"><b>Claims you can read</b> — 48-hour window, photo evidence, independent arbitration. The rulebook is public.</span></div>
+          </div>
+          <div style="background:#FBFAF7;border-radius:16px;padding:26px 30px;display:flex;align-items:center;justify-content:space-between;gap:24px;margin-top:10px;box-shadow:0 1px 2px rgba(23,32,27,.05),0 10px 28px rgba(23,32,27,.06)">
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <span style="font-size:12.5px;font-weight:700;letter-spacing:.14em;color:rgba(23,32,27,.5);text-transform:uppercase">A week in August</span>
+              <span style="font-size:24px;font-weight:700;font-variant-numeric:tabular-nums">$180 × 6 nights = $1,080</span>
+              <span style="font-size:14px;color:rgba(23,32,27,.55);font-variant-numeric:tabular-nums">Elsewhere: ≈ $1,048 after host fees, days later.</span>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
+              <span style="font-size:28px;font-weight:700;color:#1E4034;font-variant-numeric:tabular-nums">$1,080</span>
+              <span style="display:inline-flex;align-items:center;gap:6px;background:#1E4034;color:#FBFAF7;font-size:12.5px;font-weight:700;padding:6px 12px;border-radius:999px"><svg width="12" height="12" viewBox="0 0 20 20" fill="none"><path d="M11 1 L3 11.5 H9 L8 19 L17 8 H10.5 Z" fill="#DDB672"></path></svg>at check-in</span>
+            </div>
+          </div>
+          <div style="margin-top:8px">
+            <a href="#1b" style="display:inline-flex;align-items:center;background:#1E4034;color:#FBFAF7;font-weight:600;font-size:16.5px;padding:15px 28px;border-radius:12px;text-decoration:none" style-hover="background:#16332A;color:#FBFAF7">List your place</a>
+          </div>
+        </div>
+        <div style="height:560px;border-radius:16px;overflow:hidden;box-shadow:0 2px 4px rgba(23,32,27,.08),0 24px 56px rgba(23,32,27,.14)">
+          <image-slot id="host-door" shape="rect" placeholder="Photo — a host at their front door, brass key in hand"></image-slot>
+        </div>
+      </div>
+
+      <div data-screen-label="Member-owned" style="background:#FBFAF7;padding:108px 64px;display:flex;flex-direction:column;gap:52px">
+        <div style="display:flex;flex-direction:column;gap:16px;align-items:center;text-align:center">
+          <div style="font-size:12.5px;font-weight:700;letter-spacing:.2em;color:#B58B3E;text-transform:uppercase">Member-owned</div>
+          <h2 style="margin:0;font-family:'Ibarra Real Nueva',Georgia,serif;font-size:46px;font-weight:600;letter-spacing:-.005em">The credit union of home rentals.</h2>
+          <p style="margin:0;font-size:17.5px;color:rgba(23,32,27,.62);max-width:600px;line-height:1.55">No shareholders, no growth quota, no quiet fee creep. The people who stay and host own the network — and set its rules.</p>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:24px">
+          <div style="background:#EFE9DF;border-radius:16px;padding:34px;display:flex;flex-direction:column;gap:14px">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M4 4.5 C4 4.5 6.5 3 9.5 3.8 C11 4.2 12 5 12 5 V20 C12 20 11 19.2 9.5 18.8 C6.5 18 4 19.5 4 19.5 Z M20 4.5 C20 4.5 17.5 3 14.5 3.8 C13 4.2 12 5 12 5 V20 C12 20 13 19.2 14.5 18.8 C17.5 18 20 19.5 20 19.5 Z" stroke="#B58B3E" stroke-width="1.6" stroke-linejoin="round"></path></svg>
+            <span style="font-size:20px;font-weight:700">Transparent rules</span>
+            <p style="margin:0;font-size:15.5px;line-height:1.6;color:rgba(23,32,27,.62)">The fee is 2%. The rulebook is public. Every change is announced before it happens — in writing, not in a settings update.</p>
+          </div>
+          <div style="background:#EFE9DF;border-radius:16px;padding:34px;display:flex;flex-direction:column;gap:14px">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M3 11 H21 V20 H3 Z" stroke="#B58B3E" stroke-width="1.6" stroke-linejoin="round"></path><path d="M8 11 L9.5 5.5 H14.5 L16 11" stroke="#B58B3E" stroke-width="1.6" stroke-linejoin="round"></path><path d="M12 2.5 V8 M9.8 5.7 L12 8 L14.2 5.7" stroke="#B58B3E" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            <span style="font-size:20px;font-weight:700">Members vote on changes</span>
+            <p style="margin:0;font-size:15.5px;line-height:1.6;color:rgba(23,32,27,.62)">One member, one vote — hosts and guests alike. Fee changes, rule changes, arbitration policy: all balloted.</p>
+          </div>
+          <div style="background:#EFE9DF;border-radius:16px;padding:34px;display:flex;flex-direction:column;gap:14px">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M5 21 V5 C5 3.9 5.9 3 7 3 H17 C18.1 3 19 3.9 19 5 V21" stroke="#B58B3E" stroke-width="1.6" stroke-linejoin="round"></path><path d="M3 21 H21" stroke="#B58B3E" stroke-width="1.6" stroke-linecap="round"></path><circle cx="15.2" cy="12" r="1.3" fill="#B58B3E"></circle></svg>
+            <span style="font-size:20px;font-weight:700">No arbitrary delistings</span>
+            <p style="margin:0;font-size:15.5px;line-height:1.6;color:rgba(23,32,27,.62)">Nobody wakes up locked out. Removal requires a documented rule breach — and you see the evidence.</p>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding:0 64px;background:#FBFAF7">
+        <svg width="100%" height="22" viewBox="0 0 1200 22" preserveAspectRatio="none" style="display:block">
+          <path d="M0 11 Q30 1 60 11 T120 11 T180 11 T240 11 T300 11 T360 11 T420 11 T480 11 T540 11 T600 11 T660 11 T720 11 T780 11 T840 11 T900 11 T960 11 T1020 11 T1080 11 T1140 11 T1200 11" fill="none" stroke="#B58B3E" stroke-width="0.9" opacity="0.4"></path>
+          <path d="M0 11 Q30 21 60 11 T120 11 T180 11 T240 11 T300 11 T360 11 T420 11 T480 11 T540 11 T600 11 T660 11 T720 11 T780 11 T840 11 T900 11 T960 11 T1020 11 T1080 11 T1140 11 T1200 11" fill="none" stroke="#B58B3E" stroke-width="0.9" opacity="0.26"></path>
+        </svg>
+      </div>
+
+      <div data-screen-label="FAQ" style="background:#FBFAF7;padding:96px 64px 110px;display:flex;flex-direction:column;gap:44px;align-items:center">
+        <div style="display:flex;flex-direction:column;gap:16px;align-items:center;text-align:center">
+          <div style="font-size:12.5px;font-weight:700;letter-spacing:.2em;color:#B58B3E;text-transform:uppercase">Fair questions</div>
+          <h2 style="margin:0;font-family:'Ibarra Real Nueva',Georgia,serif;font-size:46px;font-weight:600;letter-spacing:-.005em">Asked and answered.</h2>
+        </div>
+        <div style="width:860px;display:flex;flex-direction:column">
+          <details open style="border-bottom:1px solid #E5DDCA;padding:26px 4px">
+            <summary style="display:flex;justify-content:space-between;align-items:center;gap:24px"><span style="font-size:19px;font-weight:600">Is my money safe?</span><svg width="18" height="18" viewBox="0 0 18 18" style="flex-shrink:0"><path d="M9 1 V17 M1 9 H17" stroke="#B58B3E" stroke-width="2" stroke-linecap="round"></path></svg></summary>
+            <p style="margin:16px 0 0;font-size:16px;line-height:1.65;color:rgba(23,32,27,.65);max-width:760px">Stay payments and deposits sit with a regulated payment partner, in accounts neither the host nor we can move unilaterally. Money moves only by the rules both parties agreed to at booking — on time, every time.</p>
+          </details>
+          <details style="border-bottom:1px solid #E5DDCA;padding:26px 4px">
+            <summary style="display:flex;justify-content:space-between;align-items:center;gap:24px"><span style="font-size:19px;font-weight:600">What if a guest damages my home?</span><svg width="18" height="18" viewBox="0 0 18 18" style="flex-shrink:0"><path d="M9 1 V17 M1 9 H17" stroke="#B58B3E" stroke-width="2" stroke-linecap="round"></path></svg></summary>
+            <p style="margin:16px 0 0;font-size:16px;line-height:1.65;color:rgba(23,32,27,.65);max-width:760px">File a claim within 48 hours of checkout, with photos. If the guest accepts, you're paid from the deposit instantly. If they dispute, independent arbitration decides — usually within five days.</p>
+          </details>
+          <details style="border-bottom:1px solid #E5DDCA;padding:26px 4px">
+            <summary style="display:flex;justify-content:space-between;align-items:center;gap:24px"><span style="font-size:19px;font-weight:600">What happens in a dispute?</span><svg width="18" height="18" viewBox="0 0 18 18" style="flex-shrink:0"><path d="M9 1 V17 M1 9 H17" stroke="#B58B3E" stroke-width="2" stroke-linecap="round"></path></svg></summary>
+            <p style="margin:16px 0 0;font-size:16px;line-height:1.65;color:rgba(23,32,27,.65);max-width:760px">Both sides submit evidence to independent arbitrators. Each party sees the identical file — no back channels, no support-ticket roulette. The decision is binding and executes automatically.</p>
+          </details>
+          <details style="border-bottom:1px solid #E5DDCA;padding:26px 4px">
+            <summary style="display:flex;justify-content:space-between;align-items:center;gap:24px"><span style="font-size:19px;font-weight:600">Why is the fee only 2%?</span><svg width="18" height="18" viewBox="0 0 18 18" style="flex-shrink:0"><path d="M9 1 V17 M1 9 H17" stroke="#B58B3E" stroke-width="2" stroke-linecap="round"></path></svg></summary>
+            <p style="margin:16px 0 0;font-size:16px;line-height:1.65;color:rgba(23,32,27,.65);max-width:760px">Because 2% covers what the network actually costs: payments, verification, and arbitration. There are no shareholders to feed. Members own it, so the price is the cost.</p>
+          </details>
+          <details style="border-bottom:1px solid #E5DDCA;padding:26px 4px">
+            <summary style="display:flex;justify-content:space-between;align-items:center;gap:24px"><span style="font-size:19px;font-weight:600">How is identity verified?</span><svg width="18" height="18" viewBox="0 0 18 18" style="flex-shrink:0"><path d="M9 1 V17 M1 9 H17" stroke="#B58B3E" stroke-width="2" stroke-linecap="round"></path></svg></summary>
+            <p style="margin:16px 0 0;font-size:16px;line-height:1.65;color:rgba(23,32,27,.65);max-width:760px">Tier 1 is a government ID with a liveness check. Tier 2 adds a verified address. Tier 3 adds payment history and completed stays. Your tier is stamped on your Trust Passport — and hosts can see it before they accept.</p>
+          </details>
+        </div>
+      </div>
+
+      <div data-screen-label="Footer" style="background:#1E4034;padding:100px 64px 48px;display:flex;flex-direction:column;gap:56px">
+        <div style="display:flex;flex-direction:column;gap:28px;align-items:center;text-align:center">
+          <h2 style="margin:0;font-family:'Ibarra Real Nueva',Georgia,serif;font-size:52px;font-weight:600;color:#FBFAF7;letter-spacing:-.005em;max-width:900px;text-wrap:balance">Their home. Your trust. Nobody's middleman.</h2>
+          <div style="display:flex;gap:14px">
+            <a href="#1b" style="display:inline-flex;align-items:center;background:#FBFAF7;color:#17201B;font-weight:700;font-size:16.5px;padding:16px 30px;border-radius:12px;text-decoration:none" style-hover="background:#EFE9DF;color:#17201B">Find a stay</a>
+            <a href="#1a-hosts" style="display:inline-flex;align-items:center;color:#FBFAF7;font-weight:600;font-size:16.5px;padding:16px 30px;border-radius:12px;text-decoration:none;border:1.5px solid rgba(251,250,247,.55)" style-hover="border-color:#FBFAF7;color:#FBFAF7;background:rgba(251,250,247,.1)">List your place</a>
+          </div>
+        </div>
+        <div style="border-top:1px solid rgba(251,250,247,.18);padding-top:28px;display:flex;justify-content:space-between;align-items:center;gap:24px">
+          <div style="display:flex;align-items:center;gap:9px">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M3.5 10.6 L12 3.4 L20.5 10.6 V20.5 H3.5 Z" stroke="#FBFAF7" stroke-width="1.8" stroke-linejoin="round"></path><circle cx="12" cy="12.6" r="2.1" fill="#DDB672"></circle><path d="M12 14.6 V17.2" stroke="#DDB672" stroke-width="2" stroke-linecap="round"></path></svg>
+            <span style="font-family:'Ibarra Real Nueva',Georgia,serif;font-size:20px;font-weight:700;color:#FBFAF7">{{brand}}</span>
+          </div>
+          <div style="display:flex;gap:28px;font-size:14.5px;font-weight:500;color:rgba(251,250,247,.6)">
+            <span>Member rules</span><span>Fee schedule</span><span>Arbitration</span><span>Membership</span><span>Contact</span>
+          </div>
+          <span style="font-size:14px;color:rgba(251,250,247,.5)">© 2026 — member-owned. The fee is 2%. That's the whole trick.</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<section data-screen-label="Deliverable 2 — Mobile app flow" style="display:flex;justify-content:flex-start;padding:40px 72px 100px">
+  <div id="1b" style="display:flex;flex-direction:column;gap:20px">
+    <div style="display:flex;align-items:center;gap:12px">
+      <span style="background:#17201B;color:#FBFAF7;font-weight:700;font-size:13px;padding:4px 11px;border-radius:8px;letter-spacing:.02em">1b</span>
+      <span style="color:rgba(23,32,27,.6);font-size:14px;font-weight:600;letter-spacing:.02em">Mobile app — clickable flow · CTAs jump between screens</span>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">
+      <span style="font-size:16px;font-weight:700">The guest journey</span>
+      <span style="font-size:14px;color:rgba(23,32,27,.55)">Explore → Listing → Book (3 steps) → Trip → Review</span>
+    </div>
+    <div style="display:flex;gap:26px;align-items:flex-start">
+
+      <div id="s1" data-screen-label="App 1 — Explore" style="display:flex;flex-direction:column;gap:14px;width:402px;flex-shrink:0">
+        <div style="display:flex;align-items:center;gap:10px"><span style="width:26px;height:26px;border-radius:8px;background:#1E4034;color:#FBFAF7;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center">1</span><span style="font-size:15px;font-weight:700">Explore</span></div>
+        <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+          <div style="height:100%;box-sizing:border-box;background:#FBFAF7;display:flex;flex-direction:column;font-family:'Hanken Grotesk',system-ui,sans-serif;color:#17201B;padding-top:64px">
+            <div style="padding:6px 18px 14px;display:flex;flex-direction:column;gap:12px">
+              <div style="background:#EFE9DF;border-radius:999px;padding:13px 18px;display:flex;align-items:center;gap:12px">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#1E4034" stroke-width="2"></circle><path d="M16.5 16.5 L21 21" stroke="#1E4034" stroke-width="2" stroke-linecap="round"></path></svg>
+                <div style="display:flex;flex-direction:column"><span style="font-size:15.5px;font-weight:700">Where to?</span><span style="font-size:12px;color:rgba(23,32,27,.55)">Hudson Valley · any week · 2 guests</span></div>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between">
+                <span style="font-size:13px;font-weight:600;color:rgba(23,32,27,.55)">48 member homes</span>
+                <div style="background:#EFE9DF;border-radius:999px;padding:3px;display:flex">
+                  <span style="background:#FBFAF7;border-radius:999px;padding:7px 16px;font-size:12.5px;font-weight:700;box-shadow:0 1px 3px rgba(23,32,27,.12)">List</span>
+                  <span style="padding:7px 16px;font-size:12.5px;font-weight:600;color:rgba(23,32,27,.55)">Map</span>
+                </div>
+              </div>
+            </div>
+            <div style="flex:1;overflow:hidden;padding:2px 18px 0;display:flex;flex-direction:column;gap:16px">
+              <a href="#s2" style="text-decoration:none;color:inherit;display:block;background:#FBFAF7;border:1px solid #EDE5D4;border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(23,32,27,.05),0 8px 22px rgba(23,32,27,.07)">
+                <div style="height:186px;position:relative">
+                  <image-slot id="exp-1" shape="rect" placeholder="Cottage exterior, morning light"></image-slot>
+                </div>
+                <div style="padding:13px 16px 15px;display:flex;flex-direction:column;gap:7px">
+                  <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px">
+                    <span style="font-size:16.5px;font-weight:700">Gable End Cottage</span>
+                    <span style="font-size:16.5px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap">$200 <span style="font-size:12.5px;font-weight:500;color:rgba(23,32,27,.55)">/ night</span></span>
+                  </div>
+                  <span style="font-size:13px;color:rgba(23,32,27,.55)">Hudson, NY · Sleeps 4 · 2 bedrooms</span>
+                  <div style="display:flex;gap:7px;margin-top:3px">
+                    <span style="display:inline-flex;align-items:center;gap:5px;background:#EFE9DF;font-size:11.5px;font-weight:700;padding:5px 10px;border-radius:999px;font-variant-numeric:tabular-nums"><svg width="10" height="12" viewBox="0 0 15 17" fill="none"><path d="M7.5 1 L14 3.5 V8 C14 12.5 11.2 15 7.5 16 C3.8 15 1 12.5 1 8 V3.5 Z" fill="#B58B3E"></path><path d="M4.8 8.2 L6.8 10.2 L10.4 6.4" stroke="#FBFAF7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>4.93 · Tier 3 host</span>
+                    <span style="display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:600;color:rgba(23,32,27,.65);border:1px solid #E2D9C5;padding:5px 10px;border-radius:999px"><svg width="9" height="11" viewBox="0 0 20 20" fill="none"><path d="M11 1 L3 11.5 H9 L8 19 L17 8 H10.5 Z" fill="#B58B3E"></path></svg>Instant book</span>
+                  </div>
+                </div>
+              </a>
+              <div style="background:#FBFAF7;border:1px solid #EDE5D4;border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(23,32,27,.05),0 8px 22px rgba(23,32,27,.07)">
+                <div style="height:186px;position:relative">
+                  <image-slot id="exp-2" shape="rect" placeholder="Brick loft interior"></image-slot>
+                </div>
+                <div style="padding:13px 16px 15px;display:flex;flex-direction:column;gap:7px">
+                  <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px">
+                    <span style="font-size:16.5px;font-weight:700">Warm brick loft</span>
+                    <span style="font-size:16.5px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap">$146 <span style="font-size:12.5px;font-weight:500;color:rgba(23,32,27,.55)">/ night</span></span>
+                  </div>
+                  <span style="font-size:13px;color:rgba(23,32,27,.55)">Montréal, QC · Sleeps 2 · 1 bedroom</span>
+                  <div style="display:flex;gap:7px;margin-top:3px">
+                    <span style="display:inline-flex;align-items:center;gap:5px;background:#EFE9DF;font-size:11.5px;font-weight:700;padding:5px 10px;border-radius:999px;font-variant-numeric:tabular-nums"><svg width="10" height="12" viewBox="0 0 15 17" fill="none"><path d="M7.5 1 L14 3.5 V8 C14 12.5 11.2 15 7.5 16 C3.8 15 1 12.5 1 8 V3.5 Z" fill="#B58B3E"></path><path d="M4.8 8.2 L6.8 10.2 L10.4 6.4" stroke="#FBFAF7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>4.87 · Tier 2 host</span>
+                  </div>
+                </div>
+              </div>
+              <div style="background:#FBFAF7;border:1px solid #EDE5D4;border-radius:16px 16px 0 0;overflow:hidden">
+                <div style="height:120px;position:relative">
+                  <image-slot id="exp-3" shape="rect" placeholder="Lemon-tree courtyard"></image-slot>
+                </div>
+              </div>
+            </div>
+            <div style="border-top:1px solid #EDE6D6;background:#FBFAF7;display:flex;padding:10px 8px 26px">
+              <a href="#s1" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;color:#1E4034"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"></circle><path d="M16.5 16.5 L21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg><span style="font-size:10.5px;font-weight:700">Explore</span></a>
+              <a href="#s6" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;color:rgba(23,32,27,.45)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="4" y="7.5" width="16" height="12.5" rx="2" stroke="currentColor" stroke-width="1.8"></rect><path d="M9 7.5 V5 C9 4.2 9.7 3.5 10.5 3.5 H13.5 C14.3 3.5 15 4.2 15 5 V7.5" stroke="currentColor" stroke-width="1.8"></path></svg><span style="font-size:10.5px;font-weight:600">Trips</span></a>
+              <a href="#s8" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;color:rgba(23,32,27,.45)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2.5 L20 5.5 V11 C20 16.5 16.5 20 12 21.5 C7.5 20 4 16.5 4 11 V5.5 Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"></path><path d="M8.5 11.5 L11 14 L15.5 8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg><span style="font-size:10.5px;font-weight:600">Passport</span></a>
+              <span style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;color:rgba(23,32,27,.45)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4.5 5.5 H19.5 V16.5 H12.5 L8.5 20 V16.5 H4.5 Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"></path></svg><span style="font-size:10.5px;font-weight:600">Inbox</span></span>
+              <a href="#s10" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;color:rgba(23,32,27,.45)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="8" cy="8" r="4.2" stroke="currentColor" stroke-width="1.8"></circle><path d="M11.2 11.2 L20 20 M16.8 16.8 L19.3 14.3 M13.8 13.8 L15.8 11.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg><span style="font-size:10.5px;font-weight:600">Host</span></a>
+            </div>
+          </div>
+        </x-import>
+        <span style="font-size:13.5px;color:rgba(23,32,27,.55);line-height:1.5;max-width:380px">Every card carries the host's Trust Score and tier — trust is visible before price.</span>
+      </div>
+
+      <div style="align-self:flex-start;margin-top:420px;display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0">
+        <svg width="34" height="16" viewBox="0 0 34 16" fill="none"><path d="M0 8 H28 M22 2 L29 8 L22 14" stroke="rgba(23,32,27,.45)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        <span style="font-size:11.5px;font-weight:600;color:rgba(23,32,27,.5);white-space:nowrap">tap a stay</span>
+      </div>
+
+      <div id="s2" data-screen-label="App 2 — Listing detail" style="display:flex;flex-direction:column;gap:14px;width:402px;flex-shrink:0">
+        <div style="display:flex;align-items:center;gap:10px"><span style="width:26px;height:26px;border-radius:8px;background:#1E4034;color:#FBFAF7;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center">2</span><span style="font-size:15px;font-weight:700">Listing detail</span></div>
+        <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+          <div style="height:100%;box-sizing:border-box;background:#FBFAF7;display:flex;flex-direction:column;font-family:'Hanken Grotesk',system-ui,sans-serif;color:#17201B">
+            <div style="height:290px;position:relative;flex-shrink:0">
+              <image-slot id="listing-hero" shape="rect" placeholder="Gallery — cottage kitchen in morning light"></image-slot>
+              <a href="#s1" style="position:absolute;top:64px;left:14px;width:40px;height:40px;border-radius:50%;background:rgba(251,250,247,.92);display:flex;align-items:center;justify-content:center;text-decoration:none;box-shadow:0 2px 8px rgba(23,32,27,.18)"><svg width="9" height="15" viewBox="0 0 12 20" fill="none"><path d="M10 2 L2 10 L10 18" stroke="#17201B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg></a>
+              <div style="position:absolute;bottom:12px;left:0;right:0;display:flex;justify-content:center;gap:5px;pointer-events:none">
+                <span style="width:6px;height:6px;border-radius:50%;background:#FBFAF7"></span><span style="width:6px;height:6px;border-radius:50%;background:rgba(251,250,247,.45)"></span><span style="width:6px;height:6px;border-radius:50%;background:rgba(251,250,247,.45)"></span><span style="width:6px;height:6px;border-radius:50%;background:rgba(251,250,247,.45)"></span>
+              </div>
+            </div>
+            <div style="flex:1;overflow:hidden;padding:18px;display:flex;flex-direction:column;gap:13px">
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <span style="font-family:'Ibarra Real Nueva',Georgia,serif;font-size:24px;font-weight:600;line-height:1.1">Gable End Cottage</span>
+                <span style="font-size:13.5px;color:rgba(23,32,27,.55)">Hudson, New York · Sleeps 4 · 2 bed · Wifi · Kitchen · Fireplace</span>
+                <div style="display:flex;gap:7px;margin-top:2px">
+                  <span style="display:inline-flex;align-items:center;gap:5px;background:#EFE9DF;font-size:11.5px;font-weight:700;padding:5px 10px;border-radius:999px;font-variant-numeric:tabular-nums">4.93 ★ · 34 reviews</span>
+                  <span style="display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:600;color:rgba(23,32,27,.65);border:1px solid #E2D9C5;padding:5px 10px;border-radius:999px"><svg width="9" height="11" viewBox="0 0 20 20" fill="none"><path d="M11 1 L3 11.5 H9 L8 19 L17 8 H10.5 Z" fill="#B58B3E"></path></svg>Instant book</span>
+                </div>
+              </div>
+              <div style="background:#EFE9DF;border-radius:14px;padding:12px 14px;display:flex;align-items:center;gap:12px">
+                <div style="width:42px;height:42px;border-radius:50%;background:#1E4034;color:#FBFAF7;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;border:1.5px solid #B58B3E;flex-shrink:0">NB</div>
+                <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0">
+                  <span style="font-size:14.5px;font-weight:700">Hosted by Nora</span>
+                  <span style="font-size:12px;color:rgba(23,32,27,.55)">Tier 3 · 21 stays · 0 claims · replies in ~1 h</span>
+                </div>
+                <a href="#s8" style="font-size:12px;font-weight:700;color:#1E4034;text-decoration:none;white-space:nowrap">Passport →</a>
+              </div>
+              <div style="border:1px solid #E8E0CE;border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:9px">
+                <div style="display:flex;justify-content:space-between;font-size:14px;font-variant-numeric:tabular-nums"><span style="color:rgba(23,32,27,.7)">$200 × 5 nights</span><span style="font-weight:600">$1,000</span></div>
+                <div style="display:flex;justify-content:space-between;font-size:14px;font-variant-numeric:tabular-nums"><span style="color:rgba(23,32,27,.7)">Network fee — flat 2%</span><span style="font-weight:600">$20</span></div>
+                <div style="height:1px;background:#EDE5D3"></div>
+                <div style="display:flex;justify-content:space-between;font-size:15.5px;font-weight:700;font-variant-numeric:tabular-nums"><span>Total — that's it</span><span>$1,020</span></div>
+              </div>
+              <div style="border:1.5px dashed rgba(181,139,62,.75);background:rgba(181,139,62,.06);border-radius:14px;padding:13px 16px;display:flex;align-items:center;gap:12px">
+                <div style="display:flex;flex-direction:column;gap:3px;flex:1">
+                  <span style="font-size:14px;font-weight:700;font-variant-numeric:tabular-nums">Incidentals deposit · $300</span>
+                  <span style="font-size:12px;line-height:1.45;color:rgba(23,32,27,.6)">Held in neutral escrow — never in the host's account.</span>
+                </div>
+                <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:#8C6A2C;white-space:nowrap"><svg width="12" height="12" viewBox="0 0 20 20" fill="none"><path d="M17 5 V11 C17 12.7 15.7 14 14 14 H4 M7 10.5 L3.5 14 L7 17.5" stroke="#8C6A2C" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>RETURNS TO YOU</span>
+              </div>
+            </div>
+            <div style="border-top:1px solid #EDE6D6;padding:13px 18px 28px;display:flex;align-items:center;justify-content:space-between;gap:16px;background:#FBFAF7">
+              <div style="display:flex;flex-direction:column"><span style="font-size:16px;font-weight:700;font-variant-numeric:tabular-nums">$1,020 total</span><span style="font-size:11.5px;color:rgba(23,32,27,.55)">Aug 8–13 · 2 guests</span></div>
+              <a href="#s3" style="display:inline-flex;align-items:center;background:#1E4034;color:#FBFAF7;font-weight:700;font-size:15px;padding:15px 24px;border-radius:12px;text-decoration:none" style-hover="background:#16332A;color:#FBFAF7">Request to book</a>
+            </div>
+          </div>
+        </x-import>
+        <span style="font-size:13.5px;color:rgba(23,32,27,.55);line-height:1.5;max-width:380px">Fee shown as arithmetic; the refundable deposit lives in its own dashed box — visually separate from the cost of stay.</span>
+      </div>
+
+      <div style="align-self:flex-start;margin-top:420px;display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0">
+        <svg width="34" height="16" viewBox="0 0 34 16" fill="none"><path d="M0 8 H28 M22 2 L29 8 L22 14" stroke="rgba(23,32,27,.45)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        <span style="font-size:11.5px;font-weight:600;color:rgba(23,32,27,.5);white-space:nowrap">request to book</span>
+      </div>
+
+      <div id="s3" data-screen-label="App 3 — Booking step 1: dates &amp; guests" style="display:flex;flex-direction:column;gap:14px;width:402px;flex-shrink:0">
+        <div style="display:flex;align-items:center;gap:10px"><span style="width:26px;height:26px;border-radius:8px;background:#1E4034;color:#FBFAF7;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center">3</span><span style="font-size:15px;font-weight:700">Booking · step 1 — dates &amp; guests</span></div>
+        <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+          <div style="height:100%;box-sizing:border-box;background:#FBFAF7;display:flex;flex-direction:column;font-family:'Hanken Grotesk',system-ui,sans-serif;color:#17201B;padding-top:64px">
+            <div style="padding:6px 18px 0;display:flex;flex-direction:column;gap:14px;flex:1;overflow:hidden">
+              <div style="display:flex;align-items:center;gap:12px">
+                <a href="#s2" style="width:40px;height:40px;border-radius:50%;background:#EFE9DF;display:flex;align-items:center;justify-content:center;text-decoration:none;flex-shrink:0"><svg width="9" height="15" viewBox="0 0 12 20" fill="none"><path d="M10 2 L2 10 L10 18" stroke="#17201B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg></a>
+                <div style="display:flex;flex-direction:column;flex:1"><span style="font-size:16px;font-weight:700">Request to book</span><span style="font-size:12px;color:rgba(23,32,27,.55)">Gable End Cottage</span></div>
+                <span style="font-size:12.5px;font-weight:700;color:rgba(23,32,27,.5);font-variant-numeric:tabular-nums">1 of 3</span>
+              </div>
+              <div style="display:flex;gap:6px">
+                <div style="flex:1;height:4px;border-radius:99px;background:#1E4034"></div>
+                <div style="flex:1;height:4px;border-radius:99px;background:#E5DDCA"></div>
+                <div style="flex:1;height:4px;border-radius:99px;background:#E5DDCA"></div>
+              </div>
+              <div style="background:#EFE9DF;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:0 4px">
+                  <span style="font-size:15px;font-weight:700">August 2026</span>
+                  <div style="display:flex;gap:18px"><svg width="9" height="15" viewBox="0 0 12 20" fill="none"><path d="M10 2 L2 10 L10 18" stroke="rgba(23,32,27,.4)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg><svg width="9" height="15" viewBox="0 0 12 20" fill="none"><path d="M2 2 L10 10 L2 18" stroke="rgba(23,32,27,.7)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(7,1fr);justify-items:center">
+                  <span style="font-size:11.5px;font-weight:600;color:rgba(23,32,27,.45)">S</span><span style="font-size:11.5px;font-weight:600;color:rgba(23,32,27,.45)">M</span><span style="font-size:11.5px;font-weight:600;color:rgba(23,32,27,.45)">T</span><span style="font-size:11.5px;font-weight:600;color:rgba(23,32,27,.45)">W</span><span style="font-size:11.5px;font-weight:600;color:rgba(23,32,27,.45)">T</span><span style="font-size:11.5px;font-weight:600;color:rgba(23,32,27,.45)">F</span><span style="font-size:11.5px;font-weight:600;color:rgba(23,32,27,.45)">S</span>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(7,1fr);justify-items:center;row-gap:2px">
+                  <sc-for list="{{calDays}}" as="d" hint-placeholder-count="37">
+                    <div style="{{d.st}}">{{d.label}}</div>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                <div style="border:1px solid #E8E0CE;border-radius:12px;padding:11px 14px;display:flex;flex-direction:column;gap:2px"><span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:rgba(23,32,27,.5)">CHECK-IN</span><span style="font-size:14.5px;font-weight:700">Sat, Aug 8 · 3 PM</span></div>
+                <div style="border:1px solid #E8E0CE;border-radius:12px;padding:11px 14px;display:flex;flex-direction:column;gap:2px"><span style="font-size:11px;font-weight:700;letter-spacing:.08em;color:rgba(23,32,27,.5)">CHECKOUT</span><span style="font-size:14.5px;font-weight:700">Thu, Aug 13 · 11 AM</span></div>
+              </div>
+              <div style="border:1px solid #E8E0CE;border-radius:12px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between">
+                <div style="display:flex;flex-direction:column;gap:1px"><span style="font-size:14.5px;font-weight:700">Guests</span><span style="font-size:12px;color:rgba(23,32,27,.55)">This home sleeps 4</span></div>
+                <div style="display:flex;align-items:center;gap:14px">
+                  <span style="width:40px;height:40px;border-radius:50%;border:1.5px solid #D8CDB6;display:flex;align-items:center;justify-content:center;font-size:20px;color:rgba(23,32,27,.6)">−</span>
+                  <span style="font-size:17px;font-weight:700;font-variant-numeric:tabular-nums">2</span>
+                  <span style="width:40px;height:40px;border-radius:50%;background:#1E4034;color:#FBFAF7;display:flex;align-items:center;justify-content:center;font-size:20px">+</span>
+                </div>
+              </div>
+            </div>
+            <div style="padding:13px 18px 28px;display:flex;flex-direction:column;gap:9px">
+              <a href="#s4" style="display:flex;align-items:center;justify-content:center;background:#1E4034;color:#FBFAF7;font-weight:700;font-size:15.5px;padding:16px;border-radius:12px;text-decoration:none" style-hover="background:#16332A;color:#FBFAF7">Continue — $1,000 for 5 nights</a>
+              <span style="font-size:11.5px;color:rgba(23,32,27,.5);text-align:center">No fees yet. The 2% shows up as $20, next screen — in full view.</span>
+            </div>
+          </div>
+        </x-import>
+        <span style="font-size:13.5px;color:rgba(23,32,27,.55);line-height:1.5;max-width:380px">Step 1 of 3 — dates and guests, nothing else asked yet.</span>
+      </div>
+
+      <div style="align-self:flex-start;margin-top:420px;display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0">
+        <svg width="34" height="16" viewBox="0 0 34 16" fill="none"><path d="M0 8 H28 M22 2 L29 8 L22 14" stroke="rgba(23,32,27,.45)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        <span style="font-size:11.5px;font-weight:600;color:rgba(23,32,27,.5);white-space:nowrap">continue</span>
+      </div>
+
+      <div id="s4" data-screen-label="App 4 — Booking step 2: price &amp; deposit" style="display:flex;flex-direction:column;gap:14px;width:402px;flex-shrink:0">
+        <div style="display:flex;align-items:center;gap:10px"><span style="width:26px;height:26px;border-radius:8px;background:#1E4034;color:#FBFAF7;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center">4</span><span style="font-size:15px;font-weight:700">Booking · step 2 — price &amp; deposit</span></div>
+        <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+          <div style="height:100%;box-sizing:border-box;background:#FBFAF7;display:flex;flex-direction:column;font-family:'Hanken Grotesk',system-ui,sans-serif;color:#17201B;padding-top:64px">
+            <div style="padding:6px 18px 0;display:flex;flex-direction:column;gap:14px;flex:1;overflow:hidden">
+              <div style="display:flex;align-items:center;gap:12px">
+                <a href="#s3" style="width:40px;height:40px;border-radius:50%;background:#EFE9DF;display:flex;align-items:center;justify-content:center;text-decoration:none;flex-shrink:0"><svg width="9" height="15" viewBox="0 0 12 20" fill="none"><path d="M10 2 L2 10 L10 18" stroke="#17201B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg></a>
+                <div style="display:flex;flex-direction:column;flex:1"><span style="font-size:16px;font-weight:700">Price &amp; deposit</span><span style="font-size:12px;color:rgba(23,32,27,.55)">Gable End Cottage · Aug 8–13</span></div>
+                <span style="font-size:12.5px;font-weight:700;color:rgba(23,32,27,.5);font-variant-numeric:tabular-nums">2 of 3</span>
+              </div>
+              <div style="display:flex;gap:6px">
+                <div style="flex:1;height:4px;border-radius:99px;background:#1E4034"></div>
+                <div style="flex:1;height:4px;border-radius:99px;background:#1E4034"></div>
+                <div style="flex:1;height:4px;border-radius:99px;background:#E5DDCA"></div>
+              </div>
+              <div style="border:1px solid #E8E0CE;border-radius:14px;padding:15px 16px;display:flex;flex-direction:column;gap:10px">
+                <span style="font-size:11.5px;font-weight:700;letter-spacing:.12em;color:rgba(23,32,27,.5)">THE STAY</span>
+                <div style="display:flex;justify-content:space-between;font-size:14px;font-variant-numeric:tabular-nums"><span style="color:rgba(23,32,27,.7)">$200 × 5 nights</span><span style="font-weight:600">$1,000</span></div>
+                <div style="display:flex;justify-content:space-between;font-size:14px;font-variant-numeric:tabular-nums"><span style="color:rgba(23,32,27,.7)">Network fee — flat 2%</span><span style="font-weight:600">$20</span></div>
+                <div style="height:1px;background:#EDE5D3"></div>
+                <div style="display:flex;justify-content:space-between;font-size:15.5px;font-weight:700;font-variant-numeric:tabular-nums"><span>Guest pays · host gets $1,000</span><span>$1,020</span></div>
+              </div>
+              <div style="border:1.5px dashed rgba(181,139,62,.75);background:rgba(181,139,62,.06);border-radius:14px;padding:15px 16px;display:flex;flex-direction:column;gap:12px">
+                <div style="display:flex;justify-content:space-between;align-items:baseline">
+                  <span style="font-size:14.5px;font-weight:700;font-variant-numeric:tabular-nums">$300 incidentals deposit</span>
+                  <span style="font-size:11px;font-weight:700;color:#8C6A2C">RETURNS TO YOU</span>
+                </div>
+                <span style="font-size:12.5px;line-height:1.5;color:rgba(23,32,27,.65)">Held in neutral escrow — an account neither Nora nor {{brand}} controls. Auto-returned <b>Sat, Aug 15</b> unless a claim is filed.</span>
+                <div style="position:relative;margin-top:2px">
+                  <div style="position:absolute;left:7px;right:7px;top:6px;height:2px;background:#E4D9C0"></div>
+                  <div style="position:absolute;left:7px;top:6px;height:2px;background:#B58B3E;width:8%"></div>
+                  <div style="display:grid;grid-template-columns:repeat(4,1fr);position:relative">
+                    <div style="display:flex;flex-direction:column;align-items:flex-start;gap:5px"><span style="width:14px;height:14px;border-radius:50%;background:#B58B3E;border:2px solid #B58B3E;box-sizing:border-box"></span><span style="font-size:10px;font-weight:700">Held</span></div>
+                    <div style="display:flex;flex-direction:column;align-items:flex-start;gap:5px"><span style="width:14px;height:14px;border-radius:50%;background:#FBFAF7;border:2px solid #D8CBAC;box-sizing:border-box"></span><span style="font-size:10px;font-weight:600;color:rgba(23,32,27,.5)">Stay</span></div>
+                    <div style="display:flex;flex-direction:column;align-items:flex-start;gap:5px"><span style="width:14px;height:14px;border-radius:50%;background:#FBFAF7;border:2px solid #D8CBAC;box-sizing:border-box"></span><span style="font-size:10px;font-weight:600;color:rgba(23,32,27,.5)">48 h window</span></div>
+                    <div style="display:flex;flex-direction:column;align-items:flex-start;gap:5px"><span style="width:14px;height:14px;border-radius:50%;background:#FBFAF7;border:2px solid #D8CBAC;box-sizing:border-box"></span><span style="font-size:10px;font-weight:600;color:rgba(23,32,27,.5)">Returned</span></div>
+                  </div>
+                </div>
+              </div>
+              <div style="display:flex;gap:10px;align-items:flex-start;padding:0 4px">
+                <svg width="15" height="15" viewBox="0 0 20 20" fill="none" style="flex-shrink:0;margin-top:2px"><path d="M10 2 V4 M4 4.5 L10 4 L16 4.5 M4 4.5 L2 10 H6 Z M16 4.5 L14 10 H18 Z M10 4 V16 M6.5 16 H13.5" stroke="#B58B3E" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                <span style="font-size:12px;line-height:1.5;color:rgba(23,32,27,.55)">Claims require photo evidence. Disputes go to independent arbitration — both sides see the identical file.</span>
+              </div>
+            </div>
+            <div style="padding:13px 18px 28px">
+              <a href="#s5" style="display:flex;align-items:center;justify-content:center;background:#1E4034;color:#FBFAF7;font-weight:700;font-size:15.5px;padding:16px;border-radius:12px;text-decoration:none" style-hover="background:#16332A;color:#FBFAF7">Continue to payment</a>
+            </div>
+          </div>
+        </x-import>
+        <span style="font-size:13.5px;color:rgba(23,32,27,.55);line-height:1.5;max-width:380px">The deposit explainer with its escrow timeline — the same component that reappears during the trip and after checkout.</span>
+      </div>
+
+      <div style="align-self:flex-start;margin-top:420px;display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0">
+        <svg width="34" height="16" viewBox="0 0 34 16" fill="none"><path d="M0 8 H28 M22 2 L29 8 L22 14" stroke="rgba(23,32,27,.45)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        <span style="font-size:11.5px;font-weight:600;color:rgba(23,32,27,.5);white-space:nowrap">to payment</span>
+      </div>
+
+      <div id="s5" data-screen-label="App 5 — Booking step 3: confirm &amp; pay" style="display:flex;flex-direction:column;gap:14px;width:402px;flex-shrink:0">
+        <div style="display:flex;align-items:center;gap:10px"><span style="width:26px;height:26px;border-radius:8px;background:#1E4034;color:#FBFAF7;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center">5</span><span style="font-size:15px;font-weight:700">Booking · step 3 — confirm &amp; pay</span></div>
+        <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+          <div style="height:100%;box-sizing:border-box;background:#FBFAF7;display:flex;flex-direction:column;font-family:'Hanken Grotesk',system-ui,sans-serif;color:#17201B;padding-top:64px">
+            <div style="padding:6px 18px 0;display:flex;flex-direction:column;gap:14px;flex:1;overflow:hidden">
+              <div style="display:flex;align-items:center;gap:12px">
+                <a href="#s4" style="width:40px;height:40px;border-radius:50%;background:#EFE9DF;display:flex;align-items:center;justify-content:center;text-decoration:none;flex-shrink:0"><svg width="9" height="15" viewBox="0 0 12 20" fill="none"><path d="M10 2 L2 10 L10 18" stroke="#17201B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg></a>
+                <div style="display:flex;flex-direction:column;flex:1"><span style="font-size:16px;font-weight:700">Confirm &amp; pay</span><span style="font-size:12px;color:rgba(23,32,27,.55)">Gable End Cottage · Aug 8–13</span></div>
+                <span style="font-size:12.5px;font-weight:700;color:rgba(23,32,27,.5);font-variant-numeric:tabular-nums">3 of 3</span>
+              </div>
+              <div style="display:flex;gap:6px">
+                <div style="flex:1;height:4px;border-radius:99px;background:#1E4034"></div>
+                <div style="flex:1;height:4px;border-radius:99px;background:#1E4034"></div>
+                <div style="flex:1;height:4px;border-radius:99px;background:#1E4034"></div>
+              </div>
+              <div style="background:#EFE9DF;border-radius:14px;padding:12px 14px;display:flex;align-items:center;gap:12px">
+                <div style="width:54px;height:54px;border-radius:10px;overflow:hidden;flex-shrink:0"><image-slot id="pay-thumb" shape="rect" placeholder="Thumb"></image-slot></div>
+                <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:14.5px;font-weight:700">Gable End Cottage</span><span style="font-size:12px;color:rgba(23,32,27,.55)">Aug 8–13 · 5 nights · 2 guests</span></div>
+              </div>
+              <span style="font-size:11.5px;font-weight:700;letter-spacing:.12em;color:rgba(23,32,27,.5);padding:0 2px">PAY WITH</span>
+              <div style="display:flex;flex-direction:column;gap:9px;margin-top:-6px">
+                <div style="border:1.5px solid #1E4034;border-radius:12px;padding:13px 14px;display:flex;align-items:center;gap:12px;background:rgba(30,64,52,.04)">
+                  <svg width="30" height="20" viewBox="0 0 30 20"><rect width="30" height="20" rx="3" fill="#1E4034"></rect><rect x="4" y="13" width="9" height="3" rx="1" fill="#DDB672"></rect><rect x="4" y="5" width="6" height="4.5" rx="1" fill="#FBFAF7" opacity="0.85"></rect></svg>
+                  <span style="font-size:14.5px;font-weight:700;flex:1;font-variant-numeric:tabular-nums">Visa ·· 4242</span>
+                  <span style="width:22px;height:22px;border-radius:50%;background:#1E4034;display:flex;align-items:center;justify-content:center"><svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M2 8.5 L6 12.5 L14 3.5" stroke="#FBFAF7" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>
+                </div>
+                <div style="border:1px solid #E2D9C5;border-radius:12px;padding:13px 14px;display:flex;align-items:center;gap:12px">
+                  <svg width="17" height="20" viewBox="0 0 24 28" fill="none"><path d="M19.7 14.7 C19.7 11.9 22 10.6 22.1 10.5 C20.8 8.6 18.8 8.3 18.1 8.3 C16.4 8.1 14.8 9.3 13.9 9.3 C13 9.3 11.7 8.3 10.2 8.4 C8.3 8.4 6.6 9.5 5.6 11.2 C3.7 14.6 5.1 19.6 7 22.3 C7.9 23.6 9 25.1 10.5 25 C11.9 24.9 12.4 24.1 14.1 24.1 C15.8 24.1 16.2 25 17.7 25 C19.2 24.9 20.2 23.6 21.1 22.3 C22.1 20.7 22.6 19.2 22.6 19.1 C22.6 19.1 19.8 18 19.7 14.7 Z" fill="#17201B"></path><path d="M17 6.1 C17.8 5.1 18.3 3.8 18.2 2.5 C17.1 2.6 15.7 3.3 14.9 4.3 C14.2 5.1 13.5 6.5 13.7 7.7 C14.9 7.8 16.2 7 17 6.1 Z" fill="#17201B"></path></svg>
+                  <span style="font-size:14.5px;font-weight:600;flex:1;color:rgba(23,32,27,.8)">Apple Pay</span>
+                  <span style="width:22px;height:22px;border-radius:50%;border:1.5px solid #D8CDB6"></span>
+                </div>
+              </div>
+              <div style="border:1px solid #E8E0CE;border-radius:14px;padding:15px 16px;display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;justify-content:space-between;font-size:14px;font-variant-numeric:tabular-nums"><span style="color:rgba(23,32,27,.7)">Due now — the stay</span><span style="font-weight:600">$1,020</span></div>
+                <div style="display:flex;justify-content:space-between;font-size:14px;font-variant-numeric:tabular-nums"><span style="color:rgba(23,32,27,.7)">Into escrow — deposit</span><span style="font-weight:600">$300</span></div>
+                <div style="height:1px;background:#EDE5D3"></div>
+                <div style="display:flex;justify-content:space-between;align-items:baseline;font-variant-numeric:tabular-nums"><span style="font-size:14px;font-weight:700">Card total today</span><span style="font-size:16px;font-weight:700">$1,320</span></div>
+                <span style="font-size:11.5px;color:rgba(23,32,27,.55);font-variant-numeric:tabular-nums">$300 of it comes straight back — Sat, Aug 15, unless a claim is filed.</span>
+              </div>
+            </div>
+            <div style="padding:13px 18px 28px;display:flex;flex-direction:column;gap:9px">
+              <a href="#s6" style="display:flex;align-items:center;justify-content:center;background:#1E4034;color:#FBFAF7;font-weight:700;font-size:15.5px;padding:16px;border-radius:12px;text-decoration:none" style-hover="background:#16332A;color:#FBFAF7">Confirm &amp; pay $1,320</a>
+              <span style="font-size:11.5px;color:rgba(23,32,27,.5);text-align:center">Nora is paid $1,000 at your check-in — instantly.</span>
+            </div>
+          </div>
+        </x-import>
+        <span style="font-size:13.5px;color:rgba(23,32,27,.55);line-height:1.5;max-width:380px">Card or Apple Pay. The receipt separates the stay from the deposit that comes back.</span>
+      </div>
+
+      <div style="align-self:flex-start;margin-top:420px;display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0">
+        <svg width="34" height="16" viewBox="0 0 34 16" fill="none"><path d="M0 8 H28 M22 2 L29 8 L22 14" stroke="rgba(23,32,27,.45)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        <span style="font-size:11.5px;font-weight:600;color:rgba(23,32,27,.5);white-space:nowrap">paid → the trip</span>
+      </div>
+
+      <div id="s6" data-screen-label="App 6 — Trip (active stay)" style="display:flex;flex-direction:column;gap:14px;width:402px;flex-shrink:0">
+        <div style="display:flex;align-items:center;gap:10px"><span style="width:26px;height:26px;border-radius:8px;background:#1E4034;color:#FBFAF7;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center">6</span><span style="font-size:15px;font-weight:700">Trip — active stay</span></div>
+        <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+          <div style="height:100%;box-sizing:border-box;background:#FBFAF7;display:flex;flex-direction:column;font-family:'Hanken Grotesk',system-ui,sans-serif;color:#17201B;padding-top:64px">
+            <div style="padding:6px 18px 0;display:flex;flex-direction:column;gap:13px;flex:1;overflow:hidden">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span style="font-family:'Ibarra Real Nueva',Georgia,serif;font-size:24px;font-weight:600">Your stay</span>
+                <span style="background:#EFE9DF;font-size:12px;font-weight:700;padding:6px 12px;border-radius:999px;font-variant-numeric:tabular-nums">Day 2 of 5</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;border:1px solid #E8E0CE;border-radius:14px;padding:12px 14px">
+                <div style="width:54px;height:54px;border-radius:10px;overflow:hidden;flex-shrink:0"><image-slot id="trip-thumb" shape="rect" placeholder="Thumb"></image-slot></div>
+                <div style="display:flex;flex-direction:column;gap:2px;flex:1"><span style="font-size:15px;font-weight:700">Gable End Cottage</span><span style="font-size:12px;color:rgba(23,32,27,.55)">Aug 8–13 · Hudson, NY · hosted by Nora</span></div>
+              </div>
+              <div style="background:#EFE9DF;border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:8px">
+                <span style="font-size:11.5px;font-weight:700;letter-spacing:.14em;color:rgba(23,32,27,.5)">DOOR CODE</span>
+                <span style="font-size:42px;font-weight:700;letter-spacing:.28em;font-variant-numeric:tabular-nums;line-height:1">4172</span>
+                <span style="font-size:12.5px;color:rgba(23,32,27,.6);line-height:1.5">Check-in from 3 PM · Park behind the barn · Wifi: gable-guest</span>
+              </div>
+              <div style="border:1.5px dashed rgba(181,139,62,.75);background:rgba(181,139,62,.06);border-radius:14px;padding:13px 16px;display:flex;align-items:center;gap:12px">
+                <svg width="17" height="19" viewBox="0 0 15 17" fill="none" style="flex-shrink:0"><path d="M7.5 1 L14 3.5 V8 C14 12.5 11.2 15 7.5 16 C3.8 15 1 12.5 1 8 V3.5 Z" stroke="#8C6A2C" stroke-width="1.6" stroke-linejoin="round"></path><path d="M4.8 8.2 L6.8 10.2 L10.4 6.4" stroke="#8C6A2C" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                <div style="display:flex;flex-direction:column;gap:2px;flex:1">
+                  <span style="font-size:14px;font-weight:700;font-variant-numeric:tabular-nums">$300 · in escrow</span>
+                  <span style="font-size:12px;color:rgba(23,32,27,.6)">Auto-returns Sat, Aug 15 — nobody can touch it meanwhile.</span>
+                </div>
+                <a href="#s9" style="font-size:12px;font-weight:700;color:#8C6A2C;text-decoration:none;white-space:nowrap">Details →</a>
+              </div>
+              <div style="display:flex;gap:10px">
+                <span style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;background:#1E4034;color:#FBFAF7;font-weight:700;font-size:14px;padding:14px;border-radius:12px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4.5 5.5 H19.5 V16.5 H12.5 L8.5 20 V16.5 H4.5 Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"></path></svg>Message Nora</span>
+                <span style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;border:1.5px solid #D8CDB6;color:#17201B;font-weight:700;font-size:14px;padding:14px;border-radius:12px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3 L22 20 H2 Z" stroke="#8C6A2C" stroke-width="1.7" stroke-linejoin="round"></path><path d="M12 9.5 V14.5 M12 16.8 V17.2" stroke="#8C6A2C" stroke-width="1.8" stroke-linecap="round"></path></svg>Report an issue</span>
+              </div>
+              <div style="border-top:1px solid #EDE6D6;padding-top:12px;display:flex;align-items:center;justify-content:space-between;gap:10px">
+                <span style="font-size:12.5px;color:rgba(23,32,27,.55);line-height:1.45">Checkout Thu, 11 AM — your review opens then. Double-blind, as always.</span>
+                <a href="#s7" style="font-size:12.5px;font-weight:700;color:#1E4034;text-decoration:none;white-space:nowrap">Preview →</a>
+              </div>
+            </div>
+            <div style="border-top:1px solid #EDE6D6;background:#FBFAF7;display:flex;padding:10px 8px 26px">
+              <a href="#s1" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;color:rgba(23,32,27,.45)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"></circle><path d="M16.5 16.5 L21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg><span style="font-size:10.5px;font-weight:600">Explore</span></a>
+              <a href="#s6" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;color:#1E4034"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="4" y="7.5" width="16" height="12.5" rx="2" stroke="currentColor" stroke-width="1.8"></rect><path d="M9 7.5 V5 C9 4.2 9.7 3.5 10.5 3.5 H13.5 C14.3 3.5 15 4.2 15 5 V7.5" stroke="currentColor" stroke-width="1.8"></path></svg><span style="font-size:10.5px;font-weight:700">Trips</span></a>
+              <a href="#s8" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;color:rgba(23,32,27,.45)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2.5 L20 5.5 V11 C20 16.5 16.5 20 12 21.5 C7.5 20 4 16.5 4 11 V5.5 Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"></path><path d="M8.5 11.5 L11 14 L15.5 8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg><span style="font-size:10.5px;font-weight:600">Passport</span></a>
+              <span style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;color:rgba(23,32,27,.45)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4.5 5.5 H19.5 V16.5 H12.5 L8.5 20 V16.5 H4.5 Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"></path></svg><span style="font-size:10.5px;font-weight:600">Inbox</span></span>
+              <a href="#s10" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;color:rgba(23,32,27,.45)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="8" cy="8" r="4.2" stroke="currentColor" stroke-width="1.8"></circle><path d="M11.2 11.2 L20 20 M16.8 16.8 L19.3 14.3 M13.8 13.8 L15.8 11.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg><span style="font-size:10.5px;font-weight:600">Host</span></a>
+            </div>
+          </div>
+        </x-import>
+        <span style="font-size:13.5px;color:rgba(23,32,27,.55);line-height:1.5;max-width:380px">Door code front and center; the deposit chip links to its escrow detail (<a href="#s9" style="color:#1E4034;font-weight:600">screen 9</a>).</span>
+      </div>
+
+      <div style="align-self:flex-start;margin-top:420px;display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0">
+        <svg width="34" height="16" viewBox="0 0 34 16" fill="none"><path d="M0 8 H28 M22 2 L29 8 L22 14" stroke="rgba(23,32,27,.45)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        <span style="font-size:11.5px;font-weight:600;color:rgba(23,32,27,.5);white-space:nowrap">after checkout</span>
+      </div>
+
+      <div id="s7" data-screen-label="App 7 — Review flow" style="display:flex;flex-direction:column;gap:14px;width:402px;flex-shrink:0">
+        <div style="display:flex;align-items:center;gap:10px"><span style="width:26px;height:26px;border-radius:8px;background:#1E4034;color:#FBFAF7;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center">7</span><span style="font-size:15px;font-weight:700">Review — double-blind</span></div>
+        <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+          <div style="height:100%;box-sizing:border-box;background:#FBFAF7;display:flex;flex-direction:column;font-family:'Hanken Grotesk',system-ui,sans-serif;color:#17201B;padding-top:64px">
+            <div style="padding:6px 18px 0;display:flex;flex-direction:column;gap:14px;flex:1;overflow:hidden">
+              <div style="display:flex;flex-direction:column;gap:3px">
+                <span style="font-family:'Ibarra Real Nueva',Georgia,serif;font-size:24px;font-weight:600">How was Gable End?</span>
+                <span style="font-size:12.5px;color:rgba(23,32,27,.55)">Checked out Thu, Aug 13 · receipt #S-49213</span>
+              </div>
+              <div style="background:#EFE9DF;border-radius:14px;padding:13px 16px;display:flex;gap:12px;align-items:center">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M3 12 C3 12 6.5 5.5 12 5.5 C17.5 5.5 21 12 21 12 C21 12 17.5 18.5 12 18.5 C6.5 18.5 3 12 3 12 Z" stroke="#1E4034" stroke-width="1.7"></path><path d="M4 20 L20 4" stroke="#1E4034" stroke-width="1.7" stroke-linecap="round"></path></svg>
+                <span style="font-size:13px;line-height:1.5;color:rgba(23,32,27,.75)"><b>Double-blind:</b> Nora can't read yours until hers is in — or 14 days pass. Then both publish at once.</span>
+              </div>
+              <div style="display:flex;justify-content:center;gap:10px;padding:8px 0 2px">
+                <svg width="38" height="36" viewBox="0 0 17 16"><path d="M8.5 0.8 L10.6 5.6 L15.8 6.1 L11.9 9.6 L13 14.7 L8.5 12.1 L4 14.7 L5.1 9.6 L1.2 6.1 L6.4 5.6 Z" fill="#B58B3E"></path></svg>
+                <svg width="38" height="36" viewBox="0 0 17 16"><path d="M8.5 0.8 L10.6 5.6 L15.8 6.1 L11.9 9.6 L13 14.7 L8.5 12.1 L4 14.7 L5.1 9.6 L1.2 6.1 L6.4 5.6 Z" fill="#B58B3E"></path></svg>
+                <svg width="38" height="36" viewBox="0 0 17 16"><path d="M8.5 0.8 L10.6 5.6 L15.8 6.1 L11.9 9.6 L13 14.7 L8.5 12.1 L4 14.7 L5.1 9.6 L1.2 6.1 L6.4 5.6 Z" fill="#B58B3E"></path></svg>
+                <svg width="38" height="36" viewBox="0 0 17 16"><path d="M8.5 0.8 L10.6 5.6 L15.8 6.1 L11.9 9.6 L13 14.7 L8.5 12.1 L4 14.7 L5.1 9.6 L1.2 6.1 L6.4 5.6 Z" fill="#B58B3E"></path></svg>
+                <svg width="38" height="36" viewBox="0 0 17 16"><path d="M8.5 0.8 L10.6 5.6 L15.8 6.1 L11.9 9.6 L13 14.7 L8.5 12.1 L4 14.7 L5.1 9.6 L1.2 6.1 L6.4 5.6 Z" fill="#B58B3E"></path></svg>
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center">
+                <span style="background:#1E4034;color:#FBFAF7;font-size:12.5px;font-weight:700;padding:9px 15px;border-radius:999px">Spotless</span>
+                <span style="background:#1E4034;color:#FBFAF7;font-size:12.5px;font-weight:700;padding:9px 15px;border-radius:999px">As photographed</span>
+                <span style="border:1px solid #D8CDB6;color:rgba(23,32,27,.7);font-size:12.5px;font-weight:600;padding:9px 15px;border-radius:999px">Easy check-in</span>
+                <span style="border:1px solid #D8CDB6;color:rgba(23,32,27,.7);font-size:12.5px;font-weight:600;padding:9px 15px;border-radius:999px">Quiet street</span>
+                <span style="background:#1E4034;color:#FBFAF7;font-size:12.5px;font-weight:700;padding:9px 15px;border-radius:999px">Would return</span>
+              </div>
+              <div style="border:1px solid #E8E0CE;border-radius:14px;padding:14px 16px;min-height:120px;display:flex;flex-direction:column;gap:6px">
+                <span style="font-size:14px;line-height:1.6;color:rgba(23,32,27,.85)">The kitchen actually looks like the photos. Fog over the hills every morning —</span>
+                <span style="width:2px;height:18px;background:#1E4034;opacity:.7"></span>
+              </div>
+              <span style="font-size:11.5px;color:rgba(23,32,27,.5);text-align:center">Permanent once published · tied to your booking receipt</span>
+            </div>
+            <div style="padding:13px 18px 28px">
+              <a href="#s8" style="display:flex;align-items:center;justify-content:center;background:#1E4034;color:#FBFAF7;font-weight:700;font-size:15.5px;padding:16px;border-radius:12px;text-decoration:none" style-hover="background:#16332A;color:#FBFAF7">Publish review</a>
+            </div>
+          </div>
+        </x-import>
+        <span style="font-size:13.5px;color:rgba(23,32,27,.55);line-height:1.5;max-width:380px">Stars, quick tags, text — and the double-blind rule stated in one line. Publishing adds to your Passport (<a href="#s8" style="color:#1E4034;font-weight:600">screen 8</a>).</span>
+      </div>
+
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px;margin-top:44px">
+      <span style="font-size:16px;font-weight:700">Membership &amp; host</span>
+      <span style="font-size:14px;color:rgba(23,32,27,.55)">The signature Passport screen · deposit &amp; claims · host mode</span>
+    </div>
+    <div style="display:flex;gap:26px;align-items:flex-start">
+
+      <div id="s8" data-screen-label="App 8 — Trust Passport (profile)" style="display:flex;flex-direction:column;gap:14px;width:402px;flex-shrink:0">
+        <div style="display:flex;align-items:center;gap:10px"><span style="width:26px;height:26px;border-radius:8px;background:#B58B3E;color:#FBFAF7;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center">8</span><span style="font-size:15px;font-weight:700">Trust Passport — the signature screen</span></div>
+        <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+          <div style="height:100%;box-sizing:border-box;background:#1E4034;display:flex;flex-direction:column;font-family:'Hanken Grotesk',system-ui,sans-serif;color:#FBFAF7;padding-top:64px">
+            <div style="padding:6px 18px 0;display:flex;flex-direction:column;gap:14px;flex:1;overflow:hidden">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span style="font-family:'Ibarra Real Nueva',Georgia,serif;font-size:24px;font-weight:600">Trust Passport</span>
+                <span style="width:38px;height:38px;border-radius:50%;border:1.5px solid rgba(251,250,247,.4);display:flex;align-items:center;justify-content:center"><svg width="15" height="17" viewBox="0 0 18 20" fill="none"><path d="M9 12 V2 M5.5 5 L9 1.5 L12.5 5" stroke="#FBFAF7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path><path d="M4 9 H2.5 V18.5 H15.5 V9 H14" stroke="#FBFAF7" stroke-width="1.8" stroke-linecap="round"></path></svg></span>
+              </div>
+              <div style="position:relative;background:#F8F3E9;border-radius:16px;border:1px solid rgba(181,139,62,.6);overflow:hidden;color:#17201B;box-shadow:0 20px 44px rgba(0,0,0,.35)">
+                <svg width="170" height="170" viewBox="0 0 200 200" style="position:absolute;right:-46px;top:30px;pointer-events:none">
+                  <g fill="none" stroke="#B58B3E" stroke-width="0.55" opacity="0.5">
+                    <ellipse cx="100" cy="100" rx="96" ry="32"></ellipse>
+                    <ellipse cx="100" cy="100" rx="96" ry="32" transform="rotate(30 100 100)"></ellipse>
+                    <ellipse cx="100" cy="100" rx="96" ry="32" transform="rotate(60 100 100)"></ellipse>
+                    <ellipse cx="100" cy="100" rx="96" ry="32" transform="rotate(90 100 100)"></ellipse>
+                    <ellipse cx="100" cy="100" rx="96" ry="32" transform="rotate(120 100 100)"></ellipse>
+                    <ellipse cx="100" cy="100" rx="96" ry="32" transform="rotate(150 100 100)"></ellipse>
+                    <circle cx="100" cy="100" r="58"></circle>
+                  </g>
+                </svg>
+                <div style="padding:7px 0 6px;text-align:center;font-size:5.5px;letter-spacing:.3em;color:rgba(30,64,52,.55);font-weight:700;white-space:nowrap;overflow:hidden;border-bottom:1px solid rgba(181,139,62,.35)">TRUST PASSPORT · MEMBER OWNED · PORTABLE REPUTATION · NEUTRAL ESCROW · TRUST PASSPORT · MEMBER OWNED</div>
+                <div style="position:relative;padding:16px 18px 14px;display:flex;flex-direction:column;gap:14px">
+                  <div style="display:flex;justify-content:space-between;align-items:baseline">
+                    <span style="font-size:10.5px;font-weight:700;letter-spacing:.22em;color:#1E4034">TRUST PASSPORT</span>
+                    <span style="font-size:11px;font-weight:600;letter-spacing:.06em;color:#B58B3E;font-variant-numeric:tabular-nums">Nº TP-2193-0047</span>
+                  </div>
+                  <div style="display:flex;gap:13px;align-items:center">
+                    <div style="width:56px;height:56px;border-radius:50%;background:#1E4034;color:#F8F3E9;display:flex;align-items:center;justify-content:center;font-family:'Ibarra Real Nueva',Georgia,serif;font-size:22px;font-weight:600;border:2px solid #B58B3E;outline:1px solid rgba(181,139,62,.45);outline-offset:3px;flex-shrink:0">NB</div>
+                    <div style="display:flex;flex-direction:column;gap:3px">
+                      <span style="font-family:'Ibarra Real Nueva',Georgia,serif;font-size:23px;font-weight:600;line-height:1">Nora Bennett</span>
+                      <span style="font-size:11.5px;color:rgba(23,32,27,.6)">Member since March 2023 · Hudson, NY</span>
+                      <span style="display:inline-flex;align-items:center;gap:5px;background:#B58B3E;color:#FBFAF7;font-size:10.5px;font-weight:700;padding:4px 9px;border-radius:999px;align-self:flex-start"><svg width="9" height="11" viewBox="0 0 15 17" fill="none"><path d="M7.5 1 L14 3.5 V8 C14 12.5 11.2 15 7.5 16 C3.8 15 1 12.5 1 8 V3.5 Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path><path d="M4.8 8.2 L6.8 10.2 L10.4 6.4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>Tier 3 verified</span>
+                    </div>
+                  </div>
+                  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px 10px">
+                    <div style="display:flex;flex-direction:column;gap:1px"><span style="font-size:19px;font-weight:700;font-variant-numeric:tabular-nums">21</span><span style="font-size:9px;font-weight:700;letter-spacing:.08em;color:rgba(23,32,27,.55)">STAYS</span></div>
+                    <div style="display:flex;flex-direction:column;gap:1px"><span style="font-size:19px;font-weight:700;font-variant-numeric:tabular-nums;color:#1E4034">21</span><span style="font-size:9px;font-weight:700;letter-spacing:.08em;color:rgba(23,32,27,.55)">DAMAGE-FREE</span></div>
+                    <div style="display:flex;flex-direction:column;gap:1px"><span style="font-size:19px;font-weight:700;font-variant-numeric:tabular-nums">0</span><span style="font-size:9px;font-weight:700;letter-spacing:.08em;color:rgba(23,32,27,.55)">CLAIMS</span></div>
+                    <div style="display:flex;flex-direction:column;gap:1px"><span style="font-size:19px;font-weight:700;font-variant-numeric:tabular-nums">4.93<span style="font-size:11px;color:#B58B3E"> ★</span></span><span style="font-size:9px;font-weight:700;letter-spacing:.08em;color:rgba(23,32,27,.55)">AS GUEST</span></div>
+                    <div style="display:flex;flex-direction:column;gap:1px"><span style="font-size:19px;font-weight:700;font-variant-numeric:tabular-nums">4.88<span style="font-size:11px;color:#B58B3E"> ★</span></span><span style="font-size:9px;font-weight:700;letter-spacing:.08em;color:rgba(23,32,27,.55)">AS HOST</span></div>
+                    <div style="display:flex;flex-direction:column;gap:1px"><span style="font-size:19px;font-weight:700;font-variant-numeric:tabular-nums">98%</span><span style="font-size:9px;font-weight:700;letter-spacing:.08em;color:rgba(23,32,27,.55)">RESPONSE</span></div>
+                  </div>
+                  <div style="background:rgba(30,64,52,.07);border-radius:6px;padding:8px 12px;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:9.5px;letter-spacing:.14em;color:rgba(30,64,52,.62);line-height:1.7;white-space:nowrap;overflow:hidden">P&lt;STEAD&lt;&lt;BENNETT&lt;&lt;NORA&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;<br>TP21930047&lt;2303&lt;21STAYS&lt;0CLAIMS&lt;493&lt;488</div>
+                </div>
+                <div style="padding:6px 0 7px;text-align:center;font-size:5.5px;letter-spacing:.3em;color:rgba(30,64,52,.55);font-weight:700;white-space:nowrap;overflow:hidden;border-top:1px solid rgba(181,139,62,.35)">ISSUED BY THE MEMBERS · REVIEWS WITH RECEIPTS · INSTANT PAYOUT · INDEPENDENT ARBITRATION</div>
+              </div>
+              <div style="display:flex;justify-content:space-around;padding:2px 8px 0">
+                <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><span style="width:58px;height:58px;border-radius:50%;border:1.5px solid #DDB672;outline:1px solid rgba(221,182,114,.4);outline-offset:3px;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;color:#DDB672;font-variant-numeric:tabular-nums">21</span><span style="font-size:10px;font-weight:600;color:rgba(251,250,247,.65);letter-spacing:.06em">STREAK</span></div>
+                <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><span style="width:58px;height:58px;border-radius:50%;border:1.5px solid #DDB672;outline:1px solid rgba(221,182,114,.4);outline-offset:3px;display:flex;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3.5 10.6 L12 3.4 L20.5 10.6 V20.5 H3.5 Z" stroke="#DDB672" stroke-width="1.8" stroke-linejoin="round"></path><circle cx="12" cy="13.2" r="1.8" fill="#DDB672"></circle></svg></span><span style="font-size:10px;font-weight:600;color:rgba(251,250,247,.65);letter-spacing:.06em">HOSTS TOO</span></div>
+                <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><span style="width:58px;height:58px;border-radius:50%;border:1.5px solid #DDB672;outline:1px solid rgba(221,182,114,.4);outline-offset:3px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#DDB672;font-variant-numeric:tabular-nums">'23</span><span style="font-size:10px;font-weight:600;color:rgba(251,250,247,.65);letter-spacing:.06em">EARLY MEMBER</span></div>
+              </div>
+              <div style="background:rgba(251,250,247,.08);border:1px solid rgba(251,250,247,.15);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px">
+                <span style="font-size:12.5px;line-height:1.5;color:rgba(251,250,247,.8);flex:1">34 reviews, each tied to a receipt. Latest: Maya R., 5★, June 2026.</span>
+                <span style="font-size:12px;font-weight:700;color:#DDB672;white-space:nowrap">See all →</span>
+              </div>
+            </div>
+            <div style="border-top:1px solid rgba(251,250,247,.12);background:#FBFAF7;display:flex;padding:10px 8px 26px">
+              <a href="#s1" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;color:rgba(23,32,27,.45)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"></circle><path d="M16.5 16.5 L21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg><span style="font-size:10.5px;font-weight:600">Explore</span></a>
+              <a href="#s6" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;color:rgba(23,32,27,.45)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="4" y="7.5" width="16" height="12.5" rx="2" stroke="currentColor" stroke-width="1.8"></rect><path d="M9 7.5 V5 C9 4.2 9.7 3.5 10.5 3.5 H13.5 C14.3 3.5 15 4.2 15 5 V7.5" stroke="currentColor" stroke-width="1.8"></path></svg><span style="font-size:10.5px;font-weight:600">Trips</span></a>
+              <a href="#s8" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;color:#1E4034"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2.5 L20 5.5 V11 C20 16.5 16.5 20 12 21.5 C7.5 20 4 16.5 4 11 V5.5 Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"></path><path d="M8.5 11.5 L11 14 L15.5 8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg><span style="font-size:10.5px;font-weight:700">Passport</span></a>
+              <span style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;color:rgba(23,32,27,.45)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4.5 5.5 H19.5 V16.5 H12.5 L8.5 20 V16.5 H4.5 Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"></path></svg><span style="font-size:10.5px;font-weight:600">Inbox</span></span>
+              <a href="#s10" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;color:rgba(23,32,27,.45)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="8" cy="8" r="4.2" stroke="currentColor" stroke-width="1.8"></circle><path d="M11.2 11.2 L20 20 M16.8 16.8 L19.3 14.3 M13.8 13.8 L15.8 11.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg><span style="font-size:10.5px;font-weight:600">Host</span></a>
+            </div>
+          </div>
+        </x-import>
+        <span style="font-size:13.5px;color:rgba(23,32,27,.55);line-height:1.5;max-width:380px">The screenshot-worthy credential: guilloché print, microtext border, machine-readable strip. Portable, permanent, member-owned.</span>
+      </div>
+
+      <div id="s9" data-screen-label="App 9 — Deposit &amp; claims" style="display:flex;flex-direction:column;gap:14px;width:402px;flex-shrink:0">
+        <div style="display:flex;align-items:center;gap:10px"><span style="width:26px;height:26px;border-radius:8px;background:#B3402A;color:#FBFAF7;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center">9</span><span style="font-size:15px;font-weight:700">Deposit &amp; claims — dispute state</span></div>
+        <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+          <div style="height:100%;box-sizing:border-box;background:#FBFAF7;display:flex;flex-direction:column;font-family:'Hanken Grotesk',system-ui,sans-serif;color:#17201B;padding-top:64px">
+            <div style="padding:6px 18px 0;display:flex;flex-direction:column;gap:13px;flex:1;overflow:hidden">
+              <div style="display:flex;flex-direction:column;gap:3px">
+                <span style="font-family:'Ibarra Real Nueva',Georgia,serif;font-size:24px;font-weight:600">Your deposit</span>
+                <span style="font-size:12.5px;color:rgba(23,32,27,.55)">Gable End stay · checked out Thu, Aug 13</span>
+              </div>
+              <div style="background:#EFE9DF;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <span style="font-size:13px;font-weight:700;font-variant-numeric:tabular-nums">$300 in escrow</span>
+                  <span style="display:inline-flex;align-items:center;gap:6px;background:rgba(179,64,42,.12);border:1px solid rgba(179,64,42,.45);color:#B3402A;font-size:11px;font-weight:700;padding:5px 10px;border-radius:999px">CLAIM UNDER REVIEW</span>
+                </div>
+                <div style="position:relative">
+                  <div style="position:absolute;left:7px;right:7px;top:6px;height:2px;background:#DFD5BE"></div>
+                  <div style="position:absolute;left:7px;top:6px;height:2px;background:#1E4034;width:68%"></div>
+                  <div style="display:grid;grid-template-columns:repeat(4,1fr);position:relative">
+                    <div style="display:flex;flex-direction:column;align-items:flex-start;gap:5px"><span style="width:14px;height:14px;border-radius:50%;background:#1E4034;box-sizing:border-box"></span><span style="font-size:10px;font-weight:700">Held</span></div>
+                    <div style="display:flex;flex-direction:column;align-items:flex-start;gap:5px"><span style="width:14px;height:14px;border-radius:50%;background:#1E4034;box-sizing:border-box"></span><span style="font-size:10px;font-weight:700">Stay</span></div>
+                    <div style="display:flex;flex-direction:column;align-items:flex-start;gap:5px"><span style="width:14px;height:14px;border-radius:50%;background:#B3402A;box-shadow:0 0 0 3px rgba(179,64,42,.2);box-sizing:border-box"></span><span style="font-size:10px;font-weight:700;color:#B3402A">Claim filed</span></div>
+                    <div style="display:flex;flex-direction:column;align-items:flex-start;gap:5px"><span style="width:14px;height:14px;border-radius:50%;background:#FBFAF7;border:2px solid #D8CBAC;box-sizing:border-box"></span><span style="font-size:10px;font-weight:600;color:rgba(23,32,27,.5)">Release</span></div>
+                  </div>
+                </div>
+              </div>
+              <div style="border:1.5px solid rgba(179,64,42,.45);background:rgba(179,64,42,.04);border-radius:14px;padding:15px 16px;display:flex;flex-direction:column;gap:11px">
+                <div style="display:flex;justify-content:space-between;align-items:baseline">
+                  <span style="font-size:10.5px;font-weight:700;letter-spacing:.14em;color:#B3402A">CLAIM #C-1108 · FILED BY NORA, 9:14 AM</span>
+                  <span style="font-size:14.5px;font-weight:700;font-variant-numeric:tabular-nums">$85 <span style="font-size:11.5px;font-weight:600;color:rgba(23,32,27,.55)">of $300</span></span>
+                </div>
+                <span style="font-size:15px;font-weight:700">Broken ceramic table lamp</span>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <div style="width:84px;height:64px;border-radius:8px;overflow:hidden"><image-slot id="ev-1" shape="rect" placeholder="Photo 1"></image-slot></div>
+                  <div style="width:84px;height:64px;border-radius:8px;overflow:hidden"><image-slot id="ev-2" shape="rect" placeholder="Photo 2"></image-slot></div>
+                  <span style="font-size:11.5px;color:rgba(23,32,27,.55);line-height:1.45">2 photos ·<br>1 receipt</span>
+                </div>
+                <div style="display:flex;gap:9px;margin-top:2px">
+                  <span style="flex:1;display:flex;align-items:center;justify-content:center;background:#1E4034;color:#FBFAF7;font-weight:700;font-size:13.5px;padding:13px;border-radius:11px;min-height:44px;box-sizing:border-box">Accept — release $85</span>
+                  <span style="flex:1;display:flex;align-items:center;justify-content:center;border:1.5px solid rgba(179,64,42,.55);color:#B3402A;font-weight:700;font-size:13.5px;padding:13px;border-radius:11px;min-height:44px;box-sizing:border-box">Dispute</span>
+                </div>
+              </div>
+              <div style="border:1px solid #E8E0CE;border-radius:14px;padding:13px 16px;display:flex;gap:11px;align-items:flex-start">
+                <svg width="17" height="17" viewBox="0 0 20 20" fill="none" style="flex-shrink:0;margin-top:2px"><path d="M10 2 V4 M4 4.5 L10 4 L16 4.5 M4 4.5 L2 10 H6 Z M16 4.5 L14 10 H18 Z M10 4 V16 M6.5 16 H13.5" stroke="#B58B3E" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                <span style="font-size:12.5px;line-height:1.55;color:rgba(23,32,27,.65)">If you dispute, independent arbitration reviews the <b>identical evidence</b> from both sides and the decision executes automatically. Median: 5 days.</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:9px;padding:0 4px">
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M2 8.5 L6 12.5 L14 3.5" stroke="#1E4034" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                <span style="font-size:13px;font-weight:700;font-variant-numeric:tabular-nums">$215 auto-returns to you either way.</span>
+              </div>
+            </div>
+            <div style="padding:13px 18px 28px">
+              <a href="#s6" style="display:flex;align-items:center;justify-content:center;border:1.5px solid #D8CDB6;color:#17201B;font-weight:700;font-size:14.5px;padding:14px;border-radius:12px;text-decoration:none" style-hover="border-color:#1E4034;color:#1E4034">Back to trip</a>
+            </div>
+          </div>
+        </x-import>
+        <span style="font-size:13.5px;color:rgba(23,32,27,.55);line-height:1.5;max-width:380px">The only place Claim Red appears. Identical evidence for both parties; the undisputed remainder returns regardless.</span>
+      </div>
+
+      <div id="s10" data-screen-label="App 10 — Host mode dashboard" style="display:flex;flex-direction:column;gap:14px;width:402px;flex-shrink:0">
+        <div style="display:flex;align-items:center;gap:10px"><span style="width:26px;height:26px;border-radius:8px;background:#1E4034;color:#FBFAF7;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center">10</span><span style="font-size:15px;font-weight:700">Host mode — dashboard</span></div>
+        <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+          <div style="height:100%;box-sizing:border-box;background:#FBFAF7;display:flex;flex-direction:column;font-family:'Hanken Grotesk',system-ui,sans-serif;color:#17201B;padding-top:64px">
+            <div style="padding:6px 18px 0;display:flex;flex-direction:column;gap:13px;flex:1;overflow:hidden">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span style="font-family:'Ibarra Real Nueva',Georgia,serif;font-size:24px;font-weight:600">Host mode</span>
+                <div style="background:#EFE9DF;border-radius:999px;padding:3px;display:flex">
+                  <span style="padding:6px 13px;font-size:11.5px;font-weight:600;color:rgba(23,32,27,.55)">Guest</span>
+                  <span style="background:#1E4034;color:#FBFAF7;border-radius:999px;padding:6px 13px;font-size:11.5px;font-weight:700">Host</span>
+                </div>
+              </div>
+              <div style="background:#1E4034;color:#FBFAF7;border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:6px">
+                <span style="font-size:11px;font-weight:700;letter-spacing:.16em;color:rgba(251,250,247,.6)">NEXT PAYOUT</span>
+                <span style="font-size:40px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1">$1,080</span>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+                  <span style="font-size:12px;color:rgba(251,250,247,.75)">Maya R. · 6 nights · 100% of your rate</span>
+                  <span style="display:inline-flex;align-items:center;gap:5px;background:#DDB672;color:#17201B;font-size:10.5px;font-weight:700;padding:5px 10px;border-radius:999px"><svg width="9" height="11" viewBox="0 0 20 20" fill="none"><path d="M11 1 L3 11.5 H9 L8 19 L17 8 H10.5 Z" fill="#17201B"></path></svg>AT CHECK-IN, AUG 8</span>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:9px">
+                <div style="border:1px solid #E8E0CE;border-radius:12px;padding:11px 12px;display:flex;flex-direction:column;gap:2px"><span style="font-size:18px;font-weight:700;font-variant-numeric:tabular-nums">82%</span><span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:rgba(23,32,27,.5)">OCCUPANCY</span></div>
+                <div style="border:1px solid #E8E0CE;border-radius:12px;padding:11px 12px;display:flex;flex-direction:column;gap:2px"><span style="font-size:18px;font-weight:700;font-variant-numeric:tabular-nums">4.88<span style="font-size:11px;color:#B58B3E"> ★</span></span><span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:rgba(23,32,27,.5)">RATING</span></div>
+                <div style="border:1px solid #E8E0CE;border-radius:12px;padding:11px 12px;display:flex;flex-direction:column;gap:2px"><span style="font-size:18px;font-weight:700;font-variant-numeric:tabular-nums">98%</span><span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:rgba(23,32,27,.5)">RESPONSE</span></div>
+              </div>
+              <div style="background:#EFE9DF;border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;font-weight:700">August</span><span style="font-size:11px;font-weight:600;color:rgba(23,32,27,.55);font-variant-numeric:tabular-nums">12 nights booked</span></div>
+                <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px">
+                  <div style="height:38px;border-radius:8px;background:#1E4034;color:#FBFAF7;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums">8</div>
+                  <div style="height:38px;border-radius:8px;background:#1E4034;color:#FBFAF7;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums">9</div>
+                  <div style="height:38px;border-radius:8px;background:#1E4034;color:#FBFAF7;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums">10</div>
+                  <div style="height:38px;border-radius:8px;background:#1E4034;color:#FBFAF7;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums">11</div>
+                  <div style="height:38px;border-radius:8px;background:#1E4034;color:#FBFAF7;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums">12</div>
+                  <div style="height:38px;border-radius:8px;background:#FBFAF7;border:1px solid #DFD5BE;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:rgba(23,32,27,.55);font-variant-numeric:tabular-nums;box-sizing:border-box">13</div>
+                  <div style="height:38px;border-radius:8px;background:#FBFAF7;border:1px solid #DFD5BE;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:rgba(23,32,27,.55);font-variant-numeric:tabular-nums;box-sizing:border-box">14</div>
+                </div>
+              </div>
+              <div style="border:1px solid #E8E0CE;border-radius:14px;padding:12px 14px;display:flex;align-items:center;gap:12px">
+                <div style="width:46px;height:46px;border-radius:9px;overflow:hidden;flex-shrink:0"><image-slot id="host-listing" shape="rect" placeholder="Thumb"></image-slot></div>
+                <div style="display:flex;flex-direction:column;gap:1px;flex:1"><span style="font-size:14px;font-weight:700">Gable End Cottage</span><span style="font-size:11.5px;color:rgba(23,32,27,.55)">Listed · $200 a night · instant book on</span></div>
+                <svg width="7" height="12" viewBox="0 0 8 14"><path d="M1 1 L7 7 L1 13" stroke="rgba(23,32,27,.4)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              </div>
+              <div style="border:1px solid #E8E0CE;border-radius:14px;padding:13px 14px;display:flex;flex-direction:column;gap:9px">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <span style="font-size:13px;font-weight:700">Claims inbox</span>
+                  <span style="background:rgba(30,64,52,.1);color:#1E4034;font-size:10.5px;font-weight:700;padding:4px 9px;border-radius:999px">0 OPEN</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M2 8.5 L6 12.5 L14 3.5" stroke="rgba(23,32,27,.45)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                  <span style="font-size:12px;color:rgba(23,32,27,.55);font-variant-numeric:tabular-nums">Lamp — resolved · $85 released Jul 2 · streak notes updated</span>
+                </div>
+              </div>
+            </div>
+            <div style="border-top:1px solid #EDE6D6;background:#FBFAF7;display:flex;padding:10px 8px 26px">
+              <a href="#s1" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;color:rgba(23,32,27,.45)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"></circle><path d="M16.5 16.5 L21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg><span style="font-size:10.5px;font-weight:600">Explore</span></a>
+              <a href="#s6" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;color:rgba(23,32,27,.45)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="4" y="7.5" width="16" height="12.5" rx="2" stroke="currentColor" stroke-width="1.8"></rect><path d="M9 7.5 V5 C9 4.2 9.7 3.5 10.5 3.5 H13.5 C14.3 3.5 15 4.2 15 5 V7.5" stroke="currentColor" stroke-width="1.8"></path></svg><span style="font-size:10.5px;font-weight:600">Trips</span></a>
+              <a href="#s8" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;color:rgba(23,32,27,.45)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2.5 L20 5.5 V11 C20 16.5 16.5 20 12 21.5 C7.5 20 4 16.5 4 11 V5.5 Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"></path><path d="M8.5 11.5 L11 14 L15.5 8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg><span style="font-size:10.5px;font-weight:600">Passport</span></a>
+              <span style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;color:rgba(23,32,27,.45)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4.5 5.5 H19.5 V16.5 H12.5 L8.5 20 V16.5 H4.5 Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"></path></svg><span style="font-size:10.5px;font-weight:600">Inbox</span></span>
+              <a href="#s10" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;color:#1E4034"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="8" cy="8" r="4.2" stroke="currentColor" stroke-width="1.8"></circle><path d="M11.2 11.2 L20 20 M16.8 16.8 L19.3 14.3 M13.8 13.8 L15.8 11.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg><span style="font-size:10.5px;font-weight:700">Host</span></a>
+            </div>
+          </div>
+        </x-import>
+        <span style="font-size:13.5px;color:rgba(23,32,27,.55);line-height:1.5;max-width:380px">Instant-payout balance is the hero; calendar, listing performance, and a quiet claims inbox below.</span>
+      </div>
+
+    </div>
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;brandName&quot;: { &quot;editor&quot;: &quot;text&quot;, &quot;default&quot;: &quot;Stead&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Brand&quot; },
+  &quot;heroHeadline&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;Stay in homes. Skip the toll booth.&quot;, &quot;options&quot;: [&quot;Stay in homes. Skip the toll booth.&quot;, &quot;The home rental network owned by its members.&quot;, &quot;Their home. Your trust. Nobody's middleman.&quot;], &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Brand&quot; },
+  &quot;platformTake&quot;: { &quot;editor&quot;: &quot;range&quot;, &quot;default&quot;: 15, &quot;min&quot;: 12, &quot;max&quot;: 20, &quot;step&quot;: 1, &quot;unit&quot;: &quot;%&quot;, &quot;tsType&quot;: &quot;number&quot;, &quot;section&quot;: &quot;Fee comparison&quot; }
+}">
+class Component extends DCLogic {
+  state = { rate: 200, nights: 5, escrow: 0 };
+
+  renderVals() {
+    const f = (n) => "$" + Math.round(n).toLocaleString("en-US");
+    const brand = this.props.brandName ?? "Stead";
+    const headline = this.props.heroHeadline ?? "Stay in homes. Skip the toll booth.";
+    const take = this.props.platformTake ?? 15;
+    const { rate, nights, escrow } = this.state;
+    const sub = rate * nights;
+    const steadGuest = Math.round(sub * 1.02);
+    const steadFee = steadGuest - sub;
+    const otherGuest = Math.round(sub * (1 + (take * 0.8) / 100));
+    const otherHost = Math.round(sub * (1 - (take * 0.2) / 100));
+    const otherTake = otherGuest - otherHost;
+
+    const stepData = [
+      { t: "Held at booking", d: "Your $300 moves into neutral escrow — not the host's account, not ours." },
+      { t: "During the stay", d: "It sits there, untouchable. By anyone. Including us." },
+      { t: "48-hour claim window", d: "After checkout, the host has 48 hours to file a claim — with photos." },
+      { t: "Auto-released", d: "No claim? Back on your card instantly. Not eventually." }
+    ];
+    const escrowSteps = stepData.map((s, i) => {
+      const done = i <= escrow, current = i === escrow;
+      return {
+        t: s.t, d: s.d,
+        go: () => this.setState({ escrow: i }),
+        chipStyle: {
+          padding: "11px 18px", borderRadius: 10, cursor: "pointer", font: "inherit",
+          fontSize: 14.5, fontWeight: 600, minHeight: 44, whiteSpace: "nowrap",
+          background: current ? "#1E4034" : "rgba(251,250,247,.65)",
+          color: current ? "#FBFAF7" : "#17201B",
+          border: current ? "1px solid #1E4034" : "1px solid #D8CDB6",
+          transition: "all .25s ease"
+        },
+        dotStyle: {
+          width: 22, height: 22, borderRadius: "50%", boxSizing: "border-box",
+          background: done ? "#1E4034" : "#FBFAF7",
+          border: done ? "2px solid #1E4034" : "2px solid #CFC5AC",
+          boxShadow: current ? "0 0 0 3px #EFE9DF, 0 0 0 5px #B58B3E" : "none",
+          transition: "all .4s ease", position: "relative", zIndex: 2
+        },
+        titleStyle: {
+          fontWeight: 700, fontSize: 16.5,
+          color: done ? "#17201B" : "rgba(23,32,27,.42)", transition: "color .3s"
+        }
+      };
+    });
+
+    const statusLines = [
+      "$300 · held in neutral escrow",
+      "$300 · in escrow — nobody can touch it",
+      "$300 · claim window closes in 41 h",
+      "$300 · back on the guest's card"
+    ];
+
+    const calDays = [];
+    for (let i = 0; i < 6; i++) calDays.push({ label: "", st: { width: 38, height: 38 } });
+    for (let d = 1; d <= 31; d++) {
+      const inRange = d >= 8 && d <= 13, cap = d === 8 || d === 13;
+      calDays.push({
+        label: String(d),
+        st: {
+          width: 38, height: 38, display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 14.5, fontWeight: cap ? 700 : 500, borderRadius: 10, fontVariantNumeric: "tabular-nums",
+          background: cap ? "#1E4034" : (inRange ? "rgba(30,64,52,.13)" : "transparent"),
+          color: cap ? "#FBFAF7" : (inRange ? "#1E4034" : "#17201B")
+        }
+      });
+    }
+
+    return {
+      brand, headline,
+      takeLabel: "~" + take + "%",
+      rateF: f(rate), nightsF: String(nights),
+      mathLine: f(rate) + " × " + nights + (nights === 1 ? " night" : " nights") + " = " + f(sub),
+      steadGuestF: f(steadGuest), steadHostF: f(sub), steadFeeF: f(steadFee),
+      otherGuestF: f(otherGuest), otherHostF: f(otherHost), otherTakeF: f(otherTake),
+      diffF: f(otherTake - steadFee),
+      guestSavesF: f(otherGuest - steadGuest), hostGainsF: f(sub - otherHost),
+      setRate: (e) => this.setState({ rate: +e.target.value }),
+      setNights: (e) => this.setState({ nights: +e.target.value }),
+      rateVal: rate, nightsVal: nights,
+      escrowSteps,
+      escrowPctW: ["4%", "36%", "68%", "100%"][escrow],
+      escrowStatus: statusLines[escrow],
+      escrowStatusChip: {
+        display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 16px",
+        borderRadius: 999, fontWeight: 600, fontSize: 15, fontVariantNumeric: "tabular-nums",
+        background: escrow === 3 ? "#1E4034" : "rgba(181,139,62,.16)",
+        color: escrow === 3 ? "#FBFAF7" : "#17201B",
+        border: escrow === 3 ? "1px solid #1E4034" : "1px solid rgba(181,139,62,.5)",
+        transition: "all .35s ease"
+      },
+      calDays
+    };
+  }
+}
+</script>
+</body>
+</html>
