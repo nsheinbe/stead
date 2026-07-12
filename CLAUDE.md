@@ -44,3 +44,4 @@ paper #FBFAF7 · ink #17201B · spruce #1E4034 · spruce-deep #16332A · brass #
 * Stripe Identity requires account activation even in test mode (Slice 7).
 * Images in /design are placeholder slots; use picsum seeds until real photography lands (pre-launch task, not a slice).
 * `pending_payment` bookings expire via cron after 30 min so the exclusion constraint doesn't dead-lock dates behind abandoned checkouts.
+* Auth is magic-link email only for now — Google OAuth is deferred (TODO: enable the Google provider in Supabase Auth and add it to /login once the OAuth client is supplied).

@@ -37,3 +37,12 @@ Open Claude Code at the repo root and paste: "Read CLAUDE.md and /design/DESIGN_
 ## 7. Your manual verification (non-delegable)
 
 After Slices 2, 3, and 6: walk the money paths yourself in Stripe's test dashboard — deposit auth appears at check-in, cancels on release, captures correctly on a split claim, refunds match the policy preview. Test card 4242 4242 4242 4242. Payment edge cases are where AI-written code most needs human eyes; acceptance criteria are necessary but not sufficient here.
+
+## Remote-environment deviation (recorded 2026-07-12)
+
+This repo is built from a remote Claude Code environment, so §2's `stripe listen` step doesn't apply — there is no localhost to forward webhooks to. Instead:
+
+* The `stripe-webhook` edge function is deployed to the hosted Supabase project (JWT verification off; the function authenticates requests via Stripe signature verification).
+* A webhook endpoint is created via the Stripe API pointing at the deployed function URL (`https://<project-ref>.supabase.co/functions/v1/stripe-webhook`), subscribed to the events BUILD_PROMPT §7 handles: `payment_intent.succeeded`, `charge.dispute.created`, `charge.dispute.closed`, `account.updated`.
+* The endpoint's signing secret is stored as `STRIPE_WEBHOOK_SECRET` in two places: a Supabase edge-function secret and the local `.env`.
+* Secrets enter the sandbox via the Claude Code environment's variable settings, never via chat.
