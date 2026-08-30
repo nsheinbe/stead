@@ -9,6 +9,11 @@ dist/
 
 # Supabase local
 supabase/.temp/
+supabase/.branches/
+
+# Test / tooling
+coverage/
+*.tsbuildinfo
 
 # Editor/OS noise
 .DS_Store

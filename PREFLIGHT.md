@@ -4,7 +4,7 @@ Claude Code produces its best work when nothing has to be mocked. Every key belo
 
 ## 1. Supabase (~10 min)
 
-* Create a new project at supabase.com (name: stead-dev, region us-west).
+* Create a new project at supabase.com (name: stead-dev). The live project is **stead-dev in us-east-1**, ref `aqkjkarrhancuqxxukus` (owner's choice vs the older us-west text).
 * Install CLI: `npm i -g supabase`, then `supabase login` and, once the repo exists, `supabase link --project-ref <ref>`.
 * Copy into .env: Project URL → VITE_SUPABASE_URL, anon key → VITE_SUPABASE_ANON_KEY, service_role key → SUPABASE_SERVICE_ROLE_KEY.
 * Auth → Providers: enable Google (paste OAuth client from Google Cloud console) and keep Email (magic link) on.
@@ -46,3 +46,7 @@ This repo is built from a remote Claude Code environment, so §2's `stripe liste
 * A webhook endpoint is created via the Stripe API pointing at the deployed function URL (`https://<project-ref>.supabase.co/functions/v1/stripe-webhook`), subscribed to the events BUILD_PROMPT §7 handles: `payment_intent.succeeded`, `charge.dispute.created`, `charge.dispute.closed`, `account.updated`.
 * The endpoint's signing secret is stored as `STRIPE_WEBHOOK_SECRET` in two places: a Supabase edge-function secret and the local `.env`.
 * Secrets enter the sandbox via the Claude Code environment's variable settings, never via chat.
+
+## Live project (recorded for Slice 1)
+
+The hosted Supabase project is **stead-dev**, region **us-east-1**, ref **aqkjkarrhancuqxxukus**. Link with `supabase link --project-ref aqkjkarrhancuqxxukus`. Do not commit secrets; wire Stripe and Resend from `.env.example`. Tests must pass without live Stripe keys (mock the Payment Element path).
