@@ -4,7 +4,7 @@ Claude Code produces its best work when nothing has to be mocked. Every key belo
 
 ## 1. Supabase (~10 min)
 
-* Create a new project at supabase.com (name: stead-dev, region us-west).
+* Create a new project at supabase.com (name: stead-dev, region us-west). *(Done 2026-08-30: created as `stead-dev` in us-east-1 — owner's choice, matching their other projects — ref `aqkjkarrhancuqxxukus`.)*
 * Install CLI: `npm i -g supabase`, then `supabase login` and, once the repo exists, `supabase link --project-ref <ref>`.
 * Copy into .env: Project URL → VITE_SUPABASE_URL, anon key → VITE_SUPABASE_ANON_KEY, service_role key → SUPABASE_SERVICE_ROLE_KEY.
 * Auth → Providers: enable Google (paste OAuth client from Google Cloud console) and keep Email (magic link) on.
