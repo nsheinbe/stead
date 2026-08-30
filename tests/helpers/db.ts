@@ -47,6 +47,10 @@ export function databaseUrl(): string | undefined {
   return process.env.DATABASE_URL;
 }
 
+export function id(): string {
+  return crypto.randomUUID();
+}
+
 export async function getTestPool(): Promise<pg.Pool> {
   if (pool) return pool;
   if (setupPromise) return setupPromise;
@@ -126,7 +130,8 @@ export async function insertListing(
      ) VALUES (
        $1, $2, $3, 'Test listing', 'entire_home', 'Hudson', 'US', $4,
        $5, $6, $7, 'active'
-     )`,
+     )
+     ON CONFLICT (id) DO NOTHING`,
     [
       opts.id,
       opts.hostId,

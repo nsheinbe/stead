@@ -4,6 +4,7 @@ import {
   closeTestPool,
   databaseUrl,
   getTestPool,
+  id,
   insertListing,
   insertUser,
 } from "./helpers/db";
@@ -17,10 +18,10 @@ describeDb("bookings RLS", () => {
 
   it("guest A cannot read guest B's booking", async () => {
     const pool = await getTestPool();
-    const hostId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaa0005";
-    const guestA = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbb0008";
-    const guestB = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbb0009";
-    const listingId = "cccccccc-cccc-cccc-cccc-cccccccc0005";
+    const hostId = id();
+    const guestA = id();
+    const guestB = id();
+    const listingId = id();
 
     await insertUser(pool, hostId, "host-rls@stead.example", "Host", true);
     await insertUser(pool, guestA, "guest-a-rls@stead.example", "Guest A");

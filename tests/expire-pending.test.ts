@@ -5,6 +5,7 @@ import {
   closeTestPool,
   databaseUrl,
   getTestPool,
+  id,
   insertListing,
   insertUser,
 } from "./helpers/db";
@@ -56,11 +57,11 @@ describeDb("expire_pending_bookings()", () => {
 
   it("expires pending_payment rows older than the configured ttl and leaves fresh ones", async () => {
     const pool = await getTestPool();
-    const hostId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaa0001";
-    const guestId = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbb0001";
-    const listingId = "cccccccc-cccc-cccc-cccc-cccccccc0001";
-    const staleId = "dddddddd-dddd-dddd-dddd-dddddddd0001";
-    const freshId = "dddddddd-dddd-dddd-dddd-dddddddd0002";
+    const hostId = id();
+    const guestId = id();
+    const listingId = id();
+    const staleId = id();
+    const freshId = id();
 
     await insertUser(pool, hostId, "host-expire@stead.example", "Host", true);
     await insertUser(pool, guestId, "guest-expire@stead.example", "Guest");

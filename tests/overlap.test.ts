@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from "vitest";
-import { closeTestPool, databaseUrl, getTestPool, insertListing, insertUser } from "./helpers/db";
+import { closeTestPool, databaseUrl, getTestPool, id, insertListing, insertUser } from "./helpers/db";
 
 const describeDb = databaseUrl() || process.env.CI ? describe : describe.skip;
 
@@ -10,10 +10,10 @@ describeDb("bookings exclusion constraint", () => {
 
   it("rejects a second overlapping pending_payment on the same listing", async () => {
     const pool = await getTestPool();
-    const hostId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaa0002";
-    const guestA = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbb0002";
-    const guestB = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbb0003";
-    const listingId = "cccccccc-cccc-cccc-cccc-cccccccc0002";
+    const hostId = id();
+    const guestA = id();
+    const guestB = id();
+    const listingId = id();
 
     await insertUser(pool, hostId, "host-overlap@stead.example", "Host", true);
     await insertUser(pool, guestA, "guest-a-overlap@stead.example", "Guest A");
@@ -37,10 +37,10 @@ describeDb("bookings exclusion constraint", () => {
 
   it("allows a back-to-back stay that shares only the checkout morning", async () => {
     const pool = await getTestPool();
-    const hostId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaa0003";
-    const guestA = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbb0004";
-    const guestB = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbb0005";
-    const listingId = "cccccccc-cccc-cccc-cccc-cccccccc0003";
+    const hostId = id();
+    const guestA = id();
+    const guestB = id();
+    const listingId = id();
 
     await insertUser(pool, hostId, "host-adjacent@stead.example", "Host", true);
     await insertUser(pool, guestA, "guest-a-adj@stead.example", "Guest A");
@@ -62,10 +62,10 @@ describeDb("bookings exclusion constraint", () => {
 
   it("frees dates once the first hold is expired", async () => {
     const pool = await getTestPool();
-    const hostId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaa0004";
-    const guestA = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbb0006";
-    const guestB = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbb0007";
-    const listingId = "cccccccc-cccc-cccc-cccc-cccccccc0004";
+    const hostId = id();
+    const guestA = id();
+    const guestB = id();
+    const listingId = id();
 
     await insertUser(pool, hostId, "host-free@stead.example", "Host", true);
     await insertUser(pool, guestA, "guest-a-free@stead.example", "Guest A");

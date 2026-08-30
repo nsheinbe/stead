@@ -71,7 +71,9 @@ describe("quoteStay — integer cents only", () => {
     expect(quote.guest_total_cents).toBe(row.total);
     expect(quote.deposit_cents).toBe(row.depositCents);
     expect(quote.guest_total_cents).toBe(quote.stay_subtotal_cents + quote.network_fee_cents);
-    expect(quote.guest_total_cents + quote.deposit_cents).not.toBe(quote.guest_total_cents);
+    if (row.depositCents > 0) {
+      expect(quote.guest_total_cents + quote.deposit_cents).not.toBe(quote.guest_total_cents);
+    }
   });
 
   it("never adds the deposit into guest_total", () => {
