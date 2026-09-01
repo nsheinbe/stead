@@ -5,15 +5,19 @@ An agent produces its best work when nothing has to be mocked. Every key below m
 ## 1. Database — Neon (~5 min)
 
 * Create a project at [neon.tech](https://neon.tech). Postgres 17. Any region close to your Vercel region.
-* Copy the **pooled** connection string (Project → Connect → Pooled connection) into `.env` as `DATABASE_URL`. It looks like `postgresql://<user>:<password>@<endpoint>-pooler.<region>.aws.neon.tech/<db>?sslmode=require`. If a driver rejects `channel_binding=require`, drop it.
-* Apply the schema and seed:
+* You will need both hosts. The pooled one is the direct one with `-pooler` on the endpoint id: `postgresql://<user>:<password>@<endpoint>-pooler.<region>.aws.neon.tech/<db>?sslmode=require`. If a driver rejects `channel_binding=require`, drop it.
+* Copy the **direct** (non-pooled) connection string into `.env` as `DATABASE_URL_OWNER`, then:
 
 ```bash
-npm run db:migrate
+npm run db:migrate          # schema, roles, RLS policies
+npm run db:bootstrap-roles  # prints DATABASE_URL and AUTH_DATABASE_URL — paste both into .env
 npm run db:seed
+npm run verify:neon         # 16 read-only assertions against the real database
 ```
 
-* Prefer a local database while iterating: `docker compose up -d db`, then point `DATABASE_URL` at `postgres://postgres:postgres@127.0.0.1:5432/stead` and run the same two commands. Neon branches are the CI/preview story.
+* The app runs as `app_user`, never as the role Neon gave you. That role owns every table and has `BYPASSRLS`, so putting it in `DATABASE_URL` would silently disable every policy — the app refuses to start with it. Do not create `app_user` in the Neon console either; roles made there inherit `neon_superuser` and the same problem.
+
+* Prefer a local database while iterating: `docker compose up -d db`, then point `DATABASE_URL_OWNER` at `postgres://postgres:postgres@127.0.0.1:5432/stead` and run the same commands. Neon branches are the CI/preview story.
 
 ## 2. Auth (~1 min)
 

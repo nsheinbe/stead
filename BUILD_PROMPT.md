@@ -8,13 +8,16 @@
 >   JWT in an httpOnly cookie. Google OAuth is still deferred. §11's
 >   `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY`
 >   are replaced by `DATABASE_URL`, `AUTH_SECRET`, and `CRON_SECRET`.
-> * **Postgres with RLS on every table** (§4, §9) → Neon Postgres with **no
->   RLS**. The browser holds no database credentials and never queries Postgres.
->   The RLS sketch in §4 is implemented as server-side scoping instead: every
->   function in `server/queries` takes the session user id, and `tests/
->   authorization.test.ts` is the probe. Everything else about the schema —
->   integer cents, the generated `stay` daterange, the btree_gist exclusion
->   constraint — is unchanged. `auth.users` became `public.users`.
+> * **Postgres with RLS on every table** (§4, §9) → unchanged in substance; the
+>   RLS sketch in §4 is live on Neon. What changed is what the policies bind to:
+>   there is no PostgREST and no per-request `anon`/`authenticated` role, so the
+>   browser holds no database credentials and the member id arrives as the
+>   transaction-local `app.user_id`, read by `app.current_user_id()`. Traffic
+>   runs as `app_user`; the owner role is migrations-only and the app fails
+>   closed rather than serve as a role that can bypass RLS. `auth.users` became
+>   `public.users`, and the service role's blanket write access became four
+>   enumerated `SECURITY DEFINER` functions. Integer cents, the generated `stay`
+>   daterange, and the btree_gist exclusion constraint are untouched.
 > * **Edge Functions** (§7) → routes on a Hono API under `/api`, deployed as a
 >   Vercel function and runnable standalone with `npm start`. Cron jobs are
 >   authenticated HTTP endpoints under `/api/cron/*`.

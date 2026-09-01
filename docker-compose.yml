@@ -2,12 +2,15 @@
 # README "Database". Secrets stay in .env, never in git.
 #
 #   docker compose up -d db
-#   export DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/stead
-#   npm run db:migrate && npm run db:seed
+#   export DATABASE_URL_OWNER=postgres://postgres:postgres@127.0.0.1:5432/stead
+#   npm run db:migrate && npm run db:bootstrap-roles && npm run db:seed
+#
+# db:bootstrap-roles prints DATABASE_URL (app_user) and AUTH_DATABASE_URL
+# (auth_user) — the app runs as those, never as the owner.
 #
 # Tests use the throwaway db_test service:
 #   docker compose --profile test up -d db_test
-#   DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5433/stead_test npm test
+#   DATABASE_URL_OWNER=postgres://postgres:postgres@127.0.0.1:5433/stead_test npm test
 
 services:
   db:

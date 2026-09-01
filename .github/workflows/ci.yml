@@ -25,7 +25,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/stead_test
+      DATABASE_URL_OWNER: postgres://postgres:postgres@127.0.0.1:5432/stead_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

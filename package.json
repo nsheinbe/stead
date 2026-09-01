@@ -16,7 +16,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:migrate": "tsx scripts/migrate.ts",
-    "db:seed": "tsx scripts/seed.ts"
+    "db:seed": "tsx scripts/seed.ts",
+    "db:bootstrap-roles": "tsx scripts/bootstrap-roles.ts",
+    "verify:neon": "tsx scripts/verify-neon.ts"
   },
   "dependencies": {
     "@auth/core": "^0.41.3",

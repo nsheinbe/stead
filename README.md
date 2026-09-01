@@ -17,13 +17,29 @@ Money is integer cents. Pricing constants live in `app_config` (`network_fee_bps
 ```
 src/          React SPA. Talks to /api over fetch; holds no database credentials.
 server/       Hono API — auth, queries, routes. The only thing that touches Postgres.
-  queries/    Every read takes a session user id. This is where row scoping lives.
+  queries/    Reads and writes, all taking a transaction that carries the member id.
 api/index.ts  Vercel function; vercel.json rewrites /api/* here.
-drizzle/      Append-only SQL migrations. Source of truth for the schema.
-scripts/      db:migrate and db:seed.
+drizzle/      Append-only SQL migrations. Source of truth for the schema and the policies.
+scripts/      db:migrate, db:seed, db:bootstrap-roles, verify:neon.
 ```
 
-There is **no row-level security**. Neon has no PostgREST in front of it and no per-request database role, so the browser cannot query Postgres directly and does not try. Authorization is server-side: `requireUser` gates the routes and every function in `server/queries` takes the session user id as a required argument. `tests/authorization.test.ts` is the probe that used to be an RLS probe.
+## Row-level security
+
+Scoping is enforced by Postgres, not by the API. The browser no longer has a database role of its own — Supabase gave it one — so the request's member id travels as `app.user_id`, a transaction-local setting that every policy reads through `app.current_user_id()`. It is set with `is_local => true`, so it cannot survive into the next request that borrows the same pooled connection.
+
+Three roles, and the separation between them is the boundary:
+
+| Role | Carries | Host |
+| --- | --- | --- |
+| `app_user` | all tenant traffic, under RLS | pooled |
+| `auth_user` | Auth.js only — the four identity tables and nothing else | pooled |
+| the table owner | migrations and seeding, nothing else | direct |
+
+The owner has `BYPASSRLS` and owns every table, so none of the policies apply to it. That is deliberate: it is how migrations and the `SECURITY DEFINER` transitions do their work. It also makes it the one credential that must never reach the running app.
+
+**Neon makes that the likely mistake rather than a theoretical one.** A project hands you exactly one connection string, for a role that is a `neon_superuser` member with `BYPASSRLS`. Pasting it into `DATABASE_URL` turns the entire security model off — nothing errors, no policy is violated, queries simply return every member's rows. So the app checks: before it serves a single tenant query it confirms the connection role is ordinary, testing all three routes to bypassing RLS (the `BYPASSRLS` attribute, `SUPERUSER`, and table ownership) plus `row_security_active` as the ground truth. One memoized round trip per process; a privileged role gets a 503 and a loud log line instead of silent cross-member reads.
+
+State transitions are closed to `app_user` entirely. It has no `UPDATE` grant on `bookings` and no grant at all on `stripe_events` or `cron_heartbeats`; the four `SECURITY DEFINER` functions in `app` are the complete list of state changes the API can make. That is narrower than what it replaces — the Supabase service role could write any row on any table.
 
 ## Routes (Slice 1)
 
@@ -54,14 +70,20 @@ There is **no row-level security**. Neon has no PostgREST in front of it and no 
 ## Local development
 
 ```bash
-cp .env.example .env      # fill DATABASE_URL and AUTH_SECRET at minimum
+cp .env.example .env
 npm install
 docker compose up -d db
-export DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/stead
-npm run db:migrate
+
+export DATABASE_URL_OWNER=postgres://postgres:postgres@127.0.0.1:5432/stead
+npm run db:migrate         # schema, roles, policies
+npm run db:bootstrap-roles # prints DATABASE_URL and AUTH_DATABASE_URL — paste into .env
 npm run db:seed
-npm run dev               # SPA and API on http://localhost:5173
+
+# also set AUTH_SECRET in .env: openssl rand -base64 32
+npm run dev                # SPA and API on http://localhost:5173
 ```
+
+Shell environment beats `.env`, so if you have exported `DATABASE_URL` in the terminal you are running `npm run dev` from, that value wins. Exporting the owner string for a migration and forgetting to unset it is the easy way to trip the privileged-role check.
 
 `npm run dev` serves the Hono API inside Vite's dev server, so cookies are same-origin and there is no CORS to configure.
 
@@ -78,14 +100,25 @@ npm run build
 Neon Postgres 17. Migrations are append-only SQL under `drizzle/`, applied in filename order and recorded in `public._migrations` — never edit an applied file, add a new one.
 
 ```bash
-export DATABASE_URL='postgresql://...-pooler....neon.tech/neondb?sslmode=require'
-npm run db:migrate
-npm run db:seed           # 1 host, 6 active listings across timezones, picsum photos
+export DATABASE_URL_OWNER='postgresql://<owner>:<pw>@<endpoint>.<region>.aws.neon.tech/neondb?sslmode=require'
+npm run db:migrate          # direct host, owner role
+npm run db:bootstrap-roles  # gives app_user and auth_user a password; prints their URLs once
+npm run db:seed             # 1 host, 6 active listings across timezones, picsum photos
 ```
 
-`server/db/schema.ts` mirrors those files for Drizzle's query builder. The SQL is authoritative because the availability lock — a `btree_gist` exclusion constraint over a generated `daterange` — is not expressible in the Drizzle pg dialect.
+Migrations and seeding use the **direct** host; the app uses the **pooled** host (the same endpoint with `-pooler` appended). `postgres.js` runs with `prepare: false` because the pooler is PgBouncer in transaction mode. If a driver rejects `channel_binding=require`, drop it; `sslmode=require` is enough.
 
-Use the **pooled** Neon connection string. `postgres.js` runs with `prepare: false` because Neon's pooler is PgBouncer in transaction mode. If a driver rejects `channel_binding=require`, drop it; `sslmode=require` is enough.
+`server/db/schema.ts` mirrors the migration files for Drizzle's query builder. The SQL is authoritative because neither the availability lock — a `btree_gist` exclusion constraint over a generated `daterange` — nor the policies are expressible in the Drizzle pg dialect.
+
+Do not create `app_user` in the Neon console: roles made there are `neon_superuser` members and come out with `BYPASSRLS`, which would make every policy a no-op. The migration creates them as ordinary roles, and refuses to finish if it finds one that can bypass RLS.
+
+### Checking a provisioned database
+
+```bash
+npm run verify:neon
+```
+
+Sixteen read-only assertions against a real deployment, covering what a throwaway local cluster cannot: role shape for all three roles, migration arrival, RLS enabled-but-not-forced, grant disjointness between `app_user` and `auth_user`, identity not leaking across pooled requests, and the transition functions being present and `SECURITY DEFINER`. Pointing `DATABASE_URL` at the owner turns it red.
 
 ## Deploying to Vercel
 
@@ -95,8 +128,10 @@ Required environment variables:
 
 | Variable | Why |
 | --- | --- |
-| `DATABASE_URL` | Neon pooled connection string |
+| `DATABASE_URL` | `app_user` on the **pooled** host. Not the owner — the app refuses to serve with it |
 | `AUTH_SECRET` | Auth.js cookie signing — `openssl rand -base64 32` |
+| `AUTH_DATABASE_URL` | `auth_user` on the pooled host |
+| `DATABASE_URL_OWNER` | the owner on the **direct** host; migrations only |
 | `CRON_SECRET` | so only the scheduler can run `expire-pending` |
 | `RESEND_API_KEY` | magic-link delivery (without it the link only prints to the log) |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `VITE_STRIPE_PUBLISHABLE_KEY` | payments; the booking flow falls back to a mock path when unset |
@@ -149,15 +184,18 @@ S3_PUBLIC_URL=http://127.0.0.1:9000/stead
 
 ```bash
 docker compose --profile test up -d db_test
-DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5433/stead_test npm test
+DATABASE_URL_OWNER=postgres://postgres:postgres@127.0.0.1:5433/stead_test npm test
 ```
 
-The suite applies `drizzle/*.sql` to whatever `DATABASE_URL` points at, so a migration that only works in tests is impossible. CI starts Postgres 17 and runs typecheck, the full Vitest suite, and the build:
+The suite applies `drizzle/*.sql` to whatever `DATABASE_URL_OWNER` points at and then provisions the same two roles the migration defines, so a policy that only works in tests is impossible. CI starts Postgres 17 and runs typecheck, the full Vitest suite, and the build:
 
 - pricing math table tests
 - overlapping booking rejected by the gist constraint, surfaced as `DateConflictError`
 - expire-pending, and Stripe event idempotency against real Postgres
-- authorization probe: guest A cannot read guest B's booking; a paused listing is invisible to everyone but its host
+- `tests/authorization.test.ts` — the query layer, running as `app_user`
+- `tests/rls.test.ts` — adversarial probes issued as raw SQL over the `app_user` connection, bypassing every line of query code: cross-member reads, unscoped `SELECT`, impersonating another guest on insert, transitioning a booking directly, reading `stripe_events` or the identity tables, grant disjointness, and identity not surviving the transaction
+
+Those two files fail for different reasons on purpose. Drop a `WHERE` clause and `authorization.test.ts` goes red; drop a policy and `rls.test.ts` does. Disabling RLS on `bookings` turns five of its probes red, which is how it was checked.
 
 ## Copy
 
