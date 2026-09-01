@@ -6,7 +6,7 @@
 import { Hono } from "hono";
 import type Stripe from "stripe";
 import { handleStripeEvent } from "../lib/stripeWebhook";
-import { getStripe } from "../lib/stripe";
+import { getStripe, stripeConfigured } from "../lib/stripe";
 import type { AppEnv } from "../lib/http";
 import { claimStripeEvent, confirmBookingForPaymentIntent } from "../queries/bookings";
 
@@ -14,7 +14,9 @@ export const stripeRoutes = new Hono<AppEnv>();
 
 stripeRoutes.post("/webhook", async (c) => {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-  if (!webhookSecret) return c.text("Webhook secret not configured", 500);
+  if (!webhookSecret || !stripeConfigured()) {
+    return c.text("Stripe is not configured on this deployment", 500);
+  }
 
   const signature = c.req.header("stripe-signature");
   if (!signature) return c.text("Missing stripe-signature header", 400);
