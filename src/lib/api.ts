@@ -22,6 +22,20 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * A platform error page (a plain-text 500 from the host, an HTML 502 from a
+ * proxy) is not JSON. Treat it as an empty body so the caller sees the status
+ * code in an ApiError rather than a raw SyntaxError.
+ */
+function parseJsonBody(text: string): unknown {
+  if (!text) return null;
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return null;
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     credentials: "same-origin",
@@ -29,7 +43,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers: { Accept: "application/json", ...init?.headers },
   });
   const text = await response.text();
-  const body = text ? (JSON.parse(text) as unknown) : null;
+  const body = parseJsonBody(text);
   if (!response.ok) {
     const message =
       body && typeof body === "object" && "error" in body && typeof body.error === "string"
