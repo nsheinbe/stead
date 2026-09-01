@@ -8,13 +8,15 @@ import {
   expirePendingBookings,
 } from "../server/queries/bookings";
 import {
+  asMember,
+  asOwner,
+  bookingStatus,
   closeTestDb,
-  databaseUrl,
-  getTestDb,
   id,
   insertBooking,
   insertListing,
   insertMember,
+  ownerDatabaseUrl,
 } from "./helpers/db";
 
 describe("isPendingExpired", () => {
@@ -55,7 +57,7 @@ describe("stripe webhook handler", () => {
   });
 });
 
-const describeDb = databaseUrl() || process.env.CI ? describe : describe.skip;
+const describeDb = ownerDatabaseUrl() || process.env.CI ? describe : describe.skip;
 
 describeDb("expirePendingBookings", () => {
   afterAll(async () => {
@@ -63,41 +65,41 @@ describeDb("expirePendingBookings", () => {
   });
 
   it("expires pending_payment rows older than the ttl and leaves fresh ones", async () => {
-    const db = await getTestDb();
     const hostId = id();
     const guestId = id();
     const listingId = id();
 
-    await insertMember(db, hostId, `host-${hostId}@stead.example`, "Host", true);
-    await insertMember(db, guestId, `guest-${guestId}@stead.example`, "Guest");
-    await insertListing(db, { id: listingId, hostId, title: "Expire cottage" });
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    await insertMember(guestId, `guest-${guestId}@stead.example`, "Guest");
+    await insertListing({ id: listingId, hostId, title: "Expire cottage" });
 
-    const stale = await insertBooking(db, {
+    const stale = await insertBooking({
       listingId,
       guestId,
       checkIn: "2026-09-01",
       checkOut: "2026-09-03",
       createdAt: new Date(Date.now() - 45 * 60_000).toISOString(),
     });
-    const fresh = await insertBooking(db, {
+    const fresh = await insertBooking({
       listingId,
       guestId,
       checkIn: "2026-09-10",
       checkOut: "2026-09-12",
     });
 
-    expect(await expirePendingBookings(db, 30)).toBeGreaterThanOrEqual(1);
+    // No member id: the scheduler is not signed in. It works because
+    // app.expire_pending_bookings is SECURITY DEFINER, not because of a policy.
+    expect(await asMember(null, (tx) => expirePendingBookings(tx, 30))).toBeGreaterThanOrEqual(1);
 
-    const statuses = (await db.execute<{ id: string; status: string }>(sql`
-      SELECT id::text, status::text FROM public.bookings WHERE id IN (${stale}::uuid, ${fresh}::uuid)
-    `)) as unknown as { id: string; status: string }[];
+    expect(await bookingStatus(stale)).toBe("expired");
+    expect(await bookingStatus(fresh)).toBe("pending_payment");
 
-    expect(statuses.find((r) => r.id === stale)?.status).toBe("expired");
-    expect(statuses.find((r) => r.id === fresh)?.status).toBe("pending_payment");
-
-    const beats = (await db.execute<{ last_ok: Date | null }>(sql`
-      SELECT last_ok FROM public.cron_heartbeats WHERE job = 'expire-pending'
-    `)) as unknown as { last_ok: Date | null }[];
+    const beats = await asOwner(
+      async (db) =>
+        (await db.execute<{ last_ok: Date | null }>(
+          sql`SELECT last_ok FROM public.cron_heartbeats WHERE job = 'expire-pending'`,
+        )) as unknown as { last_ok: Date | null }[],
+    );
     expect(beats[0]?.last_ok).toBeTruthy();
   });
 });
@@ -108,32 +110,34 @@ describeDb("stripe idempotency and confirmation against Postgres", () => {
   });
 
   it("claims an event exactly once and confirms the matching booking", async () => {
-    const db = await getTestDb();
     const hostId = id();
     const guestId = id();
     const listingId = id();
     const paymentIntentId = `pi_${id()}`;
     const eventId = `evt_${id()}`;
 
-    await insertMember(db, hostId, `host-${hostId}@stead.example`, "Host", true);
-    await insertMember(db, guestId, `guest-${guestId}@stead.example`, "Guest");
-    await insertListing(db, { id: listingId, hostId, title: "Webhook cottage" });
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    await insertMember(guestId, `guest-${guestId}@stead.example`, "Guest");
+    await insertListing({ id: listingId, hostId, title: "Webhook cottage" });
 
-    const bookingId = await insertBooking(db, {
+    const bookingId = await insertBooking({
       listingId,
       guestId,
       checkIn: "2027-06-01",
       checkOut: "2027-06-04",
+      paymentIntentId,
     });
-    await db.execute(sql`
-      UPDATE public.bookings SET stripe_payment_intent_id = ${paymentIntentId} WHERE id = ${bookingId}::uuid
-    `);
 
-    expect(await claimStripeEvent(db, eventId, "payment_intent.succeeded")).toBe(true);
-    expect(await claimStripeEvent(db, eventId, "payment_intent.succeeded")).toBe(false);
+    expect(await asMember(null, (tx) => claimStripeEvent(tx, eventId, "payment_intent.succeeded"))).toBe(
+      true,
+    );
+    expect(await asMember(null, (tx) => claimStripeEvent(tx, eventId, "payment_intent.succeeded"))).toBe(
+      false,
+    );
 
-    expect(await confirmBookingForPaymentIntent(db, paymentIntentId)).toBe(true);
+    expect(await asMember(null, (tx) => confirmBookingForPaymentIntent(tx, paymentIntentId))).toBe(true);
+    expect(await bookingStatus(bookingId)).toBe("confirmed");
     // Already confirmed: a replay must not transition it again.
-    expect(await confirmBookingForPaymentIntent(db, paymentIntentId)).toBe(false);
+    expect(await asMember(null, (tx) => confirmBookingForPaymentIntent(tx, paymentIntentId))).toBe(false);
   });
 });

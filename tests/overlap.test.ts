@@ -6,16 +6,17 @@ import {
   isExclusionViolation,
 } from "../server/queries/bookings";
 import {
+  asMember,
+  asOwner,
   closeTestDb,
-  databaseUrl,
-  getTestDb,
   id,
   insertBooking,
   insertListing,
   insertMember,
+  ownerDatabaseUrl,
 } from "./helpers/db";
 
-const describeDb = databaseUrl() || process.env.CI ? describe : describe.skip;
+const describeDb = ownerDatabaseUrl() || process.env.CI ? describe : describe.skip;
 
 describeDb("bookings exclusion constraint", () => {
   afterAll(async () => {
@@ -23,25 +24,24 @@ describeDb("bookings exclusion constraint", () => {
   });
 
   it("rejects a second overlapping pending_payment on the same listing", async () => {
-    const db = await getTestDb();
     const hostId = id();
     const guestA = id();
     const guestB = id();
     const listingId = id();
 
-    await insertMember(db, hostId, `host-${hostId}@stead.example`, "Host", true);
-    await insertMember(db, guestA, `guest-a-${guestA}@stead.example`, "Guest A");
-    await insertMember(db, guestB, `guest-b-${guestB}@stead.example`, "Guest B");
-    await insertListing(db, { id: listingId, hostId, title: "Overlap cottage" });
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    await insertMember(guestA, `guest-a-${guestA}@stead.example`, "Guest A");
+    await insertMember(guestB, `guest-b-${guestB}@stead.example`, "Guest B");
+    await insertListing({ id: listingId, hostId, title: "Overlap cottage" });
 
-    await insertBooking(db, {
+    await insertBooking({
       listingId,
       guestId: guestA,
       checkIn: "2026-10-01",
       checkOut: "2026-10-04",
     });
 
-    const conflict = await insertBooking(db, {
+    const conflict = await insertBooking({
       listingId,
       guestId: guestB,
       checkIn: "2026-10-03",
@@ -58,16 +58,15 @@ describeDb("bookings exclusion constraint", () => {
   });
 
   it("surfaces a conflict from createBookingWithEscrow as DateConflictError", async () => {
-    const db = await getTestDb();
     const hostId = id();
     const guestA = id();
     const guestB = id();
     const listingId = id();
 
-    await insertMember(db, hostId, `host-${hostId}@stead.example`, "Host", true);
-    await insertMember(db, guestA, `guest-a-${guestA}@stead.example`, "Guest A");
-    await insertMember(db, guestB, `guest-b-${guestB}@stead.example`, "Guest B");
-    await insertListing(db, { id: listingId, hostId, title: "Booked cottage" });
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    await insertMember(guestA, `guest-a-${guestA}@stead.example`, "Guest A");
+    await insertMember(guestB, `guest-b-${guestB}@stead.example`, "Guest B");
+    await insertListing({ id: listingId, hostId, title: "Booked cottage" });
 
     const booking = {
       listingId,
@@ -84,33 +83,38 @@ describeDb("bookings exclusion constraint", () => {
     };
     const deposit = { amountCents: 30000, method: "auth_hold" as const, stripeSetupIntentId: null };
 
-    const first = await createBookingWithEscrow(db, { ...booking, guestId: guestA }, deposit, {});
+    // Booked by two different members through the real path, so the insert
+    // policies are in force as well as the constraint.
+    const first = await asMember(guestA, (tx) =>
+      createBookingWithEscrow(tx, { ...booking, guestId: guestA }, deposit, {}),
+    );
     expect(first.bookingId).toBeTruthy();
 
     await expect(
-      createBookingWithEscrow(db, { ...booking, guestId: guestB }, deposit, {}),
+      asMember(guestB, (tx) =>
+        createBookingWithEscrow(tx, { ...booking, guestId: guestB }, deposit, {}),
+      ),
     ).rejects.toBeInstanceOf(DateConflictError);
   });
 
   it("allows a back-to-back stay that shares only the checkout morning", async () => {
-    const db = await getTestDb();
     const hostId = id();
     const guestA = id();
     const guestB = id();
     const listingId = id();
 
-    await insertMember(db, hostId, `host-${hostId}@stead.example`, "Host", true);
-    await insertMember(db, guestA, `guest-a-${guestA}@stead.example`, "Guest A");
-    await insertMember(db, guestB, `guest-b-${guestB}@stead.example`, "Guest B");
-    await insertListing(db, { id: listingId, hostId, title: "Adjacent cottage" });
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    await insertMember(guestA, `guest-a-${guestA}@stead.example`, "Guest A");
+    await insertMember(guestB, `guest-b-${guestB}@stead.example`, "Guest B");
+    await insertListing({ id: listingId, hostId, title: "Adjacent cottage" });
 
-    await insertBooking(db, {
+    await insertBooking({
       listingId,
       guestId: guestA,
       checkIn: "2026-11-01",
       checkOut: "2026-11-03",
     });
-    const second = await insertBooking(db, {
+    const second = await insertBooking({
       listingId,
       guestId: guestB,
       checkIn: "2026-11-03",
@@ -120,26 +124,27 @@ describeDb("bookings exclusion constraint", () => {
   });
 
   it("frees dates once the first hold is expired", async () => {
-    const db = await getTestDb();
     const hostId = id();
     const guestA = id();
     const guestB = id();
     const listingId = id();
 
-    await insertMember(db, hostId, `host-${hostId}@stead.example`, "Host", true);
-    await insertMember(db, guestA, `guest-a-${guestA}@stead.example`, "Guest A");
-    await insertMember(db, guestB, `guest-b-${guestB}@stead.example`, "Guest B");
-    await insertListing(db, { id: listingId, hostId, title: "Freed cottage" });
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    await insertMember(guestA, `guest-a-${guestA}@stead.example`, "Guest A");
+    await insertMember(guestB, `guest-b-${guestB}@stead.example`, "Guest B");
+    await insertListing({ id: listingId, hostId, title: "Freed cottage" });
 
-    const first = await insertBooking(db, {
+    const first = await insertBooking({
       listingId,
       guestId: guestA,
       checkIn: "2026-12-01",
       checkOut: "2026-12-04",
     });
-    await db.execute(sql`UPDATE public.bookings SET status = 'expired' WHERE id = ${first}::uuid`);
+    await asOwner((db) =>
+      db.execute(sql`UPDATE public.bookings SET status = 'expired' WHERE id = ${first}::uuid`),
+    );
 
-    const second = await insertBooking(db, {
+    const second = await insertBooking({
       listingId,
       guestId: guestB,
       checkIn: "2026-12-01",
