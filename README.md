@@ -89,7 +89,7 @@ Use the **pooled** Neon connection string. `postgres.js` runs with `prepare: fal
 
 ## Deploying to Vercel
 
-`vercel.json` builds the SPA to `dist/`, rewrites `/api/*` to the function in `api/`, and registers the `expire-pending` cron.
+`vercel.json` builds the SPA to `dist/` and rewrites `/api/*` to the function in `api/`.
 
 Required environment variables:
 
@@ -103,17 +103,27 @@ Required environment variables:
 
 Point the Stripe webhook endpoint at `https://<deployment>/api/stripe/webhook`.
 
+## Scheduling expire-pending
+
+Abandoned checkouts hold dates behind the exclusion constraint until they expire, so `/api/cron/expire-pending` needs to run every few minutes — roughly `pending_payment_ttl_minutes / 3`. It is a plain authenticated endpoint, so anything that can make an HTTP request will do:
+
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" https://your-host/api/cron/expire-pending
+```
+
+Deliberately **not** in `vercel.json`: Vercel Cron on the Hobby plan fires at most once a day, and a deployment is rejected outright if the expression asks for more, which makes it both unusable here and a confusing build failure. On Pro, add it back:
+
+```json
+"crons": [{ "path": "/api/cron/expire-pending", "schedule": "*/10 * * * *" }]
+```
+
+Otherwise point any external scheduler at the URL — a cron host, a GitHub Actions `schedule` workflow, or a systemd timer.
+
 ## Self-hosting
 
 ```bash
 npm run build
 npm start                 # serves dist/ and the API from one origin on :3000
-```
-
-Schedule the cron yourself:
-
-```bash
-curl -H "Authorization: Bearer $CRON_SECRET" https://your-host/api/cron/expire-pending
 ```
 
 ## Object storage

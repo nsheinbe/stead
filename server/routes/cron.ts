@@ -1,7 +1,8 @@
 /**
- * Scheduled jobs. On Vercel these are hit by Vercel Cron (see vercel.json),
- * which sends `Authorization: Bearer $CRON_SECRET`. Self-hosters can curl the
- * same path with the same header.
+ * Scheduled jobs, as plain authenticated endpoints: callers send
+ * `Authorization: Bearer $CRON_SECRET`, which is the shape Vercel Cron uses and
+ * anything else can imitate. Nothing schedules them from this repo — see README
+ * "Scheduling expire-pending" for why the Hobby plan cannot.
  */
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";

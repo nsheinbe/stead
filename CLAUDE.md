@@ -46,6 +46,6 @@ paper #FBFAF7 · ink #17201B · spruce #1E4034 · spruce-deep #16332A · brass #
 * Neon's pooled endpoint is PgBouncer in transaction mode, so `postgres.js` runs with `prepare: false`. Use the pooled connection string; drop `channel_binding=require` if a driver rejects it.
 * Drizzle wraps driver errors in `DrizzleQueryError` — the Postgres error code is on `.cause`, not the top-level error.
 * Images in /design are placeholder slots; use picsum seeds until real photography lands (pre-launch task, not a slice). Uploads land in Slice 3 against the S3-compatible `S3_*` vars (MinIO locally).
-* `pending_payment` bookings expire via `/api/cron/expire-pending` after 30 min so the exclusion constraint doesn't dead-lock dates behind abandoned checkouts. Vercel Cron calls it with `Authorization: Bearer $CRON_SECRET`.
+* `pending_payment` bookings expire via `/api/cron/expire-pending` after 30 min so the exclusion constraint doesn't dead-lock dates behind abandoned checkouts. Call it with `Authorization: Bearer $CRON_SECRET` every few minutes. It is not in `vercel.json` on purpose: Vercel Cron on Hobby fires once a day at most and rejects the deployment if you ask for more. See README "Scheduling expire-pending".
 * Auth is magic-link email only for now — Google OAuth is deferred (TODO: add the Google provider in `server/auth.ts` and a button on /login once the OAuth client is supplied; `public.accounts` already exists for it).
 * Without `RESEND_API_KEY` the magic link prints to the server console. That is the intended local-dev path, not a bug.
