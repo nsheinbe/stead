@@ -1,7 +1,9 @@
 // Generated from the live schema via `supabase gen types typescript`.
 // Regenerate after every migration; do not hand-edit the Database type.
 // (The CLI also emits generic Tables<>/TablesInsert<> helpers; we derive the
-// aliases we actually use at the bottom of this file instead.)
+// aliases we actually use at the bottom of this file instead. Relationships
+// are NOT optional trimming: postgrest-js reads them to type embedded selects
+// like .select('*, listing_photos(*)').)
 
 export type Json =
   | string
@@ -79,19 +81,50 @@ export type Database = {
           stay_subtotal_cents?: number
           stripe_payment_intent_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: 'bookings_guest_id_fkey'
+            columns: ['guest_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'bookings_listing_id_fkey'
+            columns: ['listing_id']
+            isOneToOne: false
+            referencedRelation: 'listings'
+            referencedColumns: ['id']
+          },
+        ]
       }
       listing_blackouts: {
         Row: { end_date: string; id: string; listing_id: string; start_date: string }
         Insert: { end_date: string; id?: string; listing_id: string; start_date: string }
         Update: { end_date?: string; id?: string; listing_id?: string; start_date?: string }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: 'listing_blackouts_listing_id_fkey'
+            columns: ['listing_id']
+            isOneToOne: false
+            referencedRelation: 'listings'
+            referencedColumns: ['id']
+          },
+        ]
       }
       listing_photos: {
         Row: { id: string; listing_id: string; sort_order: number; storage_path: string }
         Insert: { id?: string; listing_id: string; sort_order?: number; storage_path: string }
         Update: { id?: string; listing_id?: string; sort_order?: number; storage_path?: string }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: 'listing_photos_listing_id_fkey'
+            columns: ['listing_id']
+            isOneToOne: false
+            referencedRelation: 'listings'
+            referencedColumns: ['id']
+          },
+        ]
       }
       listings: {
         Row: {
@@ -160,7 +193,15 @@ export type Database = {
           title?: string
           type?: Database['public']['Enums']['listing_type']
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: 'listings_host_id_fkey'
+            columns: ['host_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
       }
       profiles: {
         Row: {
