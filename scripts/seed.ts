@@ -2,7 +2,10 @@
  * Slice 1 seed: 1 host, 6 active listings across timezones, picsum photos,
  * varied policies. Idempotent — re-running it leaves the same rows.
  *
- *   DATABASE_URL=... npm run db:seed
+ *   DATABASE_URL_OWNER=... npm run db:seed
+ *
+ * Runs as the owner, which bypasses RLS. app_user could not write a listing for
+ * a host it is not, which is the point of the policies.
  */
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -229,9 +232,12 @@ const invokedDirectly =
   process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (invokedDirectly) {
-  const url = process.env.DATABASE_URL;
+  const url = process.env.DATABASE_URL_OWNER;
   if (!url) {
-    console.error("DATABASE_URL is required. Never commit it — export it in your shell.");
+    console.error(
+      "DATABASE_URL_OWNER is required — the table owner on the direct (non-pooled) host. " +
+        "Never commit it; export it in your shell.",
+    );
     process.exit(1);
   }
   await seed(createDb(url));

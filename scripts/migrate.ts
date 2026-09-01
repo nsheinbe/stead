@@ -3,7 +3,10 @@
  * filename order, each inside its own transaction, and records it in
  * public._migrations. Never edit an applied file — add a new one.
  *
- *   DATABASE_URL=... npm run db:migrate
+ *   DATABASE_URL_OWNER=... npm run db:migrate
+ *
+ * This is the one place the owning role is used, over Neon's direct
+ * (non-pooled) host. DATABASE_URL is app_user and cannot do any of this.
  */
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
@@ -48,9 +51,12 @@ export async function runMigrations(connectionString: string): Promise<string[]>
 const invokedDirectly = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (invokedDirectly) {
-  const url = process.env.DATABASE_URL;
+  const url = process.env.DATABASE_URL_OWNER;
   if (!url) {
-    console.error("DATABASE_URL is required. Never commit it — export it in your shell.");
+    console.error(
+      "DATABASE_URL_OWNER is required — the table owner on the direct (non-pooled) host. " +
+        "Never commit it; export it in your shell.",
+    );
     process.exit(1);
   }
   const applied = await runMigrations(url);
