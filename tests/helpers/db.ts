@@ -1,47 +1,16 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import pg from "pg";
+/**
+ * Test database. Points at a throwaway Postgres (docker compose up db_test, or
+ * the CI service) and applies drizzle/*.sql exactly as production does — no
+ * hand-maintained bootstrap SQL, so a migration that only works in tests is
+ * impossible.
+ */
+import { sql } from "drizzle-orm";
+import { createDb, type Db } from "../../server/db/client";
+import { profiles, users } from "../../server/db/schema";
+import { runMigrations } from "../../scripts/migrate";
 
-const { Pool } = pg;
-
-const BOOTSTRAP_SQL = `
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-CREATE EXTENSION IF NOT EXISTS btree_gist;
-
-DO $$ BEGIN
-  CREATE ROLE anon NOLOGIN;
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
-DO $$ BEGIN
-  CREATE ROLE authenticated NOLOGIN;
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
-DO $$ BEGIN
-  CREATE ROLE service_role NOLOGIN BYPASSRLS;
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
-
-CREATE SCHEMA IF NOT EXISTS auth;
-
-CREATE TABLE IF NOT EXISTS auth.users (
-  id uuid PRIMARY KEY,
-  email text,
-  raw_user_meta_data jsonb NOT NULL DEFAULT '{}'::jsonb,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE OR REPLACE FUNCTION auth.uid()
-RETURNS uuid
-LANGUAGE sql
-STABLE
-AS $$
-  SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid;
-$$;
-`;
-
-let pool: pg.Pool | undefined;
-let setupPromise: Promise<pg.Pool> | undefined;
+let db: Db | undefined;
+let setupPromise: Promise<Db> | undefined;
 
 export function databaseUrl(): string | undefined {
   return process.env.DATABASE_URL;
@@ -51,68 +20,54 @@ export function id(): string {
   return crypto.randomUUID();
 }
 
-export async function getTestPool(): Promise<pg.Pool> {
-  if (pool) return pool;
-  if (setupPromise) return setupPromise;
-  setupPromise = setup();
+export function getTestDb(): Promise<Db> {
+  if (db) return Promise.resolve(db);
+  setupPromise ??= setup();
   return setupPromise;
 }
 
-async function setup(): Promise<pg.Pool> {
+async function setup(): Promise<Db> {
   const url = databaseUrl();
   if (!url) {
     throw new Error(
-      "DATABASE_URL is required for overlap / expire / RLS tests. " +
-        "CI starts Postgres; locally use docker compose up db, then " +
-        "DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/stead_test npm test",
+      "DATABASE_URL is required for the database tests. Locally: docker compose --profile test up -d db_test, " +
+        "then DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5433/stead_test npm test",
     );
   }
-
-  const created = new Pool({ connectionString: url });
-  await created.query(BOOTSTRAP_SQL);
-
-  const { rows } = await created.query<{ reg: string | null }>(
-    "SELECT to_regclass('public.bookings')::text AS reg",
-  );
-  if (!rows[0]?.reg) {
-    const here = path.dirname(fileURLToPath(import.meta.url));
-    const migration = await readFile(
-      path.resolve(here, "../../supabase/migrations/20260830180000_slice1_foundation.sql"),
-      "utf8",
-    );
-    await created.query(migration);
-  }
-
-  pool = created;
-  return created;
+  await runMigrations(url);
+  db = createDb(url);
+  return db;
 }
 
-export async function closeTestPool(): Promise<void> {
-  if (pool) {
-    await pool.end();
-    pool = undefined;
+export async function closeTestDb(): Promise<void> {
+  if (db) {
+    // drizzle-orm/postgres-js keeps the driver on the session property.
+    await (db as unknown as { $client: { end: () => Promise<void> } }).$client.end();
+    db = undefined;
     setupPromise = undefined;
   }
 }
 
-export async function insertUser(
-  client: pg.Pool | pg.PoolClient,
-  id: string,
+/** Creates the member and, via the on_user_created trigger, their profile. */
+export async function insertMember(
+  database: Db,
+  memberId: string,
   email: string,
   displayName: string,
   isHost = false,
 ): Promise<void> {
-  await client.query(
-    `INSERT INTO auth.users (id, email, raw_user_meta_data)
-     VALUES ($1, $2, jsonb_build_object('display_name', $3::text))
-     ON CONFLICT (id) DO NOTHING`,
-    [id, email, displayName],
-  );
-  await client.query(`UPDATE public.profiles SET is_host = $2 WHERE id = $1`, [id, isHost]);
+  await database
+    .insert(users)
+    .values({ id: memberId, email, name: displayName, emailVerified: new Date() })
+    .onConflictDoNothing({ target: users.id });
+  await database
+    .update(profiles)
+    .set({ isHost, displayName })
+    .where(sql`${profiles.id} = ${memberId}::uuid`);
 }
 
 export async function insertListing(
-  client: pg.Pool | pg.PoolClient,
+  database: Db,
   opts: {
     id: string;
     hostId: string;
@@ -123,44 +78,55 @@ export async function insertListing(
     maxGuests?: number;
   },
 ): Promise<void> {
-  await client.query(
-    `INSERT INTO public.listings (
-       id, host_id, title, description, type, city, country, timezone,
-       nightly_rate_cents, deposit_cents, max_guests, status
-     ) VALUES (
-       $1, $2, $3, 'Test listing', 'entire_home', 'Hudson', 'US', $4,
-       $5, $6, $7, 'active'
-     )
-     ON CONFLICT (id) DO NOTHING`,
-    [
-      opts.id,
-      opts.hostId,
-      opts.title ?? "Test cottage",
-      opts.timezone ?? "America/New_York",
-      opts.nightlyRateCents ?? 20000,
-      opts.depositCents ?? 30000,
-      opts.maxGuests ?? 4,
-    ],
-  );
+  await database.execute(sql`
+    INSERT INTO public.listings (
+      id, host_id, title, description, type, city, country, timezone,
+      nightly_rate_cents, deposit_cents, max_guests, status
+    ) VALUES (
+      ${opts.id}::uuid, ${opts.hostId}::uuid, ${opts.title ?? "Test cottage"}, 'Test listing',
+      'entire_home', 'Hudson', 'US', ${opts.timezone ?? "America/New_York"},
+      ${opts.nightlyRateCents ?? 20000}, ${opts.depositCents ?? 30000}, ${opts.maxGuests ?? 4}, 'active'
+    )
+    ON CONFLICT (id) DO NOTHING
+  `);
 }
 
-export async function asGuest<T>(
-  poolOrClient: pg.Pool,
-  guestId: string,
-  fn: (client: pg.PoolClient) => Promise<T>,
-): Promise<T> {
-  const client = await poolOrClient.connect();
-  try {
-    await client.query("BEGIN");
-    await client.query("SET LOCAL ROLE authenticated");
-    await client.query("SELECT set_config('request.jwt.claim.sub', $1, true)", [guestId]);
-    const result = await fn(client);
-    await client.query("COMMIT");
-    return result;
-  } catch (err) {
-    await client.query("ROLLBACK");
-    throw err;
-  } finally {
-    client.release();
-  }
+type BookingRow = {
+  id?: string;
+  listingId: string;
+  guestId: string;
+  checkIn: string;
+  checkOut: string;
+  status?: string;
+  createdAt?: string;
+};
+
+/**
+ * Raw insert so tests can exercise the exclusion constraint and backdate
+ * created_at without going through the booking route.
+ */
+export async function insertBooking(database: Db, row: BookingRow): Promise<string> {
+  const nights = Math.round(
+    (Date.parse(`${row.checkOut}T00:00:00Z`) - Date.parse(`${row.checkIn}T00:00:00Z`)) / 86_400_000,
+  );
+  const subtotal = 20000 * nights;
+  const fee = Math.trunc((subtotal * 200) / 10_000);
+  const result = await database.execute<{ id: string }>(sql`
+    INSERT INTO public.bookings (
+      id, listing_id, guest_id, check_in, check_out, guests, nights,
+      nightly_rate_cents, stay_subtotal_cents, network_fee_cents, guest_total_cents,
+      deposit_cents, cancellation_policy, status, created_at
+    ) VALUES (
+      COALESCE(${row.id ?? null}::uuid, gen_random_uuid()),
+      ${row.listingId}::uuid, ${row.guestId}::uuid, ${row.checkIn}::date, ${row.checkOut}::date,
+      2, ${nights}, 20000, ${subtotal}, ${fee}, ${subtotal + fee}, 30000, 'moderate',
+      ${row.status ?? "pending_payment"}::public.booking_status,
+      COALESCE(${row.createdAt ?? null}::timestamptz, now())
+    )
+    RETURNING id
+  `);
+  const rows = result as unknown as { id: string }[];
+  const inserted = rows[0]?.id;
+  if (!inserted) throw new Error("booking insert returned no id");
+  return inserted;
 }
