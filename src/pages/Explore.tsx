@@ -3,24 +3,12 @@ import { ListingCard } from "../components/ListingCard";
 import { SearchIcon } from "../components/Icons";
 import { Shell } from "../components/Shell";
 import { StatusBanner } from "../components/StatusBanner";
-import { supabaseConfigured } from "../lib/env";
-import { getSupabase } from "../lib/supabase";
-import type { Listing } from "../lib/types";
+import { api } from "../lib/api";
 
 export function ExplorePage() {
-  const configured = supabaseConfigured();
   const listings = useQuery({
     queryKey: ["listings", "active"],
-    enabled: configured,
-    queryFn: async () => {
-      const { data, error } = await getSupabase()
-        .from("listings")
-        .select("*, listing_photos(*)")
-        .eq("status", "active")
-        .order("nightly_rate_cents", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as Listing[];
-    },
+    queryFn: () => api.listings(),
   });
 
   return (
@@ -47,12 +35,6 @@ export function ExplorePage() {
           </div>
         </div>
 
-        {!configured ? (
-          <StatusBanner
-            title="Connect Supabase to load stays"
-            detail="Copy .env.example to .env and set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY. The live project is stead-dev in us-east-1."
-          />
-        ) : null}
         {listings.isLoading ? (
           <StatusBanner title="Loading member homes…" detail="Fetching active listings." />
         ) : null}
@@ -66,7 +48,7 @@ export function ExplorePage() {
         {listings.data && listings.data.length === 0 ? (
           <StatusBanner
             title="No homes yet"
-            detail="Run the seed on a fresh project — one host, six listings across timezones."
+            detail="Run npm run db:seed against the database — one host, six listings across timezones."
           />
         ) : null}
 

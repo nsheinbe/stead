@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { useAuth } from "../hooks/useAuth";
+import { useAuth, useSignOut } from "../hooks/useAuth";
 import { BrandMark } from "./BrandMark";
 import { BottomNav } from "./BottomNav";
 
@@ -11,6 +11,7 @@ export function Shell({
   hideNav?: boolean;
 }) {
   const { user } = useAuth();
+  const signOut = useSignOut();
 
   return (
     <div className="min-h-screen bg-paper text-ink">
@@ -26,9 +27,20 @@ export function Shell({
           <Link to="/trips" className="no-underline hover:text-brass">
             Trips
           </Link>
-          <Link to={user ? "/trips" : "/login"} className="no-underline hover:text-brass">
-            {user ? "Signed in" : "Sign in"}
-          </Link>
+          {user ? (
+            <button
+              type="button"
+              disabled={signOut.isPending}
+              onClick={() => signOut.mutate()}
+              className="font-semibold text-ink/70 hover:text-brass"
+            >
+              {signOut.isPending ? "Signing out…" : "Sign out"}
+            </button>
+          ) : (
+            <Link to="/login" className="no-underline hover:text-brass">
+              Sign in
+            </Link>
+          )}
         </div>
       </header>
       <div className="mx-auto flex min-h-screen max-w-[720px] flex-col md:min-h-0 md:max-w-5xl md:px-6 md:py-8">

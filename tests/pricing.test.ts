@@ -5,7 +5,7 @@ import {
   formatUsd,
   nightsBetween,
   quoteStay,
-} from "../supabase/functions/_shared/pricing";
+} from "../server/lib/pricing";
 
 describe("quoteStay — integer cents only", () => {
   it.each([

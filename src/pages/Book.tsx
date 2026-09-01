@@ -10,11 +10,11 @@ import { PriceBreakdown } from "../components/PriceBreakdown";
 import { Shell } from "../components/Shell";
 import { StatusBanner } from "../components/StatusBanner";
 import { useAuth } from "../hooks/useAuth";
+import { api } from "../lib/api";
 import { monthGrid, prettyDay, prettyRange } from "../lib/dates";
-import { stripePublishableKey, supabaseConfigured } from "../lib/env";
+import { stripePublishableKey } from "../lib/env";
 import { formatUsd, nightsBetween, quoteStay, type StayQuote } from "../lib/money";
-import { getSupabase } from "../lib/supabase";
-import type { Listing } from "../lib/types";
+import type { CreateBookingResponse, ListingDetail } from "../lib/types";
 
 let stripePromise: Promise<Stripe | null> | null = null;
 function getStripe(): Promise<Stripe | null> {
@@ -24,17 +24,8 @@ function getStripe(): Promise<Stripe | null> {
   return stripePromise;
 }
 
-type CreateBookingResponse = {
-  booking_id: string;
-  quote: StayQuote;
-  payment_client_secret: string | null;
-  mock_payment: boolean;
-  error?: string;
-};
-
 export function BookPage() {
   const { listingId } = useParams<{ listingId: string }>();
-  const configured = supabaseConfigured();
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
@@ -49,42 +40,21 @@ export function BookPage() {
 
   const listingQuery = useQuery({
     queryKey: ["listing", listingId],
-    enabled: configured && Boolean(listingId),
-    queryFn: async () => {
-      const { data, error } = await getSupabase()
-        .from("listings")
-        .select("*, listing_photos(*)")
-        .eq("id", listingId)
-        .maybeSingle();
-      if (error) throw error;
-      return data as Listing | null;
-    },
+    enabled: Boolean(listingId),
+    queryFn: () => api.listing(listingId as string),
   });
 
-  const configQuery = useQuery({
-    queryKey: ["app_config"],
-    enabled: configured,
-    queryFn: async () => {
-      const { data, error } = await getSupabase().from("app_config").select("key, value");
-      if (error) throw error;
-      const map = Object.fromEntries((data ?? []).map((r: { key: string; value: unknown }) => [r.key, r.value]));
-      return {
-        networkFeeBps: Number(map.network_fee_bps ?? 200),
-        checkin: String(map.checkin_local_time ?? "16:00").replace(/"/g, ""),
-        checkout: String(map.checkout_local_time ?? "11:00").replace(/"/g, ""),
-      };
-    },
-  });
+  const configQuery = useQuery({ queryKey: ["config"], queryFn: () => api.config() });
 
   const listing = listingQuery.data;
   const nights = checkIn && checkOut ? nightsBetween(checkIn, checkOut) : 0;
   const quote =
     listing && nights > 0
       ? quoteStay({
-          nightlyRateCents: listing.nightly_rate_cents,
+          nightlyRateCents: listing.nightlyRateCents,
           nights,
           networkFeeBps: configQuery.data?.networkFeeBps ?? 200,
-          depositCents: listing.deposit_cents,
+          depositCents: listing.depositCents,
         })
       : null;
 
@@ -107,29 +77,12 @@ export function BookPage() {
     setCreating(true);
     setSubmitError(null);
     try {
-      const { data, error } = await getSupabase().functions.invoke("create-booking", {
-        body: {
-          listing_id: listing.id,
-          check_in: checkIn,
-          check_out: checkOut,
-          guests,
-        },
+      const payload = await api.createBooking({
+        listingId: listing.id,
+        checkIn,
+        checkOut,
+        guests,
       });
-      if (error) {
-        const ctx = (error as { context?: Response }).context;
-        let message = error.message;
-        if (ctx) {
-          try {
-            const payload = (await ctx.json()) as { error?: string };
-            if (payload.error) message = payload.error;
-          } catch {
-            /* keep message */
-          }
-        }
-        throw new Error(message);
-      }
-      const payload = data as CreateBookingResponse;
-      if (payload.error) throw new Error(payload.error);
       setCreated(payload);
       return payload;
     } catch (err) {
@@ -187,9 +140,8 @@ export function BookPage() {
           ))}
         </div>
 
-        {!configured ? <StatusBanner title="Connect Supabase to book" /> : null}
         {listingQuery.isLoading || authLoading ? <StatusBanner title="Loading…" /> : null}
-        {listingQuery.data === null ? <StatusBanner title="Listing not found" /> : null}
+        {listingQuery.isError ? <StatusBanner title="Listing not found" /> : null}
         {submitError ? <StatusBanner tone="claim" title={submitError} /> : null}
 
         {listing && step === 1 ? (
@@ -243,20 +195,20 @@ export function BookPage() {
               <div className="flex flex-col gap-0.5 rounded-xl border border-linen-tint px-3.5 py-2.5">
                 <span className="text-[11px] font-bold tracking-wider text-ink/50">CHECK-IN</span>
                 <span className="text-[14.5px] font-bold">
-                  {checkIn ? `${prettyDay(checkIn)} · ${configQuery.data?.checkin ?? "16:00"}` : "Pick a date"}
+                  {checkIn ? `${prettyDay(checkIn)} · ${configQuery.data?.checkinLocalTime ?? "16:00"}` : "Pick a date"}
                 </span>
               </div>
               <div className="flex flex-col gap-0.5 rounded-xl border border-linen-tint px-3.5 py-2.5">
                 <span className="text-[11px] font-bold tracking-wider text-ink/50">CHECKOUT</span>
                 <span className="text-[14.5px] font-bold">
-                  {checkOut ? `${prettyDay(checkOut)} · ${configQuery.data?.checkout ?? "11:00"}` : "Pick a date"}
+                  {checkOut ? `${prettyDay(checkOut)} · ${configQuery.data?.checkoutLocalTime ?? "11:00"}` : "Pick a date"}
                 </span>
               </div>
             </div>
             <div className="flex items-center justify-between rounded-xl border border-linen-tint px-3.5 py-3">
               <div className="flex flex-col">
                 <span className="text-[14.5px] font-bold">Guests</span>
-                <span className="text-xs text-ink/55">This home sleeps {listing.max_guests}</span>
+                <span className="text-xs text-ink/55">This home sleeps {listing.maxGuests}</span>
               </div>
               <div className="flex items-center gap-3.5">
                 <button
@@ -272,7 +224,7 @@ export function BookPage() {
                   type="button"
                   aria-label="More guests"
                   className="flex h-10 w-10 items-center justify-center rounded-full bg-spruce text-xl text-paper"
-                  onClick={() => setGuests((g) => Math.min(listing.max_guests, g + 1))}
+                  onClick={() => setGuests((g) => Math.min(listing.maxGuests, g + 1))}
                 >
                   +
                 </button>
@@ -358,15 +310,14 @@ function PayStep({
   checkOut,
   guests,
 }: {
-  listing: Listing;
+  listing: ListingDetail;
   quote: StayQuote;
   created: CreateBookingResponse;
   checkIn: string | null;
   checkOut: string | null;
   guests: number;
 }) {
-  const photos = [...(listing.listing_photos ?? [])].sort((a, b) => a.sort_order - b.sort_order);
-  const thumb = photos[0]?.storage_path;
+  const thumb = listing.photos[0]?.storagePath;
   const cardTotal = quote.guest_total_cents + quote.deposit_cents;
 
   return (
@@ -383,9 +334,9 @@ function PayStep({
         </div>
       </div>
 
-      {created.payment_client_secret && stripePublishableKey() ? (
-        <Elements stripe={getStripe()} options={{ clientSecret: created.payment_client_secret }}>
-          <StripePayForm bookingId={created.booking_id} totalLabel={formatUsd(cardTotal)} />
+      {created.paymentClientSecret && stripePublishableKey() ? (
+        <Elements stripe={getStripe()} options={{ clientSecret: created.paymentClientSecret }}>
+          <StripePayForm bookingId={created.bookingId} totalLabel={formatUsd(cardTotal)} />
         </Elements>
       ) : (
         <StatusBanner
@@ -415,7 +366,7 @@ function PayStep({
       <p className="m-0 text-center text-[11.5px] text-ink/50">
         The host is paid {formatUsd(quote.stay_subtotal_cents)} at your check-in — instantly.
       </p>
-      {created.mock_payment ? (
+      {created.mockPayment ? (
         <Link
           to="/trips"
           className="rounded-xl bg-spruce py-4 text-center text-[15.5px] font-bold text-paper no-underline hover:bg-spruce-deep hover:text-paper"

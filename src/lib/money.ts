@@ -1,2 +1,2 @@
-export { formatUsd, nightsBetween, quoteStay } from "@shared/pricing";
-export type { StayQuote } from "@shared/pricing";
+export { formatUsd, nightsBetween, quoteStay } from "@server/lib/pricing";
+export type { StayQuote } from "@server/lib/pricing";

@@ -1,17 +1,21 @@
-# Self-host path for Slice 1: Postgres with btree_gist.
-# Apply migrations, then seed. Secrets stay in .env — never in git.
+# Local dependencies for development. Production runs on Neon Postgres — see
+# README "Database". Secrets stay in .env, never in git.
 #
 #   docker compose up -d db
-#   export DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/stead
-#   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20260830180000_slice1_foundation.sql
-#   # Seed needs a real auth.users row on hosted Supabase; locally `supabase db reset` runs seed.sql
+#   export DATABASE_URL_OWNER=postgres://postgres:postgres@127.0.0.1:5432/stead
+#   npm run db:migrate && npm run db:bootstrap-roles && npm run db:seed
 #
-# Full local stack (Auth, Studio, edge functions): `supabase start` after `supabase link`
-# to the owner's project (stead-dev, us-east-1, ref aqkjkarrhancuqxxukus) or a fresh one.
+# db:bootstrap-roles prints DATABASE_URL (app_user) and AUTH_DATABASE_URL
+# (auth_user) — the app runs as those, never as the owner.
+#
+# Tests use the throwaway db_test service:
+#   docker compose --profile test up -d db_test
+#   DATABASE_URL_OWNER=postgres://postgres:postgres@127.0.0.1:5433/stead_test npm test
 
 services:
   db:
-    image: postgres:16
+    # Neon runs Postgres 17; match it locally so behaviour does not drift.
+    image: postgres:17
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -27,7 +31,7 @@ services:
       retries: 10
 
   db_test:
-    image: postgres:16
+    image: postgres:17
     profiles: ["test"]
     environment:
       POSTGRES_USER: postgres
@@ -41,5 +45,26 @@ services:
       timeout: 5s
       retries: 10
 
+  # S3-compatible object storage for listing photos and claim evidence.
+  # Console at http://127.0.0.1:9001 (minioadmin / minioadmin).
+  storage:
+    image: minio/minio
+    profiles: ["storage"]
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - stead_minio:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
 volumes:
   stead_pg:
+  stead_minio:

@@ -4,12 +4,11 @@ import { Shell } from "../components/Shell";
 import { StatusBanner } from "../components/StatusBanner";
 import { useAuth } from "../hooks/useAuth";
 import { prettyRange } from "../lib/dates";
-import { supabaseConfigured } from "../lib/env";
+import { api } from "../lib/api";
 import { formatUsd } from "../lib/money";
-import { getSupabase } from "../lib/supabase";
-import { listingOf, type Booking } from "../lib/types";
+import type { BookingStatus } from "../lib/types";
 
-const STATUS_LABEL: Record<Booking["status"], string> = {
+const STATUS_LABEL: Record<BookingStatus, string> = {
   pending_payment: "Awaiting payment",
   confirmed: "Confirmed",
   checked_in: "In stay",
@@ -20,21 +19,12 @@ const STATUS_LABEL: Record<Booking["status"], string> = {
 };
 
 export function TripsPage() {
-  const configured = supabaseConfigured();
   const { user, loading } = useAuth();
 
   const trips = useQuery({
     queryKey: ["trips", user?.id],
-    enabled: configured && Boolean(user),
-    queryFn: async () => {
-      const { data, error } = await getSupabase()
-        .from("bookings")
-        .select("*, listings(*, listing_photos(*))")
-        .eq("guest_id", user?.id)
-        .order("check_in", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as Booking[];
-    },
+    enabled: Boolean(user),
+    queryFn: () => api.trips(),
   });
 
   return (
@@ -44,9 +34,7 @@ export function TripsPage() {
           <h1 className="m-0 font-display text-2xl font-semibold">Your stays</h1>
         </div>
 
-        {!configured ? (
-          <StatusBanner title="Connect Supabase to see trips" />
-        ) : loading ? (
+        {loading ? (
           <StatusBanner title="Checking your session…" />
         ) : !user ? (
           <StatusBanner
@@ -55,9 +43,7 @@ export function TripsPage() {
           />
         ) : null}
 
-        {user && !configured ? null : user && trips.isLoading ? (
-          <StatusBanner title="Loading trips…" />
-        ) : null}
+        {user && trips.isLoading ? <StatusBanner title="Loading trips…" /> : null}
         {trips.isError ? (
           <StatusBanner
             tone="claim"
@@ -72,7 +58,7 @@ export function TripsPage() {
           />
         ) : null}
 
-        {user && !trips.data?.length && configured ? (
+        {user && !trips.data?.length ? (
           <Link
             to="/explore"
             className="rounded-xl bg-spruce py-3.5 text-center text-sm font-bold text-paper no-underline hover:bg-spruce-deep hover:text-paper"
@@ -83,8 +69,7 @@ export function TripsPage() {
 
         <div className="flex flex-col gap-3">
           {trips.data?.map((booking) => {
-            const listing = listingOf(booking);
-            const photos = [...(listing?.listing_photos ?? [])].sort((a, b) => a.sort_order - b.sort_order);
+            const photo = booking.listing.photos[0];
             return (
               <Link
                 key={booking.id}
@@ -92,17 +77,17 @@ export function TripsPage() {
                 className="flex items-center gap-3 rounded-[14px] border border-linen-tint px-3.5 py-3 text-inherit no-underline"
               >
                 <div className="h-[54px] w-[54px] shrink-0 overflow-hidden rounded-[10px] bg-linen">
-                  {photos[0] ? (
-                    <img src={photos[0].storage_path} alt="" className="h-full w-full object-cover" />
+                  {photo ? (
+                    <img src={photo.storagePath} alt="" className="h-full w-full object-cover" />
                   ) : null}
                 </div>
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="truncate text-[15px] font-bold">{listing?.title ?? "Stay"}</span>
+                  <span className="truncate text-[15px] font-bold">{booking.listing.title}</span>
                   <span className="text-xs text-ink/55">
-                    {prettyRange(booking.check_in, booking.check_out)} · {listing?.city}
+                    {prettyRange(booking.checkIn, booking.checkOut)} · {booking.listing.city}
                   </span>
                   <span className="money text-xs font-semibold text-ink/70">
-                    {STATUS_LABEL[booking.status]} · {formatUsd(booking.guest_total_cents)}
+                    {STATUS_LABEL[booking.status]} · {formatUsd(booking.guestTotalCents)}
                   </span>
                 </div>
               </Link>

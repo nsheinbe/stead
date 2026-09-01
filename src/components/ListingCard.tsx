@@ -1,21 +1,20 @@
 import { Link } from "react-router-dom";
 import { formatUsd } from "../lib/money";
-import type { Listing } from "../lib/types";
+import type { ListingSummary } from "../lib/types";
 import { BoltIcon } from "./Icons";
 
-function photoUrl(listing: Listing): string {
-  const photos = [...(listing.listing_photos ?? [])].sort((a, b) => a.sort_order - b.sort_order);
-  return photos[0]?.storage_path ?? `https://picsum.photos/seed/stead-${listing.id}/800/500`;
+function photoUrl(listing: ListingSummary): string {
+  return listing.photos[0]?.storagePath ?? `https://picsum.photos/seed/stead-${listing.id}/800/500`;
 }
 
-function amenityLine(listing: Listing): string {
+function amenityLine(listing: ListingSummary): string {
   const bedrooms = listing.amenities.bedrooms;
   const place = listing.region ? `${listing.city}, ${listing.region}` : listing.city;
   const beds = bedrooms ? ` · ${bedrooms} ${bedrooms === 1 ? "bedroom" : "bedrooms"}` : "";
-  return `${place} · Sleeps ${listing.max_guests}${beds}`;
+  return `${place} · Sleeps ${listing.maxGuests}${beds}`;
 }
 
-export function ListingCard({ listing }: { listing: Listing }) {
+export function ListingCard({ listing }: { listing: ListingSummary }) {
   return (
     <Link
       to={`/listing/${listing.id}`}
@@ -28,20 +27,20 @@ export function ListingCard({ listing }: { listing: Listing }) {
         <div className="flex items-baseline justify-between gap-3">
           <span className="text-[16.5px] font-bold">{listing.title}</span>
           <span className="money whitespace-nowrap text-[16.5px] font-bold">
-            {formatUsd(listing.nightly_rate_cents)}{" "}
+            {formatUsd(listing.nightlyRateCents)}{" "}
             <span className="text-[12.5px] font-medium text-ink/55">/ night</span>
           </span>
         </div>
         <span className="text-[13px] text-ink/55">{amenityLine(listing)}</span>
         <div className="mt-1 flex flex-wrap gap-1.5">
-          {listing.instant_book ? (
+          {listing.instantBook ? (
             <span className="inline-flex items-center gap-1 rounded-full border border-[#E2D9C5] px-2.5 py-1 text-[11.5px] font-semibold text-ink/65">
               <BoltIcon />
               Instant book
             </span>
           ) : null}
           <span className="rounded-full bg-linen px-2.5 py-1 text-[11.5px] font-bold capitalize">
-            {listing.cancellation_policy}
+            {listing.cancellationPolicy}
           </span>
         </div>
       </div>

@@ -7,13 +7,10 @@
 node_modules/
 dist/
 
-# Supabase local
-supabase/.temp/
-supabase/.branches/
-
 # Test / tooling
 coverage/
 *.tsbuildinfo
+.vercel/
 
 # Editor/OS noise
 .DS_Store

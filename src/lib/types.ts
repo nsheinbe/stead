@@ -1,3 +1,8 @@
+/**
+ * The wire contract between the browser and /api. Shared by both sides, so a
+ * change to a payload shape is a typecheck failure rather than a runtime
+ * surprise. All money is integer cents.
+ */
 export type ListingType = "entire_home" | "apartment" | "private_room";
 export type CancellationPolicy = "flexible" | "moderate" | "strict";
 export type ListingStatus = "draft" | "active" | "paused";
@@ -9,6 +14,14 @@ export type BookingStatus =
   | "canceled_by_guest"
   | "canceled_by_host"
   | "expired";
+export type EscrowState =
+  | "scheduled"
+  | "held"
+  | "claim_window"
+  | "released"
+  | "claimed"
+  | "disputed"
+  | "arbitrated";
 
 export type ListingAmenities = {
   bedrooms?: number;
@@ -19,73 +32,108 @@ export type ListingAmenities = {
   courtyard?: boolean;
 };
 
-export type Profile = {
-  id: string;
-  display_name: string;
-  avatar_url: string | null;
-  is_host: boolean;
-};
-
 export type ListingPhoto = {
   id: string;
-  listing_id: string;
-  storage_path: string;
-  sort_order: number;
+  storagePath: string;
+  sortOrder: number;
 };
 
-export type Listing = {
+export type HostSummary = {
   id: string;
-  host_id: string;
+  displayName: string;
+  avatarUrl: string | null;
+};
+
+export type ListingSummary = {
+  id: string;
   title: string;
-  description: string;
   type: ListingType;
-  address_line: string;
   city: string;
   region: string;
   country: string;
   timezone: string;
-  nightly_rate_cents: number;
-  deposit_cents: number;
-  max_guests: number;
+  nightlyRateCents: number;
+  depositCents: number;
+  maxGuests: number;
   amenities: ListingAmenities;
-  instant_book: boolean;
-  cancellation_policy: CancellationPolicy;
+  instantBook: boolean;
+  cancellationPolicy: CancellationPolicy;
+  photos: ListingPhoto[];
+};
+
+export type ListingDetail = ListingSummary & {
+  description: string;
+  addressLine: string;
   status: ListingStatus;
-  listing_photos?: ListingPhoto[];
-  profiles?: Profile | Profile[] | null;
+  host: HostSummary | null;
 };
 
-export type Booking = {
+export type TripListing = {
   id: string;
-  listing_id: string;
-  guest_id: string;
-  check_in: string;
-  check_out: string;
-  guests: number;
-  nights: number;
-  nightly_rate_cents: number;
-  stay_subtotal_cents: number;
-  network_fee_cents: number;
-  guest_total_cents: number;
-  deposit_cents: number;
-  cancellation_policy: CancellationPolicy;
-  status: BookingStatus;
-  created_at: string;
-  listings?: Listing | Listing[] | null;
-  escrow_deposits?: { amount_cents: number; state: string }[] | null;
+  title: string;
+  city: string;
+  region: string;
+  timezone: string;
+  photos: ListingPhoto[];
 };
 
-export function hostOf(listing: Listing): Profile | null {
-  const p = listing.profiles;
-  if (!p) return null;
-  return Array.isArray(p) ? (p[0] ?? null) : p;
-}
+export type TripSummary = {
+  id: string;
+  status: BookingStatus;
+  checkIn: string;
+  checkOut: string;
+  nights: number;
+  guestTotalCents: number;
+  depositCents: number;
+  listing: TripListing;
+};
 
-export function listingOf(booking: Booking): Listing | null {
-  const l = booking.listings;
-  if (!l) return null;
-  return Array.isArray(l) ? (l[0] ?? null) : l;
-}
+export type TripDetail = TripSummary & {
+  guests: number;
+  nightlyRateCents: number;
+  staySubtotalCents: number;
+  networkFeeCents: number;
+  cancellationPolicy: CancellationPolicy;
+  createdAt: string;
+  escrow: { amountCents: number; state: EscrowState } | null;
+};
+
+/** Fee policy from app_config. Public: the 2% is the whole point. */
+export type PublicConfig = {
+  networkFeeBps: number;
+  checkinLocalTime: string;
+  checkoutLocalTime: string;
+  claimWindowHours: number;
+  pendingPaymentTtlMinutes: number;
+};
+
+export type SessionResponse = {
+  user: { id: string; email: string; name: string | null } | null;
+};
+
+export type CreateBookingRequest = {
+  listingId: string;
+  checkIn: string;
+  checkOut: string;
+  guests: number;
+};
+
+export type CreateBookingResponse = {
+  bookingId: string;
+  quote: {
+    nightly_rate_cents: number;
+    nights: number;
+    stay_subtotal_cents: number;
+    network_fee_cents: number;
+    guest_total_cents: number;
+    deposit_cents: number;
+  };
+  paymentClientSecret: string | null;
+  setupClientSecret: string | null;
+  depositMethod: "auth_hold" | "card_on_file";
+  mockPayment: boolean;
+  timezone: string;
+};
 
 export const TYPE_LABEL: Record<ListingType, string> = {
   entire_home: "Entire home",

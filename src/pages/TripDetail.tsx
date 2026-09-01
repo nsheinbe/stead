@@ -5,34 +5,25 @@ import { Shell } from "../components/Shell";
 import { StatusBanner } from "../components/StatusBanner";
 import { useAuth } from "../hooks/useAuth";
 import { prettyRange } from "../lib/dates";
-import { supabaseConfigured } from "../lib/env";
+import { api, ApiError } from "../lib/api";
 import { formatUsd } from "../lib/money";
-import { getSupabase } from "../lib/supabase";
-import { listingOf, type Booking } from "../lib/types";
 
 export function TripDetailPage() {
   const { bookingId } = useParams<{ bookingId: string }>();
-  const configured = supabaseConfigured();
   const { user, loading } = useAuth();
 
   const trip = useQuery({
     queryKey: ["trip", bookingId],
-    enabled: configured && Boolean(user) && Boolean(bookingId),
-    queryFn: async () => {
-      const { data, error } = await getSupabase()
-        .from("bookings")
-        .select("*, listings(*, listing_photos(*)), escrow_deposits(amount_cents, state)")
-        .eq("id", bookingId)
-        .maybeSingle();
-      if (error) throw error;
-      return data as Booking | null;
-    },
+    enabled: Boolean(user) && Boolean(bookingId),
+    queryFn: () => api.trip(bookingId as string),
+    retry: false,
   });
 
   const booking = trip.data;
-  const listing = booking ? listingOf(booking) : null;
-  const photos = [...(listing?.listing_photos ?? [])].sort((a, b) => a.sort_order - b.sort_order);
-  const escrow = booking?.escrow_deposits?.[0];
+  const listing = booking?.listing;
+  const photo = listing?.photos[0];
+  const escrow = booking?.escrow;
+  const notFound = trip.error instanceof ApiError && trip.error.status === 404;
 
   return (
     <Shell>
@@ -46,27 +37,25 @@ export function TripDetailPage() {
           ) : null}
         </div>
 
-        {!configured ? <StatusBanner title="Connect Supabase to open a trip" /> : null}
         {loading || trip.isLoading ? <StatusBanner title="Loading this stay…" /> : null}
-        {user && trip.data === null ? (
-          <StatusBanner title="Trip not found" detail="Guest A cannot read guest B's booking — that is the rule." />
+        {user && notFound ? (
+          <StatusBanner
+            title="Trip not found"
+            detail="Guest A cannot read guest B's booking — that is the rule."
+          />
         ) : null}
-        {!user && !loading ? (
-          <StatusBanner title="Sign in to see this trip" />
-        ) : null}
+        {!user && !loading ? <StatusBanner title="Sign in to see this trip" /> : null}
 
         {booking && listing ? (
           <>
             <div className="flex items-center gap-3 rounded-[14px] border border-linen-tint px-3.5 py-3">
               <div className="h-[54px] w-[54px] shrink-0 overflow-hidden rounded-[10px] bg-linen">
-                {photos[0] ? (
-                  <img src={photos[0].storage_path} alt="" className="h-full w-full object-cover" />
-                ) : null}
+                {photo ? <img src={photo.storagePath} alt="" className="h-full w-full object-cover" /> : null}
               </div>
               <div className="flex flex-1 flex-col gap-0.5">
                 <span className="text-[15px] font-bold">{listing.title}</span>
                 <span className="text-xs text-ink/55">
-                  {prettyRange(booking.check_in, booking.check_out)} · {listing.city}
+                  {prettyRange(booking.checkIn, booking.checkOut)} · {listing.city}
                   {listing.region ? `, ${listing.region}` : ""}
                 </span>
               </div>
@@ -75,8 +64,8 @@ export function TripDetailPage() {
             <div className="flex flex-col gap-2 rounded-card bg-linen p-[18px]">
               <span className="text-[11.5px] font-bold tracking-[0.14em] text-ink/50">ACCESS</span>
               <p className="m-0 text-[12.5px] leading-relaxed text-ink/60">
-                Check-in {booking.check_in} at listing-local time ({listing.timezone}). The host shares the door details
-                before you arrive — Slice 1 does not invent a code.
+                Check-in {booking.checkIn} at listing-local time ({listing.timezone}). The host shares the door
+                details before you arrive — Slice 1 does not invent a code.
               </p>
             </div>
 
@@ -84,7 +73,7 @@ export function TripDetailPage() {
               <div className="flex items-center justify-between">
                 <div className="flex flex-col gap-0.5">
                   <span className="money text-sm font-bold">
-                    {formatUsd(escrow?.amount_cents ?? booking.deposit_cents)} · in escrow
+                    {formatUsd(escrow?.amountCents ?? booking.depositCents)} · in escrow
                   </span>
                   <span className="text-xs text-ink/60">
                     {escrow?.state === "scheduled"
@@ -99,17 +88,17 @@ export function TripDetailPage() {
             <div className="flex flex-col gap-2 rounded-[14px] border border-linen-tint px-4 py-3.5 text-sm">
               <div className="money flex justify-between">
                 <span className="text-ink/70">Stay + 2% network fee</span>
-                <span className="font-semibold">{formatUsd(booking.guest_total_cents)}</span>
+                <span className="font-semibold">{formatUsd(booking.guestTotalCents)}</span>
               </div>
               <div className="money flex justify-between">
                 <span className="text-ink/70">Deposit (apart)</span>
-                <span className="font-semibold">{formatUsd(booking.deposit_cents)}</span>
+                <span className="font-semibold">{formatUsd(booking.depositCents)}</span>
               </div>
             </div>
 
             <p className="m-0 text-[12.5px] leading-relaxed text-ink/55">
-              Messaging, claims, and reviews land in later slices. Checkout is 11:00 listing-local time — your review
-              opens then. Double-blind, as always.
+              Messaging, claims, and reviews land in later slices. Checkout is 11:00 listing-local time — your
+              review opens then. Double-blind, as always.
             </p>
             <Link to="/trips" className="text-sm font-bold no-underline">
               All trips →
