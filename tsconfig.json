@@ -16,16 +16,19 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
+    "types": ["node", "vite/client"],
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@shared/*": ["supabase/functions/_shared/*"]
+      "@server/*": ["server/*"]
     }
   },
   "include": [
     "src",
+    "server",
+    "scripts",
+    "api",
     "tests",
-    "supabase/functions/_shared",
     "vite.config.ts",
     "vitest.config.ts"
   ]

@@ -1,26 +1,28 @@
 # Stead — community-owned home rental marketplace
 
-Trust-first Airbnb alternative: flat 2% fee, deposits in neutral escrow, portable reputation (Trust Passport). Spec of record: `BUILD_PROMPT.md`. Design truth: `/design/Stead.dc.html` + tokens in `/design/DESIGN_HANDOFF.md`. Never edit anything in `/design`.
+Trust-first Airbnb alternative: flat 2% fee, deposits in neutral escrow, portable reputation (Trust Passport). Spec of record: `BUILD_PROMPT.md` — read the stack amendment at the top of it, which supersedes the Supabase references in the body. Design truth: `/design/Stead.dc.html` + tokens in `/design/DESIGN_HANDOFF.md`. Never edit anything in `/design`.
 
 ## Commands (keep current as the repo evolves)
 
-* Dev: `npm run dev`
+* Dev: `npm run dev` — Vite serves the SPA and the Hono API on one origin
 * Typecheck: `npm run typecheck` — run after every code change
 * Tests: `npm run test` (Vitest) — must pass before a slice is complete
-* DB: `supabase db push` · new migration: `supabase migration new <name>`
-* Functions local: `supabase functions serve`
-* Stripe webhooks local: `stripe listen --forward-to localhost:54321/functions/v1/stripe-webhook`
+* DB: `npm run db:migrate` · seed: `npm run db:seed` · new migration: add the next numbered file in `drizzle/`
+* Local Postgres: `docker compose up -d db` · test DB: `docker compose --profile test up -d db_test`
+* Self-host the built app: `npm run build && npm start`
+* Stripe webhooks local: `stripe listen --forward-to localhost:5173/api/stripe/webhook`
 
 ## Invariants (never violate; ask before deviating)
 
-* All money is integer cents. No floats, ever. Pricing math and every state transition happen ONLY in edge functions with the service role.
+* All money is integer cents. No floats, ever. Pricing math and every state transition happen ONLY on the server (`server/`), never in the browser.
 * Pricing constants come from `app_config`; snapshot them onto bookings.
-* RLS is deny-by-default on every table. Client writes to bookings, escrow_deposits, claims, payouts, messages.read-state-only, and reviews.published_at are denied by policy.
+* There is no RLS. The browser has no database credentials and never talks to Postgres. Authorization is `requireUser` plus a required session-user argument on every function in `server/queries` — no unscoped "get by id" exports.
+* Clients cannot write bookings, escrow_deposits, claims, payouts, message read-state, or reviews.published_at; those paths exist only as server routes.
 * Escrow transitions follow the state machine in BUILD_PROMPT §5 exactly and write an `escrow_audit` row. No transition outside it.
 * Webhooks are idempotent via `stripe_events` (insert event id first, skip if present).
-* Bookings are protected by the btree_gist exclusion constraint — never "check-then-insert" availability in application code.
+* Bookings are protected by the btree_gist exclusion constraint — never "check-then-insert" availability in application code. Catch `23P01` (via `isExclusionViolation`, which walks Drizzle's `cause` chain) and return a friendly conflict.
 * All scheduling is listing-local time (IANA `listings.timezone`); never assume UTC for check-in/checkout.
-* Migrations are append-only: never edit an applied migration; create a new one.
+* Migrations are append-only: never edit an applied file in `drizzle/`; add the next numbered one. `drizzle/*.sql` is authoritative; `server/db/schema.ts` mirrors it.
 
 ## Copy rules (UI, emails, seed data)
 
@@ -32,16 +34,18 @@ paper #FBFAF7 · ink #17201B · spruce #1E4034 · spruce-deep #16332A · brass #
 
 ## Workflow
 
-* One slice per session. Read BUILD_PROMPT.md for the current slice, plan first (migrations + RLS + file tree), wait for approval, then build.
-* A slice is done only when its acceptance criteria pass AND typecheck + tests are green. Commit per logical change, not one giant commit.
+* One slice per session. Read BUILD_PROMPT.md for the current slice, plan first (migration + query scoping + file tree), wait for approval, then build.
+* A slice is done only when its acceptance criteria pass AND typecheck + tests are green.  Commit per logical change, not one giant commit.
 * Make minimal changes; do not refactor unrelated code.
 * When unsure between two approaches, present both and let me choose.
-* Every slice adds Vitest coverage for its money math and state transitions.
+* Every slice adds Vitest coverage for its money math, state transitions, and the authorization scoping of any new query.
 
 ## Gotchas
 
 * Card auths last ~7 days → deposit auth-hold only when nights ≤ `deposit_auth_max_nights` (config, default 4); otherwise card-on-file path.
-* Stripe Identity requires account activation even in test mode (Slice 7).
-* Images in /design are placeholder slots; use picsum seeds until real photography lands (pre-launch task, not a slice).
-* `pending_payment` bookings expire via cron after 30 min so the exclusion constraint doesn't dead-lock dates behind abandoned checkouts.
-* Auth is magic-link email only for now — Google OAuth is deferred (TODO: enable the Google provider in Supabase Auth and add it to /login once the OAuth client is supplied).
+* Neon's pooled endpoint is PgBouncer in transaction mode, so `postgres.js` runs with `prepare: false`. Use the pooled connection string; drop `channel_binding=require` if a driver rejects it.
+* Drizzle wraps driver errors in `DrizzleQueryError` — the Postgres error code is on `.cause`, not the top-level error.
+* Images in /design are placeholder slots; use picsum seeds until real photography lands (pre-launch task, not a slice). Uploads land in Slice 3 against the S3-compatible `S3_*` vars (MinIO locally).
+* `pending_payment` bookings expire via `/api/cron/expire-pending` after 30 min so the exclusion constraint doesn't dead-lock dates behind abandoned checkouts. Vercel Cron calls it with `Authorization: Bearer $CRON_SECRET`.
+* Auth is magic-link email only for now — Google OAuth is deferred (TODO: add the Google provider in `server/auth.ts` and a button on /login once the OAuth client is supplied; `public.accounts` already exists for it).
+* Without `RESEND_API_KEY` the magic link prints to the server console. That is the intended local-dev path, not a bug.

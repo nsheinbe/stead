@@ -1,5 +1,30 @@
 # Stead — Build Prompt v2 (Slices 1–8)
 
+> **Stack amendment (supersedes the Supabase references below).** The prompt
+> below is the original brief and the slice plan is unchanged, but the platform
+> moved off Supabase onto Neon Postgres. Where it says:
+>
+> * **Supabase Auth** → Auth.js v5, magic link by email (Resend), session as a
+>   JWT in an httpOnly cookie. Google OAuth is still deferred. §11's
+>   `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY`
+>   are replaced by `DATABASE_URL`, `AUTH_SECRET`, and `CRON_SECRET`.
+> * **Postgres with RLS on every table** (§4, §9) → Neon Postgres with **no
+>   RLS**. The browser holds no database credentials and never queries Postgres.
+>   The RLS sketch in §4 is implemented as server-side scoping instead: every
+>   function in `server/queries` takes the session user id, and `tests/
+>   authorization.test.ts` is the probe. Everything else about the schema —
+>   integer cents, the generated `stay` daterange, the btree_gist exclusion
+>   constraint — is unchanged. `auth.users` became `public.users`.
+> * **Edge Functions** (§7) → routes on a Hono API under `/api`, deployed as a
+>   Vercel function and runnable standalone with `npm start`. Cron jobs are
+>   authenticated HTTP endpoints under `/api/cron/*`.
+> * **Supabase Storage** → any S3-compatible bucket via the `S3_*` variables
+>   (MinIO locally). Nothing uploads yet; this lands in Slice 3.
+> * **§8 deploy pipeline docs (S8)** → Vercel + Neon branches, not staging and
+>   prod Supabase projects.
+>
+> See README "Shape of the thing" for the current layout.
+
 ```
 You are building **Stead**, a community-owned home rental marketplace
 positioned as the fair, trust-first alternative to Airbnb. Read CLAUDE.md
