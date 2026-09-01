@@ -7,6 +7,7 @@
  * A scheduler is not a member either, so these run with no app.user_id and do
  * their work through the SECURITY DEFINER transitions.
  */
+import { timingSafeEqual } from "node:crypto";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { tenantQuery, type AppEnv } from "../lib/http";
@@ -15,12 +16,19 @@ import { getConfigMap, intFromConfig } from "../queries/listings";
 
 export const cronRoutes = new Hono<AppEnv>();
 
+/** Constant-time compare; a length mismatch is simply false. */
+function secretsMatch(presented: string, expected: string): boolean {
+  const a = Buffer.from(presented, "utf8");
+  const b = Buffer.from(expected, "utf8");
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 function assertCronCaller(header: string | undefined): void {
   const secret = process.env.CRON_SECRET;
   if (!secret) {
     throw new HTTPException(500, { message: "CRON_SECRET is not set" });
   }
-  if (header !== `Bearer ${secret}`) {
+  if (!header || !secretsMatch(header, `Bearer ${secret}`)) {
     throw new HTTPException(401, { message: "Not a scheduled caller" });
   }
 }
