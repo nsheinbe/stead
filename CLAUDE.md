@@ -2,6 +2,24 @@
 
 Trust-first Airbnb alternative: flat 2% fee, deposits in neutral escrow, portable reputation (Trust Passport). Spec of record: `BUILD_PROMPT.md` — read the stack amendment at the top of it, which supersedes the Supabase references in the body. Design truth: `/design/Stead.dc.html` + tokens in `/design/DESIGN_HANDOFF.md`. Never edit anything in `/design`.
 
+## Hosted stack (read before touching data access)
+
+The hosted database is **Neon Postgres** — Neon project `stead` (`billowing-sky-09303447`). There is no Supabase here: no `@supabase/supabase-js`, no Supabase Auth helpers, no `SUPABASE_*` variables. If you reach for one, the equivalent already lives in `server/`.
+
+**Auth is Auth.js v5** (`@auth/core`) in `server/auth.ts`: magic link by email, session as a JWT in an httpOnly cookie signed with `AUTH_SECRET`. Not Supabase Auth.
+
+**RLS is on and required.** Postgres row-level security is free on Neon, so there is no reason to trade it for application-layer checks — don't. Policies live in `drizzle/0002_roles_and_rls.sql`.
+
+Three connection strings, because the roles are the security boundary:
+
+| Variable | Role | Host | Used by |
+| --- | --- | --- | --- |
+| `DATABASE_URL` | `app_user` — non-superuser, no `BYPASSRLS` | pooled | all app traffic, under RLS |
+| `AUTH_DATABASE_URL` | `auth_user` — the four identity tables only | pooled | Auth.js |
+| `DATABASE_URL_OWNER` | the table owner, `neondb_owner` | direct | migrations and seeding only |
+
+**Never put `neondb_owner` in `DATABASE_URL`.** It owns every table and has `BYPASSRLS`, so no policy applies to it and queries would return every member's rows without erroring — the failure is silent, which is what makes it dangerous. `assertTenantRole` in `server/db/client.ts` fails closed on exactly that: before any tenant query it checks `BYPASSRLS`, `SUPERUSER`, table ownership, and `row_security_active`, and a privileged role gets a 503 instead of cross-member reads.
+
 ## Commands (keep current as the repo evolves)
 
 * Dev: `npm run dev` — Vite serves the SPA and the Hono API on one origin
