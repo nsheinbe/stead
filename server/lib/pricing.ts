@@ -32,13 +32,25 @@ function assertIntCents(value: number, label: string): void {
   }
 }
 
+/**
+ * Parses a YYYY-MM-DD civil date to epoch ms, or NaN. V8 rolls out-of-range
+ * days over (2026-02-30 → March 2), so the parsed value is formatted back and
+ * compared to catch a date that does not exist on the calendar.
+ */
+function parseCivilDate(value: string): number {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return Number.NaN;
+  const ms = Date.parse(`${value}T00:00:00Z`);
+  if (Number.isNaN(ms)) return Number.NaN;
+  return new Date(ms).toISOString().slice(0, 10) === value ? ms : Number.NaN;
+}
+
 /** Calendar nights between two YYYY-MM-DD dates. Dates are listing-local civil dates. */
 export function nightsBetween(checkIn: string, checkOut: string): number {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(checkIn) || !/^\d{4}-\d{2}-\d{2}$/.test(checkOut)) {
     throw new MoneyError("check-in and check-out must be YYYY-MM-DD");
   }
-  const start = Date.parse(`${checkIn}T00:00:00Z`);
-  const end = Date.parse(`${checkOut}T00:00:00Z`);
+  const start = parseCivilDate(checkIn);
+  const end = parseCivilDate(checkOut);
   if (Number.isNaN(start) || Number.isNaN(end)) {
     throw new MoneyError("invalid stay dates");
   }
