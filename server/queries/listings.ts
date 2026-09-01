@@ -1,13 +1,12 @@
 /**
  * Read paths for listings and fee policy.
  *
- * These reimplement the old RLS policies. `listings_public_read_active` was
- * `USING (status = 'active' OR host_id = auth.uid())`; here that predicate is
- * spelled out in SQL and the viewer id is a required argument so a caller
- * cannot forget it.
+ * The `visible` predicate below mirrors the listings_read_active policy rather
+ * than replacing it. The policy is the enforcement; repeating it here keeps the
+ * query's intent readable and lets a 404 be a 404 instead of an empty row set.
  */
 import { and, asc, desc, eq, or } from "drizzle-orm";
-import type { Db } from "../db/client";
+import type { Tx } from "../db/client";
 import { appConfig, listingPhotos, listings } from "../db/schema";
 import type {
   ListingDetail,
@@ -20,8 +19,8 @@ function toPhotos(rows: { id: string; storagePath: string; sortOrder: number }[]
   return rows.map((p) => ({ id: p.id, storagePath: p.storagePath, sortOrder: p.sortOrder }));
 }
 
-export async function listActiveListings(db: Db): Promise<ListingSummary[]> {
-  const rows = await db.query.listings.findMany({
+export async function listActiveListings(tx: Tx): Promise<ListingSummary[]> {
+  const rows = await tx.query.listings.findMany({
     where: eq(listings.status, "active"),
     orderBy: desc(listings.nightlyRateCents),
     with: { photos: { orderBy: asc(listingPhotos.sortOrder) } },
@@ -47,7 +46,7 @@ export async function listActiveListings(db: Db): Promise<ListingSummary[]> {
 
 /** Active listings are public; a host may also open their own draft or paused rows. */
 export async function getListingForViewer(
-  db: Db,
+  tx: Tx,
   listingId: string,
   viewerId: string | null,
 ): Promise<ListingDetail | null> {
@@ -55,7 +54,7 @@ export async function getListingForViewer(
     ? or(eq(listings.status, "active"), eq(listings.hostId, viewerId))
     : eq(listings.status, "active");
 
-  const row = await db.query.listings.findFirst({
+  const row = await tx.query.listings.findFirst({
     where: and(eq(listings.id, listingId), visible),
     with: {
       photos: { orderBy: asc(listingPhotos.sortOrder) },
@@ -98,8 +97,8 @@ function stringFromConfig(value: unknown, fallback: string): string {
   return typeof value === "string" && value.length > 0 ? value : fallback;
 }
 
-export async function getConfigMap(db: Db): Promise<Record<string, unknown>> {
-  const rows = await db.select().from(appConfig);
+export async function getConfigMap(tx: Tx): Promise<Record<string, unknown>> {
+  const rows = await tx.select().from(appConfig);
   return Object.fromEntries(rows.map((r) => [r.key, r.value]));
 }
 

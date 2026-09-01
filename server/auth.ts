@@ -3,10 +3,13 @@
  * difference is that the tokens and the member row now live in our own Neon
  * database instead of hosted Supabase Auth.
  *
- * Sessions are JWTs in an httpOnly, SameSite=Lax cookie. There is no RLS
- * behind this, so `requireUser` is the only thing standing between a request
- * and someone else's booking; every query in server/queries takes the id it
- * returns.
+ * Sessions are JWTs in an httpOnly, SameSite=Lax cookie. The id this returns
+ * becomes app.user_id on the request's transaction, which is what every RLS
+ * policy reads.
+ *
+ * This runs on its own connection as auth_user, which has grants on the four
+ * identity tables and on nothing else. A bug here cannot read a booking, and a
+ * bug in the booking path cannot read an email address.
  *
  * TODO: Google is a config change now — add GoogleProvider here and the button
  * to /login once an OAuth client is supplied. public.accounts already exists.
@@ -14,7 +17,7 @@
 import { Auth, type AuthConfig } from "@auth/core";
 import Resend from "@auth/core/providers/resend";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
-import { getDb } from "./db/client";
+import { getAuthDb } from "./db/client";
 import { accounts, sessions, users, verificationTokens } from "./db/schema";
 
 export type SessionUser = {
@@ -87,12 +90,11 @@ export function authConfig(): AuthConfig {
   if (!secret) {
     throw new Error("AUTH_SECRET is not set. Generate one with `openssl rand -base64 32`.");
   }
-  const db = getDb();
   cached = {
     secret,
     trustHost: true,
     basePath: "/api/auth",
-    adapter: DrizzleAdapter(db, {
+    adapter: DrizzleAdapter(getAuthDb(), {
       usersTable: users,
       accountsTable: accounts,
       sessionsTable: sessions,

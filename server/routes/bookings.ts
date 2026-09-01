@@ -3,14 +3,19 @@
  * role. Same rules: quote from app_config, snapshot the money onto the row,
  * insert pending_payment + escrow scheduled, hand back Stripe client secrets.
  *
- * The guest id comes from the session cookie, never from the request body.
+ * The guest id comes from the session cookie, never from the request body, and
+ * the insert policy checks it again inside Postgres.
+ *
+ * Note the two separate transactions with the Stripe calls between them. A
+ * transaction never spans an outbound HTTP request, so a slow Stripe response
+ * cannot pin a Postgres connection.
  */
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { depositMethod, MoneyError, nightsBetween, quoteStay } from "../lib/pricing";
 import { getStripe, stripeConfigured } from "../lib/stripe";
-import { sessionUser, type AppEnv } from "../lib/http";
+import { sessionUser, tenantQuery, type AppEnv } from "../lib/http";
 import {
   createBookingWithEscrow,
   DateConflictError,
@@ -32,11 +37,13 @@ const createBookingSchema = z.object({
 export const tripsRoutes = new Hono<AppEnv>();
 
 tripsRoutes.get("/", async (c) => {
-  return c.json(await listTripsForGuest(c.get("db"), sessionUser(c).id));
+  const guest = sessionUser(c);
+  return c.json(await tenantQuery(c, (tx) => listTripsForGuest(tx, guest.id)));
 });
 
 tripsRoutes.get("/:id", async (c) => {
-  const trip = await getTripForParty(c.get("db"), c.req.param("id"), sessionUser(c).id);
+  const viewer = sessionUser(c);
+  const trip = await tenantQuery(c, (tx) => getTripForParty(tx, c.req.param("id"), viewer.id));
   if (!trip) {
     throw new HTTPException(404, { message: "Trip not found" });
   }
@@ -47,7 +54,6 @@ export const bookingsRoutes = new Hono<AppEnv>();
 
 bookingsRoutes.post("/", async (c) => {
   const guest = sessionUser(c);
-  const db = c.get("db");
 
   const parsed = createBookingSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) {
@@ -66,7 +72,13 @@ bookingsRoutes.post("/", async (c) => {
     });
   }
 
-  const listing = await getBookableListing(db, listingId);
+  const context = await tenantQuery(c, async (tx) => ({
+    listing: await getBookableListing(tx, listingId),
+    blackedOut: await overlapsBlackout(tx, listingId, checkIn, checkOut),
+    config: await getConfigMap(tx),
+  }));
+
+  const { listing } = context;
   if (!listing) throw new HTTPException(404, { message: "Listing not found" });
   if (listing.status !== "active") {
     throw new HTTPException(409, { message: "This listing is not available" });
@@ -77,13 +89,12 @@ bookingsRoutes.post("/", async (c) => {
   if (guests > listing.maxGuests) {
     throw new HTTPException(400, { message: `This home sleeps ${listing.maxGuests}` });
   }
-  if (await overlapsBlackout(db, listingId, checkIn, checkOut)) {
+  if (context.blackedOut) {
     throw new HTTPException(409, { message: "Those dates are blocked on this listing" });
   }
 
-  const config = await getConfigMap(db);
-  const networkFeeBps = intFromConfig(config.network_fee_bps, 200);
-  const depositAuthMaxNights = intFromConfig(config.deposit_auth_max_nights, 4);
+  const networkFeeBps = intFromConfig(context.config.network_fee_bps, 200);
+  const depositAuthMaxNights = intFromConfig(context.config.deposit_auth_max_nights, 4);
 
   let quote;
   try {
@@ -132,26 +143,28 @@ bookingsRoutes.post("/", async (c) => {
 
   let created;
   try {
-    created = await createBookingWithEscrow(
-      db,
-      {
-        listingId,
-        guestId: guest.id,
-        checkIn,
-        checkOut,
-        guests,
-        nights: quote.nights,
-        nightlyRateCents: quote.nightly_rate_cents,
-        staySubtotalCents: quote.stay_subtotal_cents,
-        networkFeeCents: quote.network_fee_cents,
-        guestTotalCents: quote.guest_total_cents,
-        depositCents: quote.deposit_cents,
-        cancellationPolicy: listing.cancellationPolicy,
-        status: "pending_payment",
-        stripePaymentIntentId: paymentIntentId,
-      },
-      { amountCents: quote.deposit_cents, method, stripeSetupIntentId: setupIntentId },
-      { method, nights, mock_payment: mockPayment },
+    created = await tenantQuery(c, (tx) =>
+      createBookingWithEscrow(
+        tx,
+        {
+          listingId,
+          guestId: guest.id,
+          checkIn,
+          checkOut,
+          guests,
+          nights: quote.nights,
+          nightlyRateCents: quote.nightly_rate_cents,
+          staySubtotalCents: quote.stay_subtotal_cents,
+          networkFeeCents: quote.network_fee_cents,
+          guestTotalCents: quote.guest_total_cents,
+          depositCents: quote.deposit_cents,
+          cancellationPolicy: listing.cancellationPolicy,
+          status: "pending_payment",
+          stripePaymentIntentId: paymentIntentId,
+        },
+        { amountCents: quote.deposit_cents, method, stripeSetupIntentId: setupIntentId },
+        { method, nights, mock_payment: mockPayment },
+      ),
     );
   } catch (err) {
     if (err instanceof DateConflictError) {
