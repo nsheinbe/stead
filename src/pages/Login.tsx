@@ -4,35 +4,30 @@ import { BrandMark } from "../components/BrandMark";
 import { Shell } from "../components/Shell";
 import { StatusBanner } from "../components/StatusBanner";
 import { useAuth } from "../hooks/useAuth";
-import { supabaseConfigured } from "../lib/env";
-import { getSupabase } from "../lib/supabase";
+import { api } from "../lib/api";
 
 export function LoginPage() {
-  const configured = supabaseConfigured();
   const { user } = useAuth();
   const [params] = useSearchParams();
   const next = params.get("next") ?? "/trips";
   const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
+  const [sent, setSent] = useState(params.get("sent") === "1");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function sendLink(e: React.FormEvent) {
     e.preventDefault();
-    if (!configured) return;
     setBusy(true);
     setError(null);
-    const redirectTo = `${window.location.origin}${next.startsWith("/") ? next : "/trips"}`;
-    const { error: signError } = await getSupabase().auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: redirectTo },
-    });
-    setBusy(false);
-    if (signError) {
-      setError(signError.message);
-      return;
+    try {
+      const callbackUrl = `${window.location.origin}${next.startsWith("/") ? next : "/trips"}`;
+      await api.sendSignInLink(email, callbackUrl);
+      setSent(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not send the sign-in link");
+    } finally {
+      setBusy(false);
     }
-    setSent(true);
   }
 
   return (
@@ -50,12 +45,6 @@ export function LoginPage() {
           </p>
         </div>
 
-        {!configured ? (
-          <StatusBanner
-            title="Supabase is not wired yet"
-            detail="Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY. Live project: stead-dev, us-east-1, ref aqkjkarrhancuqxxukus."
-          />
-        ) : null}
         {user ? (
           <StatusBanner
             title="You are signed in"
@@ -65,12 +54,12 @@ export function LoginPage() {
         {sent ? (
           <StatusBanner
             title="Check your email"
-            detail="Open the magic link on this device. The hold on a pending checkout still expires in 30 minutes."
+            detail="Open the link on this device. The hold on a pending checkout still expires in 30 minutes."
           />
         ) : null}
         {error ? <StatusBanner tone="claim" title={error} /> : null}
 
-        {!user && configured ? (
+        {!user ? (
           <form onSubmit={(e) => void sendLink(e)} className="flex flex-col gap-3">
             <label className="flex flex-col gap-1.5">
               <span className="text-[11px] font-bold tracking-wider text-ink/50">EMAIL</span>

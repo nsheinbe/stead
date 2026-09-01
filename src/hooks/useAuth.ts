@@ -1,38 +1,27 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Session, User } from "@supabase/supabase-js";
-import { useEffect } from "react";
-import { supabaseConfigured } from "../lib/env";
-import { getSupabase } from "../lib/supabase";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { api } from "../lib/api";
+import type { SessionResponse } from "../lib/types";
 
 export function useAuth() {
-  const queryClient = useQueryClient();
-  const enabled = supabaseConfigured();
-
   const query = useQuery({
-    queryKey: ["auth", "session"],
-    enabled,
-    queryFn: async (): Promise<{ session: Session | null; user: User | null }> => {
-      const { data, error } = await getSupabase().auth.getSession();
-      if (error) throw error;
-      return { session: data.session, user: data.session?.user ?? null };
-    },
+    queryKey: ["session"],
+    queryFn: () => api.me(),
+    staleTime: 30_000,
   });
 
-  useEffect(() => {
-    if (!enabled) return;
-    const { data } = getSupabase().auth.onAuthStateChange((_event, session) => {
-      queryClient.setQueryData(["auth", "session"], {
-        session,
-        user: session?.user ?? null,
-      });
-    });
-    return () => data.subscription.unsubscribe();
-  }, [enabled, queryClient]);
-
   return {
-    configured: enabled,
-    loading: enabled && query.isLoading,
-    session: query.data?.session ?? null,
+    loading: query.isLoading,
     user: query.data?.user ?? null,
   };
+}
+
+export function useSignOut() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.signOut(),
+    onSuccess: () => {
+      queryClient.setQueryData<SessionResponse>(["session"], { user: null });
+      void queryClient.invalidateQueries();
+    },
+  });
 }
