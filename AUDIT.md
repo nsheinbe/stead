@@ -65,7 +65,7 @@ Sorted by severity within each tier. `file:line` refers to `main` @ `826eec7`.
 | A-2 | Low (correctness) | `src/lib/api.ts:31-32` | `JSON.parse(text)` runs on every non-empty body. A platform-level error page (Vercel's plain-text 500, a proxy's HTML 502) throws a raw `SyntaxError`, which the pages then show to the member as "Unexpected token …" instead of the `ApiError` fallback message. | Parse defensively; a non-JSON body yields `null` and the existing `Request failed (status)` path. |
 | A-3 | Low (security hygiene) | `server/routes/cron.ts:23` | `header !== \`Bearer ${secret}\`` is a short-circuiting string compare. Practically unexploitable over the network with a 64-hex secret, but the constant-time primitive is in `node:crypto` and costs nothing. | Compare with `timingSafeEqual` on equal-length buffers; unchanged 401 otherwise. |
 | A-4 | Low (correctness, self-host only) | `server/node.ts:12-16` | Hono does not inherit a sub-app's `notFound` through `.route()`, so under `npm start` an unknown `/api/*` path falls through to the SPA catch-all and returns `index.html` with 200. Vercel and `npm run dev` are unaffected (they mount `server/app.ts` directly). | Register a JSON 404 for `/api/*` on the parent after mounting the app. |
-| A-5 | Low (UX bug) | `src/pages/Book.tsx:37` | `guests` starts at 2 regardless of the listing. For a listing with `maxGuests: 1` the stepper never lets you go down to the cap from above, and "Continue to payment" gets a 400 (`This home sleeps 1`). | Clamp the effective guest count to `listing.maxGuests` once the listing loads. |
+| A-5 | Low (UX bug) | `src/pages/Book.tsx:37` | `guests` starts at 2 regardless of the listing. For a listing with `maxGuests: 1` the page shows "2" against "This home sleeps 1", and a member who does not touch the stepper gets a 400 (`This home sleeps 1`) on "Continue to payment". (Pressing minus did work; the commit message for this fix overstates it as unbookable.) | Derive the effective guest count as `min(wanted, listing.maxGuests)` once the listing loads. |
 
 ### Tier 2 — needs approval (listed, not changed)
 
@@ -84,4 +84,47 @@ Sorted by severity within each tier. `file:line` refers to `main` @ `826eec7`.
 
 ## After fixes
 
-Filled in at the end of Phase 2 — see the bottom of this file.
+Five Tier 1 fixes, one commit each, all under the 8-fix cap. Nothing in `drizzle/`,
+`server/queries/`, `server/auth.ts`, or `package.json` changed.
+
+| Item | Commit | Files |
+| --- | --- | --- |
+| A-1 | `0a19acf` | `server/lib/pricing.ts`, `tests/pricing.test.ts` (+1 test) |
+| A-2 | `a938043` | `src/lib/api.ts` |
+| A-3 | `e384c72` | `server/routes/cron.ts` |
+| A-4 | `ccac3dc` | `server/node.ts` |
+| A-5 | `31a236c` | `src/pages/Book.tsx` |
+
+### Before / after
+
+| Check | Baseline (`826eec7`) | After (`31a236c`) |
+| --- | --- | --- |
+| `npm run typecheck` | green | green |
+| `npm test` | 15 passed, 23 skipped | **16 passed**, 23 skipped (same Postgres-gated set) |
+| `npm run build` | green, 284.12 kB / 88.73 kB gzip | green, 284.35 kB / 88.83 kB gzip |
+| `npm audit` | 2 moderate | 2 moderate (B-7, major bump, not touched) |
+
+Verification beyond the suites, run in-process with `tsx` against dummy env
+(nothing written to the repo):
+
+* A-3 — `/api/cron/expire-pending` with no header, a wrong secret, a truncated
+  secret, an over-long secret, and a lowercase `bearer` all still return 401
+  `Not a scheduled caller`; the right secret passes auth (and then 500s on the
+  unreachable dummy DB, as expected); unset `CRON_SECRET` still 500s
+  `CRON_SECRET is not set`. Identical accept/reject set to the strict compare.
+* A-4 — `npm start`'s server on a scratch port: `/api/nope` and
+  `/api/listings/x/y` now `404 application/json {"error":"No such endpoint"}`;
+  `/api/me` still `200 {"user":null}`; `/explore` still serves `index.html`.
+
+Not verified here: the 23 Postgres-backed tests. None of the changed files is
+imported by them except `server/lib/pricing.ts` (via `tests/pricing.test.ts`, which
+ran) — CI on the PR is the check.
+
+### Needs approval (Tier 2, unchanged)
+
+B-1 through B-10 above. Recommended order if you want them done: **B-1** (orphaned
+Stripe intents on a date conflict — real test-mode clutter today, real money later),
+**B-2** (paid-but-expired booking has no path), **B-3** (unique
+`stripe_payment_intent_id`), then B-7 (react-router major) when a slice is
+otherwise touching routing. B-4/B-8 only matter for `npm start` deployments. B-9 is
+a judgment call. B-10 needs nothing.
