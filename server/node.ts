@@ -10,6 +10,9 @@ import app from "./app";
 const server = new Hono();
 
 server.route("/", app);
+// Hono does not carry a sub-app's notFound through route(), so without this an
+// unknown /api/* path would fall to the SPA catch-all and return index.html.
+server.all("/api/*", (c) => c.json({ error: "No such endpoint" }, 404));
 server.use("/assets/*", serveStatic({ root: "./dist" }));
 server.use("/favicon.ico", serveStatic({ root: "./dist" }));
 // SPA fallback: React Router owns every non-API path.
