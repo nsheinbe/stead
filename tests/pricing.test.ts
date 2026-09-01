@@ -110,6 +110,17 @@ describe("nightsBetween", () => {
     expect(() => nightsBetween("2026-08-13", "2026-08-08")).toThrow(MoneyError);
     expect(() => nightsBetween("2026-08-08", "2026-08-08")).toThrow(MoneyError);
   });
+
+  it("rejects dates that do not exist on the calendar", () => {
+    // V8 would roll these over (Feb 30 → Mar 2) and Postgres would then reject
+    // the same string with 22008. Fail here, as a 400, instead.
+    expect(() => nightsBetween("2026-02-28", "2026-02-30")).toThrow(MoneyError);
+    expect(() => nightsBetween("2026-02-29", "2026-03-02")).toThrow(MoneyError);
+    expect(() => nightsBetween("2026-13-01", "2026-13-03")).toThrow(MoneyError);
+    expect(() => nightsBetween("2026-04-31", "2026-05-02")).toThrow(MoneyError);
+    // Real leap day is fine.
+    expect(nightsBetween("2028-02-28", "2028-03-01")).toBe(2);
+  });
 });
 
 describe("formatUsd", () => {

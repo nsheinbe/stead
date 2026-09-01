@@ -33,7 +33,7 @@ export function BookPage() {
   const [month, setMonth] = useState(() => startOfDay(new Date()));
   const [checkIn, setCheckIn] = useState<string | null>(null);
   const [checkOut, setCheckOut] = useState<string | null>(null);
-  const [guests, setGuests] = useState(2);
+  const [guestsWanted, setGuestsWanted] = useState(2);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState<CreateBookingResponse | null>(null);
@@ -47,6 +47,8 @@ export function BookPage() {
   const configQuery = useQuery({ queryKey: ["config"], queryFn: () => api.config() });
 
   const listing = listingQuery.data;
+  // The default of 2 is chosen before the listing loads; never send more than it sleeps.
+  const guests = listing ? Math.min(guestsWanted, listing.maxGuests) : guestsWanted;
   const nights = checkIn && checkOut ? nightsBetween(checkIn, checkOut) : 0;
   const quote =
     listing && nights > 0
@@ -215,7 +217,7 @@ export function BookPage() {
                   type="button"
                   aria-label="Fewer guests"
                   className="flex h-10 w-10 items-center justify-center rounded-full border-[1.5px] border-[#D8CDB6] text-xl text-ink/60"
-                  onClick={() => setGuests((g) => Math.max(1, g - 1))}
+                  onClick={() => setGuestsWanted(Math.max(1, guests - 1))}
                 >
                   −
                 </button>
@@ -224,7 +226,7 @@ export function BookPage() {
                   type="button"
                   aria-label="More guests"
                   className="flex h-10 w-10 items-center justify-center rounded-full bg-spruce text-xl text-paper"
-                  onClick={() => setGuests((g) => Math.min(listing.maxGuests, g + 1))}
+                  onClick={() => setGuestsWanted(Math.min(listing.maxGuests, guests + 1))}
                 >
                   +
                 </button>
