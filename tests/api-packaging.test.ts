@@ -47,18 +47,25 @@ describe("Vercel API bundle", () => {
 
     const bundled = (await import(`${bundlePath}?t=${Date.now()}`)) as {
       app: typeof app;
-      default: unknown;
+      default: { fetch: (request: Request) => Response | Promise<Response> };
     };
-    expect(typeof bundled.default).toBe("function");
+    expect(typeof bundled.default.fetch).toBe("function");
     const res = await bundled.app.request("/api/health");
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
 
+    const viaFetch = await bundled.default.fetch(new Request("https://stead.test/api/health"));
+    expect(viaFetch.status).toBe(200);
+    expect(await viaFetch.json()).toEqual({ ok: true });
+
     const entry = (await import(`${path.join(root, "api/index.js")}?t=${Date.now()}`)) as {
-      default: unknown;
+      default: { fetch: (request: Request) => Response | Promise<Response> };
       config: { runtime: string };
     };
-    expect(typeof entry.default).toBe("function");
+    expect(typeof entry.default.fetch).toBe("function");
     expect(entry.config).toEqual({ runtime: "nodejs" });
+    const fromEntry = await entry.default.fetch(new Request("https://stead.test/api/health"));
+    expect(fromEntry.status).toBe(200);
+    expect(await fromEntry.json()).toEqual({ ok: true });
   });
 });
