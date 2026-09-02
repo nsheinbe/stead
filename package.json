@@ -9,7 +9,8 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite build && npm run build:api",
+    "build:api": "vite build --config vite.api.config.ts",
     "start": "tsx server/node.ts",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit --pretty false",

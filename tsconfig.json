@@ -30,6 +30,7 @@
     "api",
     "tests",
     "vite.config.ts",
+    "vite.api.config.ts",
     "vitest.config.ts"
   ]
 }
