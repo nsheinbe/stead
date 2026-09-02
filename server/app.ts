@@ -23,6 +23,10 @@ import type { SessionResponse } from "../src/lib/types";
 
 export const app = new Hono<AppEnv>().basePath("/api");
 
+// Liveness only — no session, no database. Used to verify the Vercel function
+// packed server/ correctly (a missing module crashes before Hono can answer).
+app.get("/health", (c) => c.json({ ok: true }));
+
 // Auth.js owns /api/auth/*: csrf, signin, callback, session, signout. It runs on
 // the auth_user connection, which reaches the identity tables and nothing else.
 app.all("/auth/*", (c) => handleAuthRequest(c.req.raw));

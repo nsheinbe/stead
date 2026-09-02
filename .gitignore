@@ -6,6 +6,7 @@
 # Dependencies & build output
 node_modules/
 dist/
+dist-api/
 
 # Test / tooling
 coverage/

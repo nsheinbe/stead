@@ -18,7 +18,8 @@ Money is integer cents. Pricing constants live in `app_config` (`network_fee_bps
 src/          React SPA. Talks to /api over fetch; holds no database credentials.
 server/       Hono API — auth, queries, routes. The only thing that touches Postgres.
   queries/    Reads and writes, all taking a transaction that carries the member id.
-api/index.ts  Vercel function; vercel.json rewrites /api/* here.
+api/index.js  Vercel function; vercel.json rewrites /api/* here.
+              Loads dist-api/handler.js, which is server/ bundled at build time.
 drizzle/      Append-only SQL migrations. Source of truth for the schema and the policies.
 scripts/      db:migrate, db:seed, db:bootstrap-roles, verify:neon.
 ```
@@ -57,6 +58,7 @@ State transitions are closed to `app_user` entirely. It has no `UPDATE` grant on
 
 | Method | Path | Who |
 | --- | --- | --- |
+| `GET` | `/api/health` | public — liveness; no database |
 | `GET` | `/api/config` | public — fee policy |
 | `GET` | `/api/listings` | public — active listings |
 | `GET` | `/api/listings/:id` | public if active; the host also sees their own draft/paused |
@@ -122,7 +124,17 @@ Sixteen read-only assertions against a real deployment, covering what a throwawa
 
 ## Deploying to Vercel
 
-`vercel.json` builds the SPA to `dist/` and rewrites `/api/*` to the function in `api/`.
+`vercel.json` builds the SPA to `dist/` and rewrites `/api/*` to the function in `api/`. `npm run build` also emits `dist-api/handler.js` — the Hono app bundled so the serverless function does not import extensionless TypeScript paths (that is what produced `Cannot find module '/var/task/server/app'`).
+
+After a deploy, these two should return JSON, not `FUNCTION_INVOCATION_FAILED`:
+
+```bash
+curl -sS https://<deployment>/api/health
+# {"ok":true}
+
+curl -sS https://<deployment>/api/auth/providers
+# {"resend":{"id":"resend","name":"Resend","type":"email",...}}
+```
 
 Required environment variables:
 
