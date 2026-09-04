@@ -32,7 +32,7 @@ export class HostConnectError extends Error {
 
 export function resolveHostConnectAccount(accountId: string | null | undefined): string {
   const id = accountId?.trim() ?? "";
-  if (!/^acct_[A-Za-z0-9]+$/.test(id)) {
+  if (!/^acct_[A-Za-z0-9_]+$/.test(id)) {
     throw new HostConnectError(
       "This host cannot accept bookings yet. The stay is charged to the host, not Stead — a Connect account is required.",
     );

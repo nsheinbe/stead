@@ -183,7 +183,7 @@ export async function seed(db: Db): Promise<void> {
       // Optional test Connect account (acct_...). Leave unset so seed does not
       // invent a fake id; live Stripe bookings then fail closed instead of
       // charging the platform. Never commit a secret key.
-      ...(testConnect && /^acct_[A-Za-z0-9]+$/.test(testConnect)
+      ...(testConnect && /^acct_[A-Za-z0-9_]+$/.test(testConnect)
         ? { stripeConnectAccountId: testConnect }
         : {}),
     })

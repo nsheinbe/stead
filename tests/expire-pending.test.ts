@@ -83,8 +83,8 @@ describeDb("expirePendingBookings", () => {
     const fresh = await insertBooking({
       listingId,
       guestId,
-      checkIn: "2026-09-10",
-      checkOut: "2026-10-10",
+      checkIn: "2026-11-01",
+      checkOut: "2026-12-01",
     });
 
     // No member id: the scheduler is not signed in. It works because
