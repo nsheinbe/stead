@@ -1,5 +1,8 @@
 /** Integer-cents booking math. Shared by edge functions, the client display, and tests. */
 
+/** Regulatory floor: monthly stays only. Not configurable below this. */
+export const MIN_STAY_NIGHTS = 30;
+
 export class MoneyError extends Error {
   constructor(message: string) {
     super(message);
@@ -55,8 +58,8 @@ export function nightsBetween(checkIn: string, checkOut: string): number {
     throw new MoneyError("invalid stay dates");
   }
   const nights = Math.round((end - start) / 86_400_000);
-  if (nights < 1) {
-    throw new MoneyError("stay must be at least one night");
+  if (nights < MIN_STAY_NIGHTS) {
+    throw new MoneyError(`Stays must be at least ${MIN_STAY_NIGHTS} nights`);
   }
   return nights;
 }
@@ -72,8 +75,8 @@ export function quoteStay(input: QuoteInput): StayQuote {
   assertIntCents(input.nights, "nights");
   assertIntCents(input.networkFeeBps, "network_fee_bps");
   assertIntCents(input.depositCents, "deposit_cents");
-  if (input.nights < 1) {
-    throw new MoneyError("stay must be at least one night");
+  if (input.nights < MIN_STAY_NIGHTS) {
+    throw new MoneyError(`Stays must be at least ${MIN_STAY_NIGHTS} nights`);
   }
   if (input.nightlyRateCents < 1) {
     throw new MoneyError("nightly rate must be at least 1 cent");

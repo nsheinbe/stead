@@ -146,6 +146,9 @@ export async function getBookableListing(tx: Tx, listingId: string) {
       cancellationPolicy: true,
       timezone: true,
     },
+    with: {
+      host: { columns: { stripeConnectAccountId: true } },
+    },
   });
 }
 

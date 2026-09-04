@@ -2,6 +2,8 @@
  * create-booking, formerly a Supabase edge function running with the service
  * role. Same rules: quote from app_config, snapshot the money onto the row,
  * insert pending_payment + escrow scheduled, hand back Stripe client secrets.
+ * Stays under 30 nights are a 400. Live charges are destination charges to the
+ * host's Connect account; missing Connect id is 409 and no PaymentIntent.
  *
  * The guest id comes from the session cookie, never from the request body, and
  * the insert policy checks it again inside Postgres.
@@ -14,7 +16,13 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { depositMethod, MoneyError, nightsBetween, quoteStay } from "../lib/pricing";
-import { getStripe, stripeConfigured } from "../lib/stripe";
+import {
+  destinationChargeParams,
+  getStripe,
+  HostConnectError,
+  resolveHostConnectAccount,
+  stripeConfigured,
+} from "../lib/stripe";
 import { sessionUser, tenantQuery, type AppEnv } from "../lib/http";
 import {
   createBookingWithEscrow,
@@ -119,20 +127,36 @@ bookingsRoutes.post("/", async (c) => {
   let mockPayment = false;
 
   if (stripeConfigured()) {
+    // Fail closed before any Stripe call if the host has no Connect account —
+    // a platform-MOR PaymentIntent is the regulatory miss this replaces.
+    let hostAccount: string;
+    try {
+      hostAccount = resolveHostConnectAccount(listing.host?.stripeConnectAccountId);
+    } catch (err) {
+      throw new HTTPException(409, {
+        message: err instanceof HostConnectError ? err.message : "This host cannot accept bookings yet",
+      });
+    }
+
     const stripe = getStripe();
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: quote.guest_total_cents,
-      currency: "usd",
-      automatic_payment_methods: { enabled: true },
+    const charge = destinationChargeParams({
+      guestTotalCents: quote.guest_total_cents,
+      networkFeeCents: quote.network_fee_cents,
+      destinationAccountId: hostAccount,
       metadata: { listing_id: listingId, guest_id: guest.id },
     });
+    const paymentIntent = await stripe.paymentIntents.create(charge);
     paymentIntentId = paymentIntent.id;
     paymentClientSecret = paymentIntent.client_secret;
 
-    const setupIntent = await stripe.setupIntents.create({
-      usage: "off_session",
-      metadata: { listing_id: listingId, guest_id: guest.id, deposit_method: method },
-    });
+    // Deposit card-on-file lives on the host's connected account, not the platform.
+    const setupIntent = await stripe.setupIntents.create(
+      {
+        usage: "off_session",
+        metadata: { listing_id: listingId, guest_id: guest.id, deposit_method: method },
+      },
+      { stripeAccount: hostAccount },
+    );
     setupIntentId = setupIntent.id;
     setupClientSecret = setupIntent.client_secret;
   } else {

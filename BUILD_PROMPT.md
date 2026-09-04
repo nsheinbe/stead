@@ -27,6 +27,19 @@
 >   prod Supabase projects.
 >
 > See README "Shape of the thing" for the current layout.
+>
+> **Regulatory amendment (Sep 2026 — supersedes short-stay examples below).**
+> Stays are monthly: server-side minimum is **30 nights** at `nightsBetween`,
+> `quoteStay`, and create-booking (clear 400). `listings.permit_number` exists
+> as nullable text and is unused at launch — do not require it in UI or booking.
+> Stripe Connect: the host is merchant of record. Never create a
+> `paymentIntents.create` that charges the platform for `guest_total` without
+> `transfer_data.destination` + `on_behalf_of` and `application_fee_amount`
+> (the 2% / `network_fee_bps`). Fail closed when the host has no Connect
+> account. Deposit/setup intents belong on the host's connected account. Do not
+> invent a new escrow/custody product. Do not seed Santa Monica or other
+> strict-enforcement cities. No protocol token / wallet / web3 paths. Voice
+> remains: community-owned, open source — not decentralized or crypto.
 
 ```
 You are building **Stead**, a community-owned home rental marketplace

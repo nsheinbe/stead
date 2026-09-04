@@ -38,14 +38,14 @@ describeDb("bookings exclusion constraint", () => {
       listingId,
       guestId: guestA,
       checkIn: "2026-10-01",
-      checkOut: "2026-10-04",
+      checkOut: "2026-10-31",
     });
 
     const conflict = await insertBooking({
       listingId,
       guestId: guestB,
-      checkIn: "2026-10-03",
-      checkOut: "2026-10-06",
+      checkIn: "2026-10-15",
+      checkOut: "2026-11-14",
     }).then(
       () => null,
       (err: unknown) => err,
@@ -71,17 +71,17 @@ describeDb("bookings exclusion constraint", () => {
     const booking = {
       listingId,
       checkIn: "2027-08-01",
-      checkOut: "2027-08-04",
+      checkOut: "2027-08-31",
       guests: 2,
-      nights: 3,
+      nights: 30,
       nightlyRateCents: 20000,
-      staySubtotalCents: 60000,
-      networkFeeCents: 1200,
-      guestTotalCents: 61200,
+      staySubtotalCents: 600000,
+      networkFeeCents: 12000,
+      guestTotalCents: 612000,
       depositCents: 30000,
       cancellationPolicy: "moderate" as const,
     };
-    const deposit = { amountCents: 30000, method: "auth_hold" as const, stripeSetupIntentId: null };
+    const deposit = { amountCents: 30000, method: "card_on_file" as const, stripeSetupIntentId: null };
 
     // Booked by two different members through the real path, so the insert
     // policies are in force as well as the constraint.
@@ -112,13 +112,13 @@ describeDb("bookings exclusion constraint", () => {
       listingId,
       guestId: guestA,
       checkIn: "2026-11-01",
-      checkOut: "2026-11-03",
+      checkOut: "2026-12-01",
     });
     const second = await insertBooking({
       listingId,
       guestId: guestB,
-      checkIn: "2026-11-03",
-      checkOut: "2026-11-05",
+      checkIn: "2026-12-01",
+      checkOut: "2026-12-31",
     });
     expect(second).toBeTruthy();
   });
@@ -138,7 +138,7 @@ describeDb("bookings exclusion constraint", () => {
       listingId,
       guestId: guestA,
       checkIn: "2026-12-01",
-      checkOut: "2026-12-04",
+      checkOut: "2026-12-31",
     });
     await asOwner((db) =>
       db.execute(sql`UPDATE public.bookings SET status = 'expired' WHERE id = ${first}::uuid`),
@@ -148,8 +148,40 @@ describeDb("bookings exclusion constraint", () => {
       listingId,
       guestId: guestB,
       checkIn: "2026-12-01",
-      checkOut: "2026-12-04",
+      checkOut: "2026-12-31",
     });
     expect(second).toBeTruthy();
+  });
+
+  it("rejects a stay under 30 nights at the database", async () => {
+    const hostId = id();
+    const guestId = id();
+    const listingId = id();
+
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    await insertMember(guestId, `guest-${guestId}@stead.example`, "Guest");
+    await insertListing({ id: listingId, hostId, title: "Short-stay cottage" });
+
+    const err = await insertBooking({
+      listingId,
+      guestId,
+      checkIn: "2027-01-01",
+      checkOut: "2027-01-04",
+    }).then(
+      () => null,
+      (caught: unknown) => caught,
+    );
+    expect(err).not.toBeNull();
+    let code: string | undefined;
+    for (let current = err, depth = 0; current && depth < 5; depth += 1) {
+      if (typeof current === "object" && current && "code" in current) {
+        code = (current as { code?: string }).code;
+        if (code === "23514") break;
+      }
+      current = typeof current === "object" && current && "cause" in current
+        ? (current as { cause?: unknown }).cause
+        : undefined;
+    }
+    expect(code).toBe("23514");
   });
 });

@@ -1,7 +1,7 @@
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import { loadStripe, type Stripe } from "@stripe/stripe-js";
 import { useQuery } from "@tanstack/react-query";
-import { addMonths, format, startOfDay } from "date-fns";
+import { addDays, addMonths, format, parseISO, startOfDay } from "date-fns";
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { EscrowTimeline } from "../components/EscrowTimeline";
@@ -13,7 +13,7 @@ import { useAuth } from "../hooks/useAuth";
 import { api } from "../lib/api";
 import { monthGrid, prettyDay, prettyRange } from "../lib/dates";
 import { stripePublishableKey } from "../lib/env";
-import { formatUsd, nightsBetween, quoteStay, type StayQuote } from "../lib/money";
+import { formatUsd, MIN_STAY_NIGHTS, nightsBetween, quoteStay, type StayQuote } from "../lib/money";
 import type { CreateBookingResponse, ListingDetail } from "../lib/types";
 
 let stripePromise: Promise<Stripe | null> | null = null;
@@ -49,9 +49,16 @@ export function BookPage() {
   const listing = listingQuery.data;
   // The default of 2 is chosen before the listing loads; never send more than it sleeps.
   const guests = listing ? Math.min(guestsWanted, listing.maxGuests) : guestsWanted;
-  const nights = checkIn && checkOut ? nightsBetween(checkIn, checkOut) : 0;
+  let nights = 0;
+  if (checkIn && checkOut) {
+    try {
+      nights = nightsBetween(checkIn, checkOut);
+    } catch {
+      nights = 0;
+    }
+  }
   const quote =
-    listing && nights > 0
+    listing && nights >= MIN_STAY_NIGHTS
       ? quoteStay({
           nightlyRateCents: listing.nightlyRateCents,
           nights,
@@ -59,6 +66,7 @@ export function BookPage() {
           depositCents: listing.depositCents,
         })
       : null;
+  const minCheckout = checkIn ? format(addDays(parseISO(checkIn), MIN_STAY_NIGHTS), "yyyy-MM-dd") : null;
 
   function pickDay(iso: string) {
     if (!checkIn || (checkIn && checkOut)) {
@@ -71,6 +79,8 @@ export function BookPage() {
       setCheckOut(null);
       return;
     }
+    // Do not accept a checkout that would only fail on submit.
+    if (minCheckout && iso < minCheckout) return;
     setCheckOut(iso);
   }
 
@@ -168,7 +178,8 @@ export function BookPage() {
               <div className="grid grid-cols-7 justify-items-center gap-y-0.5">
                 {cells.map(({ date, inMonth }) => {
                   const iso = format(date, "yyyy-MM-dd");
-                  const disabled = !inMonth || iso < today;
+                  const tooShort = Boolean(checkIn && !checkOut && minCheckout && iso > checkIn && iso < minCheckout);
+                  const disabled = !inMonth || iso < today || tooShort;
                   const selected = iso === checkIn || iso === checkOut;
                   const inRange = checkIn && checkOut && iso > checkIn && iso < checkOut;
                   return (
@@ -207,6 +218,11 @@ export function BookPage() {
                 </span>
               </div>
             </div>
+            {checkIn && !checkOut && minCheckout ? (
+              <p className="m-0 text-center text-[12px] text-ink/55">
+                Checkout from {prettyDay(minCheckout)} — {MIN_STAY_NIGHTS} nights from check-in.
+              </p>
+            ) : null}
             <div className="flex items-center justify-between rounded-xl border border-linen-tint px-3.5 py-3">
               <div className="flex flex-col">
                 <span className="text-[14.5px] font-bold">Guests</span>
@@ -243,7 +259,7 @@ export function BookPage() {
                 : "Pick dates to continue"}
             </button>
             <p className="m-0 text-center text-[11.5px] text-ink/50">
-              No fees yet. The 2% shows up next — in full view.
+              Monthly stays only — {MIN_STAY_NIGHTS} nights minimum. The 2% shows up next, in full view.
             </p>
           </div>
         ) : null}

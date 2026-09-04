@@ -40,7 +40,7 @@ describeDb("booking visibility is scoped to the session user", () => {
       listingId,
       guestId: guestA,
       checkIn: "2027-01-08",
-      checkOut: "2027-01-11",
+      checkOut: "2027-02-07",
       status: "confirmed",
     });
 
@@ -63,7 +63,7 @@ describeDb("booking visibility is scoped to the session user", () => {
       listingId,
       guestId,
       checkIn: "2027-02-08",
-      checkOut: "2027-02-11",
+      checkOut: "2027-03-10",
       status: "confirmed",
     });
 
@@ -87,14 +87,14 @@ describeDb("booking visibility is scoped to the session user", () => {
       listingId,
       guestId: guestA,
       checkIn: "2027-03-08",
-      checkOut: "2027-03-11",
+      checkOut: "2027-04-07",
       status: "confirmed",
     });
     await insertBooking({
       listingId,
       guestId: guestB,
       checkIn: "2027-04-08",
-      checkOut: "2027-04-11",
+      checkOut: "2027-05-08",
       status: "confirmed",
     });
 

@@ -71,7 +71,7 @@ describeDb("bookings are visible only to their parties", () => {
       listingId,
       guestId: guestA,
       checkIn: "2027-01-08",
-      checkOut: "2027-01-11",
+      checkOut: "2027-02-07",
       status: "confirmed",
     });
 
@@ -101,14 +101,14 @@ describeDb("bookings are visible only to their parties", () => {
       listingId,
       guestId: guestA,
       checkIn: "2027-03-08",
-      checkOut: "2027-03-11",
+      checkOut: "2027-04-07",
       status: "confirmed",
     });
     await insertBooking({
       listingId,
       guestId: guestB,
       checkIn: "2027-04-08",
-      checkOut: "2027-04-11",
+      checkOut: "2027-05-08",
       status: "confirmed",
     });
 
@@ -135,7 +135,7 @@ describeDb("state transitions are closed to app_user", () => {
       listingId,
       guestId,
       checkIn: "2027-05-08",
-      checkOut: "2027-05-11",
+      checkOut: "2027-06-07",
       paymentIntentId,
     });
 
@@ -172,8 +172,8 @@ describeDb("state transitions are closed to app_user", () => {
             nightly_rate_cents, stay_subtotal_cents, network_fee_cents, guest_total_cents,
             deposit_cents, cancellation_policy, status
           ) VALUES (
-            ${listingId}::uuid, ${guestId}::uuid, '2027-09-01', '2027-09-04', 2, 3,
-            20000, 60000, 1200, 61200, 30000, 'moderate', 'pending_payment'
+            ${listingId}::uuid, ${guestId}::uuid, '2027-09-01', '2027-10-01', 2, 30,
+            20000, 600000, 12000, 612000, 30000, 'moderate', 'pending_payment'
           )
         `,
       );
@@ -201,8 +201,8 @@ describeDb("state transitions are closed to app_user", () => {
             nightly_rate_cents, stay_subtotal_cents, network_fee_cents, guest_total_cents,
             deposit_cents, cancellation_policy, status
           ) VALUES (
-            ${listingId}::uuid, ${guestId}::uuid, '2027-10-01', '2027-10-04', 2, 3,
-            20000, 60000, 1200, 61200, 30000, 'moderate', 'confirmed'
+            ${listingId}::uuid, ${guestId}::uuid, '2027-10-01', '2027-10-31', 2, 30,
+            20000, 600000, 12000, 612000, 30000, 'moderate', 'confirmed'
           )
         `,
       ),
@@ -285,6 +285,43 @@ describeDb("listing visibility", () => {
     );
     // The USING clause filters the row out rather than raising: nothing to update.
     expect(updated).toHaveLength(0);
+  });
+});
+
+describeDb("regulatory columns stay behind existing policies", () => {
+  afterAll(async () => {
+    await closeTestDb();
+  });
+
+  it("a stranger cannot write another host's permit_number or Connect account", async () => {
+    const hostId = id();
+    const strangerId = id();
+    const listingId = id();
+
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    await insertMember(strangerId, `stranger-${strangerId}@stead.example`, "Stranger");
+    await insertListing({ id: listingId, hostId, title: "Permit cottage" });
+
+    const listingTouched = await rawAsMember(
+      strangerId,
+      (tx) =>
+        tx`UPDATE public.listings SET permit_number = 'SM-FAKE' WHERE id = ${listingId}::uuid RETURNING id`,
+    );
+    expect(listingTouched).toHaveLength(0);
+
+    const profileTouched = await rawAsMember(
+      strangerId,
+      (tx) =>
+        tx`UPDATE public.profiles SET stripe_connect_account_id = 'acct_evil' WHERE id = ${hostId}::uuid RETURNING id`,
+    );
+    expect(profileTouched).toHaveLength(0);
+
+    const hostWrote = await rawAsMember(
+      hostId,
+      (tx) =>
+        tx`UPDATE public.listings SET permit_number = 'OPTIONAL-NULLABLE' WHERE id = ${listingId}::uuid RETURNING permit_number`,
+    );
+    expect(hostWrote[0]?.permit_number).toBe("OPTIONAL-NULLABLE");
   });
 });
 

@@ -174,9 +174,19 @@ export async function seed(db: Db): Promise<void> {
     .values({ id: HOST_ID, name: "Nora", email: HOST_EMAIL, emailVerified: new Date() })
     .onConflictDoNothing({ target: users.id });
 
+  const testConnect = process.env.STRIPE_TEST_CONNECT_ACCOUNT_ID?.trim();
   await db
     .update(profiles)
-    .set({ isHost: true, displayName: "Nora" })
+    .set({
+      isHost: true,
+      displayName: "Nora",
+      // Optional test Connect account (acct_...). Leave unset so seed does not
+      // invent a fake id; live Stripe bookings then fail closed instead of
+      // charging the platform. Never commit a secret key.
+      ...(testConnect && /^acct_[A-Za-z0-9]+$/.test(testConnect)
+        ? { stripeConnectAccountId: testConnect }
+        : {}),
+    })
     .where(sql`${profiles.id} = ${HOST_ID}::uuid`);
 
   for (const l of SEED_LISTINGS) {
