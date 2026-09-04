@@ -110,6 +110,8 @@ export const profiles = pgTable("profiles", {
   phoneVerified: boolean("phone_verified").notNull().default(false),
   idVerified: boolean("id_verified").notNull().default(false),
   memberSince: timestamp("member_since", { mode: "date", withTimezone: true }).notNull().defaultNow(),
+  /** Stripe Connect Express/Standard account. Required for live charges; host is MOR. */
+  stripeConnectAccountId: text("stripe_connect_account_id"),
 });
 
 export const listings = pgTable(
@@ -136,6 +138,8 @@ export const listings = pgTable(
     instantBook: boolean("instant_book").notNull().default(false),
     cancellationPolicy: cancellationPolicy("cancellation_policy").notNull().default("moderate"),
     status: listingStatus("status").notNull().default("draft"),
+    /** Unused at launch — nullable, never required for booking. */
+    permitNumber: text("permit_number"),
   },
   (table) => [index("listings_status_idx").on(table.status)],
 );

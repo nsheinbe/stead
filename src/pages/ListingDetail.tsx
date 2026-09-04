@@ -6,9 +6,9 @@ import { BackChevron, BoltIcon } from "../components/Icons";
 import { Shell } from "../components/Shell";
 import { StatusBanner } from "../components/StatusBanner";
 import { api, ApiError } from "../lib/api";
-import { formatUsd, quoteStay } from "../lib/money";
+import { formatUsd, MIN_STAY_NIGHTS, quoteStay } from "../lib/money";
 
-const PREVIEW_NIGHTS = 5;
+const PREVIEW_NIGHTS = MIN_STAY_NIGHTS;
 
 export function ListingDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -146,7 +146,7 @@ export function ListingDetailPage() {
             <div className="flex flex-col">
               <span className="money text-base font-bold">{formatUsd(quote.guest_total_cents)} total</span>
               <span className="text-[11.5px] text-ink/55">
-                {PREVIEW_NIGHTS} nights · shown as arithmetic
+                {PREVIEW_NIGHTS}-night stay · shown as arithmetic
               </span>
             </div>
             <Link

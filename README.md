@@ -10,7 +10,9 @@ This is Slice 1: foundation plus guest booking. Landing, host tools, claims, rev
 
 Vite + React 18 + TypeScript (strict) · Tailwind · React Router · TanStack Query · react-hook-form + zod · date-fns / date-fns-tz · **Neon Postgres + Drizzle ORM (postgres.js)** · **Hono API** · **Auth.js v5 magic link, JWT in an httpOnly cookie** · Stripe Payment Element (test mode, behind env) · Vitest
 
-Money is integer cents. Pricing constants live in `app_config` (`network_fee_bps = 200`, and the rest of BUILD_PROMPT §3) and are snapshotted onto bookings. Availability is the `btree_gist` exclusion constraint — never check-then-insert.
+Money is integer cents. Pricing constants live in `app_config` (`network_fee_bps = 200`, and the rest of BUILD_PROMPT §3) and are snapshotted onto bookings. Stays are 30 nights or more — `nightsBetween` / `quoteStay` / create-booking reject anything shorter with a 400, and Postgres enforces the same floor. Availability is the `btree_gist` exclusion constraint — never check-then-insert.
+
+Guest stay charges are destination charges on Stripe Connect: the host's connected account is the merchant of record (`transfer_data.destination` + `on_behalf_of`), and Stead takes only the 2% network fee as `application_fee_amount`. A host without `profiles.stripe_connect_account_id` cannot take a live payment — the route fails closed and never creates a platform-MOR PaymentIntent. Seed a test `acct_` via `STRIPE_TEST_CONNECT_ACCOUNT_ID`; do not put secret keys in git. Express onboarding UI is still blocked on live Connect settings.
 
 ## Shape of the thing
 
@@ -147,6 +149,7 @@ Required environment variables:
 | `CRON_SECRET` | so only the scheduler can run `expire-pending` |
 | `RESEND_API_KEY` | magic-link delivery (without it the link only prints to the log) |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `VITE_STRIPE_PUBLISHABLE_KEY` | payments; the booking flow falls back to a mock path when unset |
+| `STRIPE_TEST_CONNECT_ACCOUNT_ID` | optional test `acct_…` stamped on the seed host; live charges fail closed without a host Connect id |
 
 Point the Stripe webhook endpoint at `https://<deployment>/api/stripe/webhook`.
 

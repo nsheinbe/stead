@@ -34,6 +34,8 @@ Three connection strings, because the roles are the security boundary:
 ## Invariants (never violate; ask before deviating)
 
 * All money is integer cents. No floats, ever. Pricing math and every state transition happen ONLY on the server (`server/`), never in the browser.
+* Minimum stay is 30 nights. `nightsBetween`, `quoteStay`, and create-booking reject anything shorter. Do not expand below 30.
+* Live stay charges are Stripe Connect destination charges with the host as merchant of record (`on_behalf_of` + `transfer_data.destination`). Platform takes only `application_fee_amount` (network fee). Fail closed — never create a platform-MOR PaymentIntent — if the host has no `stripe_connect_account_id`. Deposit/setup intents are created on the host's connected account.
 * Pricing constants come from `app_config`; snapshot them onto bookings.
 * RLS is deny-by-default on every tenant table and is the enforcement, not a second opinion. Scoping in `server/queries` mirrors the policies for readability; it never substitutes for them. Add a table, add its policies in the same migration.
 * Three database roles. `app_user` (pooled) carries tenant traffic under RLS, `auth_user` (pooled) sees only the four identity tables, the owner (direct host) runs migrations and nothing else. Never collapse them — the owner has BYPASSRLS and the app fails closed rather than serve as it.

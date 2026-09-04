@@ -77,14 +77,14 @@ describeDb("expirePendingBookings", () => {
       listingId,
       guestId,
       checkIn: "2026-09-01",
-      checkOut: "2026-09-03",
+      checkOut: "2026-10-01",
       createdAt: new Date(Date.now() - 45 * 60_000).toISOString(),
     });
     const fresh = await insertBooking({
       listingId,
       guestId,
-      checkIn: "2026-09-10",
-      checkOut: "2026-09-12",
+      checkIn: "2026-11-01",
+      checkOut: "2026-12-01",
     });
 
     // No member id: the scheduler is not signed in. It works because
@@ -124,7 +124,7 @@ describeDb("stripe idempotency and confirmation against Postgres", () => {
       listingId,
       guestId,
       checkIn: "2027-06-01",
-      checkOut: "2027-06-04",
+      checkOut: "2027-07-01",
       paymentIntentId,
     });
 
