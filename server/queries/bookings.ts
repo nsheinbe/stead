@@ -98,7 +98,16 @@ export async function getTripForParty(
         columns: { id: true, title: true, city: true, region: true, timezone: true },
         with: { photos: { orderBy: asc(listingPhotos.sortOrder) } },
       },
-      escrow: { columns: { amountCents: true, state: true } },
+      escrow: {
+        columns: {
+          amountCents: true,
+          state: true,
+          heldAt: true,
+          windowClosesAt: true,
+          releasedAt: true,
+        },
+        with: { audit: { orderBy: asc(escrowAudit.at) } },
+      },
     },
   });
   if (!row) return null;
@@ -117,7 +126,20 @@ export async function getTripForParty(
     depositCents: row.depositCents,
     cancellationPolicy: row.cancellationPolicy,
     createdAt: row.createdAt.toISOString(),
-    escrow: row.escrow ? { amountCents: row.escrow.amountCents, state: row.escrow.state } : null,
+    escrow: row.escrow
+      ? {
+          amountCents: row.escrow.amountCents,
+          state: row.escrow.state,
+          heldAt: row.escrow.heldAt?.toISOString() ?? null,
+          windowClosesAt: row.escrow.windowClosesAt?.toISOString() ?? null,
+          releasedAt: row.escrow.releasedAt?.toISOString() ?? null,
+          timeline: row.escrow.audit.map((step) => ({
+            toState: step.toState,
+            at: step.at.toISOString(),
+            actor: step.actor,
+          })),
+        }
+      : null,
     listing: {
       id: row.listing.id,
       title: row.listing.title,
