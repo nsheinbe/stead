@@ -75,14 +75,9 @@ export function TripDetailPage() {
                   <span className="money text-sm font-bold">
                     {formatUsd(escrow?.amountCents ?? booking.depositCents)} · in escrow
                   </span>
-                  <span className="text-xs text-ink/60">
-                    {escrow?.state === "scheduled"
-                      ? "Scheduled — held at listing-local check-in. Nobody can spend it meanwhile."
-                      : `State: ${escrow?.state ?? "scheduled"}`}
-                  </span>
                 </div>
               </div>
-              <EscrowTimeline activeIndex={0} />
+              <EscrowTimeline escrow={escrow ?? null} timezone={listing.timezone} />
             </div>
 
             <div className="flex flex-col gap-2 rounded-[14px] border border-linen-tint px-4 py-3.5 text-sm">
