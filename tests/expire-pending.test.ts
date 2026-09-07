@@ -41,6 +41,7 @@ describe("stripe webhook handler", () => {
         confirmed.push(pi);
         return true;
       },
+      findExpiredBooking: async () => null,
     };
 
     const event = {
@@ -51,8 +52,8 @@ describe("stripe webhook handler", () => {
 
     const first = await handleStripeEvent(event, store);
     const second = await handleStripeEvent(event, store);
-    expect(first).toEqual({ skipped: false, confirmed: true });
-    expect(second).toEqual({ skipped: true, confirmed: false });
+    expect(first).toEqual({ skipped: false, confirmed: true, refundDue: null });
+    expect(second).toEqual({ skipped: true, confirmed: false, refundDue: null });
     expect(confirmed).toEqual(["pi_abc"]);
   });
 });
