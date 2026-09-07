@@ -17,9 +17,12 @@ import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { depositMethod, MoneyError, nightsBetween, quoteStay } from "../lib/pricing";
 import {
+  cancelOrphanedIntents,
+  createIntent,
   destinationChargeParams,
   getStripe,
   HostConnectError,
+  intentIdempotencyKey,
   resolveHostConnectAccount,
   stripeConfigured,
 } from "../lib/stripe";
@@ -34,6 +37,7 @@ import {
 } from "../queries/bookings";
 import { getConfigMap, intFromConfig } from "../queries/listings";
 import type { CreateBookingResponse } from "../../src/lib/types";
+
 
 const createBookingSchema = z.object({
   listingId: z.string().uuid(),
@@ -125,37 +129,48 @@ bookingsRoutes.post("/", async (c) => {
   let setupIntentId: string;
   let setupClientSecret: string | null = null;
   let mockPayment = false;
+  // Needed in the rollback path below, which runs outside the Stripe block.
+  let hostAccount: string | null = null;
 
   if (stripeConfigured()) {
     // Fail closed before any Stripe call if the host has no Connect account —
     // a platform-MOR PaymentIntent is the regulatory miss this replaces.
-    let hostAccount: string;
+    let account: string;
     try {
-      hostAccount = resolveHostConnectAccount(listing.host?.stripeConnectAccountId);
+      account = resolveHostConnectAccount(listing.host?.stripeConnectAccountId);
     } catch (err) {
       throw new HTTPException(409, {
         message: err instanceof HostConnectError ? err.message : "This host cannot accept bookings yet",
       });
     }
+    hostAccount = account;
 
     const stripe = getStripe();
     const charge = destinationChargeParams({
       guestTotalCents: quote.guest_total_cents,
       networkFeeCents: quote.network_fee_cents,
-      destinationAccountId: hostAccount,
+      destinationAccountId: account,
       metadata: { listing_id: listingId, guest_id: guest.id },
     });
-    const paymentIntent = await stripe.paymentIntents.create(charge);
+
+    const paymentIntent = await createIntent(
+      (options) => stripe.paymentIntents.create(charge, options),
+      intentIdempotencyKey("pi", guest.id, listingId, checkIn, checkOut),
+    );
     paymentIntentId = paymentIntent.id;
     paymentClientSecret = paymentIntent.client_secret;
 
     // Deposit card-on-file lives on the host's connected account, not the platform.
-    const setupIntent = await stripe.setupIntents.create(
-      {
-        usage: "off_session",
-        metadata: { listing_id: listingId, guest_id: guest.id, deposit_method: method },
-      },
-      { stripeAccount: hostAccount },
+    const setupIntent = await createIntent(
+      (options) =>
+        stripe.setupIntents.create(
+          {
+            usage: "off_session",
+            metadata: { listing_id: listingId, guest_id: guest.id, deposit_method: method },
+          },
+          { ...options, stripeAccount: account },
+        ),
+      intentIdempotencyKey("seti", guest.id, listingId, checkIn, checkOut),
     );
     setupIntentId = setupIntent.id;
     setupClientSecret = setupIntent.client_secret;
@@ -191,6 +206,10 @@ bookingsRoutes.post("/", async (c) => {
       ),
     );
   } catch (err) {
+    // The intents exist but no booking references them. Nothing else will ever
+    // look at them, so cancel before surfacing the error — a date conflict is
+    // the common path here and would otherwise leak a pair on every collision.
+    await cancelOrphanedIntents(paymentIntentId, setupIntentId, hostAccount);
     if (err instanceof DateConflictError) {
       throw new HTTPException(409, { message: err.message });
     }
