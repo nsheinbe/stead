@@ -44,6 +44,13 @@ export const escrowState = pgEnum("escrow_state", [
   "arbitrated",
 ]);
 export const escrowMethod = pgEnum("escrow_method", ["auth_hold", "card_on_file"]);
+export const refundReason = pgEnum("refund_reason", [
+  "guest_cancel",
+  "host_cancel",
+  "dispute",
+  // Payment settled after the TTL had already expired the booking.
+  "expired",
+]);
 
 // --- Identity: written by Auth.js through the Drizzle adapter -----------------
 
@@ -239,6 +246,25 @@ export const escrowAudit = pgTable(
   },
   (table) => [index("escrow_audit_deposit_idx").on(table.depositId)],
 );
+
+export const refunds = pgTable(
+  "refunds",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    bookingId: uuid("booking_id")
+      .notNull()
+      .references(() => bookings.id, { onDelete: "cascade" }),
+    amountCents: integer("amount_cents").notNull(),
+    reason: refundReason("reason").notNull(),
+    stripeRefundId: text("stripe_refund_id").unique(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("refunds_booking_idx").on(table.bookingId)],
+);
+
+export const refundsRelations = relations(refunds, ({ one }) => ({
+  booking: one(bookings, { fields: [refunds.bookingId], references: [bookings.id] }),
+}));
 
 export const stripeEvents = pgTable("stripe_events", {
   id: text("id").primaryKey(),
