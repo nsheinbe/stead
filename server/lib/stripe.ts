@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import Stripe from "stripe";
 
 let client: Stripe | undefined;
@@ -80,4 +81,62 @@ export function destinationChargeParams(input: {
     on_behalf_of: destination,
     metadata: input.metadata,
   };
+}
+
+/**
+ * Stable for one logical booking attempt, so a double-submit or a client-side
+ * retry reuses the intents instead of minting another pair in Stripe.
+ */
+export function intentIdempotencyKey(
+  kind: "pi" | "seti",
+  guestId: string,
+  listingId: string,
+  checkIn: string,
+  checkOut: string,
+): string {
+  const digest = createHash("sha256")
+    .update([guestId, listingId, checkIn, checkOut].join("|"))
+    .digest("hex")
+    .slice(0, 32);
+  return `booking:${kind}:${digest}`;
+}
+
+/**
+ * Create an intent under an idempotency key, tolerating the one case where
+ * replay is wrong: a previous attempt on the same guest/listing/date span
+ * rolled back and cancelled its intent. Stripe replays that cancelled object
+ * for the key's 24h lifetime, and handing the member a cancelled client secret
+ * would fail at confirmation with nothing to explain it — so take a fresh key.
+ */
+export async function createIntent<T extends { status: string }>(
+  create: (options: { idempotencyKey: string }) => Promise<T>,
+  key: string,
+): Promise<T> {
+  const intent = await create({ idempotencyKey: key });
+  if (intent.status !== "canceled") return intent;
+  return create({ idempotencyKey: `${key}:${crypto.randomUUID()}` });
+}
+
+/**
+ * Best effort, and deliberately so: this runs while an error is already on its
+ * way up, and a failure to cancel must not replace it. An intent that has since
+ * succeeded or been cancelled throws, which is why the results are settled
+ * rather than awaited as a pair.
+ */
+export async function cancelOrphanedIntents(
+  paymentIntentId: string,
+  setupIntentId: string,
+  hostAccount: string | null,
+): Promise<void> {
+  if (!stripeConfigured() || hostAccount === null) return;
+  const stripe = getStripe();
+  const results = await Promise.allSettled([
+    stripe.paymentIntents.cancel(paymentIntentId),
+    stripe.setupIntents.cancel(setupIntentId, undefined, { stripeAccount: hostAccount }),
+  ]);
+  for (const result of results) {
+    if (result.status === "rejected") {
+      console.error("[stripe] could not cancel an orphaned intent", result.reason);
+    }
+  }
 }

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { destinationChargeParams, HostConnectError, resolveHostConnectAccount } from "../server/lib/stripe";
+import {
+  createIntent,
+  destinationChargeParams,
+  HostConnectError,
+  intentIdempotencyKey,
+  resolveHostConnectAccount,
+} from "../server/lib/stripe";
 
 describe("resolveHostConnectAccount", () => {
   it("accepts a Stripe connected account id", () => {
@@ -56,5 +62,55 @@ describe("destinationChargeParams", () => {
         metadata: {},
       }),
     ).toThrow(HostConnectError);
+  });
+});
+
+describe("intentIdempotencyKey", () => {
+  it("is stable for one booking attempt and distinct across attempts", () => {
+    const key = intentIdempotencyKey("pi", "g1", "l1", "2026-10-01", "2026-10-31");
+
+    expect(intentIdempotencyKey("pi", "g1", "l1", "2026-10-01", "2026-10-31")).toBe(key);
+    // A different intent kind, member, listing, or either date is a different
+    // attempt and must not replay the first one's intent.
+    expect(intentIdempotencyKey("seti", "g1", "l1", "2026-10-01", "2026-10-31")).not.toBe(key);
+    expect(intentIdempotencyKey("pi", "g2", "l1", "2026-10-01", "2026-10-31")).not.toBe(key);
+    expect(intentIdempotencyKey("pi", "g1", "l2", "2026-10-01", "2026-10-31")).not.toBe(key);
+    expect(intentIdempotencyKey("pi", "g1", "l1", "2026-10-02", "2026-10-31")).not.toBe(key);
+    expect(intentIdempotencyKey("pi", "g1", "l1", "2026-10-01", "2026-11-30")).not.toBe(key);
+  });
+
+  it("does not carry the member id into a value Stripe stores", () => {
+    const key = intentIdempotencyKey("pi", "guest-uuid-secret", "l1", "2026-10-01", "2026-10-31");
+    expect(key).not.toContain("guest-uuid-secret");
+  });
+});
+
+describe("createIntent", () => {
+  it("uses the idempotency key and returns a usable intent unchanged", async () => {
+    const keys: string[] = [];
+    const intent = await createIntent(async (options) => {
+      keys.push(options.idempotencyKey);
+      return { id: "pi_live", status: "requires_payment_method" };
+    }, "booking:pi:abc");
+
+    expect(intent.id).toBe("pi_live");
+    expect(keys).toEqual(["booking:pi:abc"]);
+  });
+
+  it("retries under a fresh key when Stripe replays a cancelled intent", async () => {
+    // An earlier attempt on these dates rolled back and cancelled its intent.
+    // Replaying it would hand the member a dead client secret.
+    const keys: string[] = [];
+    const intent = await createIntent(async (options) => {
+      keys.push(options.idempotencyKey);
+      return keys.length === 1
+        ? { id: "pi_cancelled", status: "canceled" }
+        : { id: "pi_fresh", status: "requires_payment_method" };
+    }, "booking:pi:abc");
+
+    expect(intent.id).toBe("pi_fresh");
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).toBe("booking:pi:abc");
+    expect(keys[1]).toMatch(/^booking:pi:abc:/);
   });
 });
