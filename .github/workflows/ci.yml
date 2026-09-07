@@ -4,7 +4,10 @@ on:
   push:
     branches: [main, "cursor/**"]
   pull_request:
-    branches: [main]
+    # Stacked PRs target the branch below them, not main. Without those
+    # patterns here a stacked PR gets no checks at all, which is worse than
+    # a broad filter: it looks reviewed and was never run.
+    branches: [main, "claude/**", "cursor/**"]
 
 jobs:
   check:
