@@ -4,7 +4,7 @@
  * a btree_gist exclusion constraint over a generated daterange, which the
  * Drizzle pg dialect cannot express.
  */
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   boolean,
   date,
@@ -17,6 +17,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import type { ListingAmenities } from "../../src/lib/types";
@@ -198,7 +199,11 @@ export const bookings = pgTable(
   (table) => [
     index("bookings_guest_idx").on(table.guestId),
     index("bookings_listing_idx").on(table.listingId),
-    index("bookings_payment_intent_idx").on(table.stripePaymentIntentId),
+    // Unique so one payment can only ever confirm one booking; partial
+    // because the id is null between insert and intent creation.
+    uniqueIndex("bookings_payment_intent_key")
+      .on(table.stripePaymentIntentId)
+      .where(sql`${table.stripePaymentIntentId} IS NOT NULL`),
   ],
 );
 
