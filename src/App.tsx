@@ -5,6 +5,9 @@ import { ListingDetailPage } from "./pages/ListingDetail";
 import { LoginPage } from "./pages/Login";
 import { TripDetailPage } from "./pages/TripDetail";
 import { TripsPage } from "./pages/Trips";
+import { HostListingsPage } from "./pages/HostListings";
+import { HostListingEditPage } from "./pages/HostListingEdit";
+import { HostPayoutsPage } from "./pages/HostPayouts";
 
 export function App() {
   return (
@@ -15,6 +18,9 @@ export function App() {
       <Route path="/book/:listingId" element={<BookPage />} />
       <Route path="/trips" element={<TripsPage />} />
       <Route path="/trips/:bookingId" element={<TripDetailPage />} />
+      <Route path="/host/listings" element={<HostListingsPage />} />
+      <Route path="/host/listings/:listingId" element={<HostListingEditPage />} />
+      <Route path="/host/payouts" element={<HostPayoutsPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="*" element={<Navigate to="/explore" replace />} />
     </Routes>

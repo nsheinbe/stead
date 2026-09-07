@@ -6,7 +6,7 @@ const items = [
   { to: "/trips", label: "Trips", icon: BagIcon, live: true },
   { to: "/login", label: "Passport", icon: ShieldIcon, live: false },
   { to: "/login", label: "Inbox", icon: InboxIcon, live: false },
-  { to: "/login", label: "Host", icon: HostIcon, live: false },
+  { to: "/host/listings", label: "Host", icon: HostIcon, live: true },
 ] as const;
 
 export function BottomNav() {
