@@ -162,3 +162,61 @@ export const POLICY_LABEL: Record<CancellationPolicy, string> = {
   moderate: "Moderate cancel",
   strict: "Strict cancel",
 };
+
+/** A listing as its host sees it — including drafts and paused ones. */
+export type HostListing = {
+  id: string;
+  title: string;
+  city: string;
+  country: string;
+  timezone: string;
+  nightlyRateCents: number;
+  depositCents: number;
+  maxGuests: number;
+  status: ListingStatus;
+  cancellationPolicy: CancellationPolicy;
+  instantBook: boolean;
+  photos: ListingPhoto[];
+};
+
+export type ListingInput = {
+  title: string;
+  description?: string;
+  type: ListingType;
+  addressLine?: string;
+  city: string;
+  region?: string;
+  country: string;
+  timezone: string;
+  nightlyRateCents: number;
+  depositCents: number;
+  maxGuests: number;
+  amenities?: ListingAmenities;
+  instantBook?: boolean;
+  cancellationPolicy?: CancellationPolicy;
+  status?: ListingStatus;
+};
+
+/** Whether Stripe will actually let this host be paid. */
+export type ConnectStatus = {
+  accountId: string | null;
+  chargesEnabled: boolean;
+  payoutsEnabled: boolean;
+  detailsSubmitted: boolean;
+};
+
+export type PresignedUpload = {
+  uploadUrl: string;
+  key: string;
+  publicUrl: string;
+  expiresInSeconds: number;
+};
+
+export type HostPayout = {
+  id: string;
+  bookingId: string;
+  amountCents: number;
+  state: "scheduled" | "paid" | "frozen" | "failed";
+  paidAt: string | null;
+  stripeTransferId: string | null;
+};
