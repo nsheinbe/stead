@@ -44,6 +44,7 @@ export const escrowState = pgEnum("escrow_state", [
   "arbitrated",
 ]);
 export const escrowMethod = pgEnum("escrow_method", ["auth_hold", "card_on_file"]);
+export const payoutState = pgEnum("payout_state", ["scheduled", "paid", "frozen", "failed"]);
 export const refundReason = pgEnum("refund_reason", [
   "guest_cancel",
   "host_cancel",
@@ -264,6 +265,31 @@ export const refunds = pgTable(
 
 export const refundsRelations = relations(refunds, ({ one }) => ({
   booking: one(bookings, { fields: [refunds.bookingId], references: [bookings.id] }),
+}));
+
+export const payouts = pgTable(
+  "payouts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    // One per booking; the uniqueness is what makes a redelivered webhook safe.
+    bookingId: uuid("booking_id")
+      .notNull()
+      .unique()
+      .references(() => bookings.id, { onDelete: "cascade" }),
+    hostId: uuid("host_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "restrict" }),
+    amountCents: integer("amount_cents").notNull(),
+    stripeTransferId: text("stripe_transfer_id").unique(),
+    state: payoutState("state").notNull().default("scheduled"),
+    paidAt: timestamp("paid_at", { mode: "date", withTimezone: true }),
+  },
+  (table) => [index("payouts_host_idx").on(table.hostId)],
+);
+
+export const payoutsRelations = relations(payouts, ({ one }) => ({
+  booking: one(bookings, { fields: [payouts.bookingId], references: [bookings.id] }),
+  host: one(profiles, { fields: [payouts.hostId], references: [profiles.id] }),
 }));
 
 export const stripeEvents = pgTable("stripe_events", {
