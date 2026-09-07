@@ -153,18 +153,39 @@ Required environment variables:
 
 Point the Stripe webhook endpoint at `https://<deployment>/api/stripe/webhook`.
 
-## Scheduling expire-pending
+## Scheduling the cron endpoints
 
-Abandoned checkouts hold dates behind the exclusion constraint until they expire, so `/api/cron/expire-pending` needs to run every few minutes — roughly `pending_payment_ttl_minutes / 3`. It is a plain authenticated endpoint, so anything that can make an HTTP request will do:
+Four jobs, all plain authenticated endpoints under `/api/cron/*`, all taking `Authorization: Bearer $CRON_SECRET`:
+
+| Endpoint | What it does | How often |
+| --- | --- | --- |
+| `expire-pending` | Releases dates held by abandoned checkouts | every few minutes — roughly `pending_payment_ttl_minutes / 3` |
+| `check-in` | `scheduled` → `held` at listing-local check-in | hourly is enough; it is idempotent |
+| `check-out` | `held` → `claim_window` at listing-local checkout, stamping `window_closes_at` | hourly |
+| `release-deposits` | `claim_window` → `released` once the window closes, and emails the guest | hourly |
+
+Each moves only what is due and re-running one changes nothing, so a missed tick is caught by the next rather than needing a backfill. Each records a heartbeat in `cron_heartbeats` on success and on failure, so a stale `last_ok` is the signal that one has quietly stopped.
+
+Listings span timezones, so `check-in` and `check-out` fire against each listing's own local clock — running them hourly is what makes that resolution meaningful.
+
+Anything that can make an HTTP request will do:
 
 ```bash
 curl -H "Authorization: Bearer $CRON_SECRET" https://your-host/api/cron/expire-pending
+curl -H "Authorization: Bearer $CRON_SECRET" https://your-host/api/cron/check-in
+curl -H "Authorization: Bearer $CRON_SECRET" https://your-host/api/cron/check-out
+curl -H "Authorization: Bearer $CRON_SECRET" https://your-host/api/cron/release-deposits
 ```
 
-Deliberately **not** in `vercel.json`: Vercel Cron on the Hobby plan fires at most once a day, and a deployment is rejected outright if the expression asks for more, which makes it both unusable here and a confusing build failure. On Pro, add it back:
+Deliberately **not** in `vercel.json`: Vercel Cron on the Hobby plan fires at most once a day, and a deployment is rejected outright if the expression asks for more, which makes it both unusable here and a confusing build failure. On Pro, add them back:
 
 ```json
-"crons": [{ "path": "/api/cron/expire-pending", "schedule": "*/10 * * * *" }]
+"crons": [
+  { "path": "/api/cron/expire-pending",   "schedule": "*/10 * * * *" },
+  { "path": "/api/cron/check-in",         "schedule": "0 * * * *" },
+  { "path": "/api/cron/check-out",        "schedule": "0 * * * *" },
+  { "path": "/api/cron/release-deposits", "schedule": "0 * * * *" }
+]
 ```
 
 Otherwise point any external scheduler at the URL — a cron host, a GitHub Actions `schedule` workflow, or a systemd timer.
