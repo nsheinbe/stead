@@ -310,12 +310,29 @@ describeDb("regulatory columns stay behind existing policies", () => {
     );
     expect(listingTouched).toHaveLength(0);
 
-    const profileTouched = await rawAsMember(
+    // This used to be filtered to zero rows by profiles_self_update. Since
+    // 0006 the column grant refuses it outright, which is stronger: writing
+    // stripe_connect_account_id is now denied to every member including the
+    // owner, and only app.attach_connect_account can set it.
+    const strangerWrite = await rawAsMember(
       strangerId,
       (tx) =>
         tx`UPDATE public.profiles SET stripe_connect_account_id = 'acct_evil' WHERE id = ${hostId}::uuid RETURNING id`,
+    ).then(
+      () => "allowed",
+      () => "refused",
     );
-    expect(profileTouched).toHaveLength(0);
+    expect(strangerWrite).toBe("refused");
+
+    const ownerWrite = await rawAsMember(
+      hostId,
+      (tx) =>
+        tx`UPDATE public.profiles SET stripe_connect_account_id = 'acct_self' WHERE id = ${hostId}::uuid RETURNING id`,
+    ).then(
+      () => "allowed",
+      () => "refused",
+    );
+    expect(ownerWrite).toBe("refused");
 
     const hostWrote = await rawAsMember(
       hostId,
