@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
+import { HostSubnav } from "../components/HostSubnav";
 import { Shell } from "../components/Shell";
 import { StatusBanner } from "../components/StatusBanner";
 import { useAuth } from "../hooks/useAuth";
@@ -84,6 +85,7 @@ export function HostListingEditPage() {
   return (
     <Shell>
       <div className="flex flex-1 flex-col gap-3.5 px-[18px] pb-4 pt-16 md:pt-4">
+        <HostSubnav />
         <Link to="/host/listings" className="text-xs font-bold text-ink/55">
           ← Your homes
         </Link>

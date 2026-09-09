@@ -3,6 +3,8 @@
  * token for this file to hold and nothing to leak into localStorage.
  */
 import type {
+  ClaimDetail,
+  ClaimSummary,
   ConnectStatus,
   CreateBookingRequest,
   CreateBookingResponse,
@@ -115,6 +117,48 @@ export const api = {
     request<{ url: string; accountId: string }>("/api/connect/onboard", { method: "POST" }),
 
   hostPayouts: () => request<HostPayout[]>("/api/host/payouts"),
+
+  claims: () => request<ClaimSummary[]>("/api/claims"),
+
+  claim: (id: string) => request<ClaimDetail>(`/api/claims/${id}`),
+
+  fileClaim: (body: { bookingId: string; amountCents: number; description: string }) =>
+    request<ClaimDetail>("/api/claims", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+
+  respondClaim: (id: string, accept: boolean) =>
+    request<ClaimDetail>(`/api/claims/${id}/respond`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accept }),
+    }),
+
+  resolveClaim: (
+    id: string,
+    body: { outcome: "host" | "guest" | "split"; amountCents?: number; note?: string },
+  ) =>
+    request<ClaimDetail>(`/api/claims/${id}/resolve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+
+  claimEvidenceUploadUrl: (claimId: string, contentType: string) =>
+    request<PresignedUpload>(`/api/claims/${claimId}/evidence-upload`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contentType }),
+    }),
+
+  attachClaimEvidence: (claimId: string, key: string, note?: string) =>
+    request<ClaimDetail>(`/api/claims/${claimId}/evidence`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key, note }),
+    }),
 
   /**
    * The browser PUTs straight to the bucket. The content type must match what

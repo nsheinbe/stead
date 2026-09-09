@@ -8,6 +8,8 @@ import { TripsPage } from "./pages/Trips";
 import { HostListingsPage } from "./pages/HostListings";
 import { HostListingEditPage } from "./pages/HostListingEdit";
 import { HostPayoutsPage } from "./pages/HostPayouts";
+import { HostClaimsPage } from "./pages/HostClaims";
+import { HostClaimDetailPage } from "./pages/HostClaimDetail";
 
 export function App() {
   return (
@@ -21,6 +23,8 @@ export function App() {
       <Route path="/host/listings" element={<HostListingsPage />} />
       <Route path="/host/listings/:listingId" element={<HostListingEditPage />} />
       <Route path="/host/payouts" element={<HostPayoutsPage />} />
+      <Route path="/host/claims" element={<HostClaimsPage />} />
+      <Route path="/host/claims/:claimId" element={<HostClaimDetailPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="*" element={<Navigate to="/explore" replace />} />
     </Routes>
