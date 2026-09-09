@@ -4,6 +4,7 @@ import { ExplorePage } from "./pages/Explore";
 import { LandingPage } from "./pages/Landing";
 import { ListingDetailPage } from "./pages/ListingDetail";
 import { LoginPage } from "./pages/Login";
+import { ListingMessageRedirect, MessagesPage, MessageThreadPage } from "./pages/Messages";
 import { TripDetailPage } from "./pages/TripDetail";
 import { TripsPage } from "./pages/Trips";
 import { HostListingsPage } from "./pages/HostListings";
@@ -23,6 +24,9 @@ export function App() {
       <Route path="/book/:listingId" element={<BookPage />} />
       <Route path="/trips" element={<TripsPage />} />
       <Route path="/trips/:bookingId" element={<TripDetailPage />} />
+      <Route path="/messages" element={<MessagesPage />} />
+      <Route path="/messages/:listingId" element={<ListingMessageRedirect />} />
+      <Route path="/messages/:listingId/:guestId" element={<MessageThreadPage />} />
       <Route path="/review/:bookingId" element={<ReviewPage />} />
       <Route path="/passport/:userId" element={<PassportPage />} />
       <Route path="/host/listings" element={<HostListingsPage />} />

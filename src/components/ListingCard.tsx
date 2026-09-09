@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { formatUsd } from "../lib/money";
-import type { ListingSummary } from "../lib/types";
+import { POLICY_LABEL, type ListingSummary } from "../lib/types";
 import { BoltIcon } from "./Icons";
 
 function photoUrl(listing: ListingSummary): string {
@@ -43,8 +43,8 @@ export function ListingCard({ listing }: { listing: ListingSummary }) {
               Instant book
             </span>
           ) : null}
-          <span className="rounded-full bg-linen px-2.5 py-1 text-[11.5px] font-bold capitalize">
-            {listing.cancellationPolicy}
+          <span className="rounded-full bg-linen px-2.5 py-1 text-[11.5px] font-bold">
+            {POLICY_LABEL[listing.cancellationPolicy]}
           </span>
         </div>
       </div>

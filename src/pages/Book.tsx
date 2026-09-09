@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { addDays, addMonths, format, parseISO, startOfDay } from "date-fns";
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { CancellationPolicyCard } from "../components/CancellationPolicyCard";
 import { EscrowTimeline } from "../components/EscrowTimeline";
 import { BackChevron, ScaleIcon } from "../components/Icons";
 import { PriceBreakdown } from "../components/PriceBreakdown";
@@ -290,6 +291,7 @@ export function BookPage() {
               </p>
               <EscrowTimeline />
             </div>
+            <CancellationPolicyCard policy={listing.cancellationPolicy} compact />
             <div className="flex items-start gap-2.5 px-1">
               <ScaleIcon />
               <span className="text-xs leading-relaxed text-ink/55">

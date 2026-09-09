@@ -4,7 +4,7 @@ A community-owned home rental marketplace. Hosts list because they keep more —
 
 Apache-2.0. Copyright 2026 Stead contributors.
 
-Slices 1–5 are on this tree: guest booking, escrow lifecycle, the host surface, claims with evidence and independent arbitration, double-blind reviews, the Trust Passport, the marketing landing with a live fee slider, explore filters, and branded transactional email. Messaging and cancellations land later. Spec of record: `BUILD_PROMPT.md` (see the stack amendment at the top of it). Design truth: `/design` (do not edit). Slice status: `PROGRESS.md`.
+Slices 1–6 are on this tree: guest booking, escrow lifecycle, the host surface, claims with evidence and independent arbitration, double-blind reviews, the Trust Passport, the marketing landing with a live fee slider, explore filters, branded transactional email, messaging threads, and the cancellation engine. Spec of record: `BUILD_PROMPT.md` (see the stack amendment at the top of it). Design truth: `/design` (do not edit). Slice status: `PROGRESS.md`.
 
 ## Stack
 
@@ -52,7 +52,8 @@ State transitions are closed to `app_user` entirely. It has no `UPDATE` grant on
 | `/explore` | Member homes, filterable by city, type, guests, nightly rate, instant book |
 | `/listing/:id` | Listing detail + fee arithmetic |
 | `/book/:listingId` | Book · 3 steps (dates, deposit explainer, pay) |
-| `/trips` · `/trips/:bookingId` | Guest trips; host files a claim here during the window |
+| `/trips` · `/trips/:bookingId` | Guest trips; cancel with policy preview; host files a claim here during the window |
+| `/messages` · `/messages/:listingId/:guestId` | Threads keyed by listing + guest; unread badges |
 | `/review/:bookingId` | Double-blind review after checkout |
 | `/passport/:userId` | Trust Passport |
 | `/host/listings` · `/host/payouts` · `/host/claims` | Host surface |
@@ -71,6 +72,8 @@ The landing fee slider uses `quoteStay` for Stead's column so it cannot disagree
 | `GET` | `/api/listings/:id` | public if active; the host also sees their own draft/paused |
 | `GET` | `/api/me` | current session, or `{ user: null }` |
 | `GET` | `/api/trips` · `/api/trips/:id` | signed-in guest; `/:id` also the listing host |
+| `GET`/`POST` | `/api/trips/:id/cancellation` · `/cancel` | stay parties — preview / cancel-booking |
+| `GET`/`POST` | `/api/messages` · `/unread` · `/:listingId/:guestId` | participants — threads, send-message, mark-read |
 | `POST` | `/api/bookings` | signed-in guest — quote, insert, Stripe client secrets |
 | `GET`/`POST` | `/api/claims` · `/api/claims/:id` | parties + arbiter; file / read |
 | `POST` | `/api/claims/:id/respond` | guest — accept or dispute |

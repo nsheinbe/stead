@@ -118,6 +118,30 @@ export type TripReviewState = {
   published: boolean;
 };
 
+export type CancelBand = "full" | "partial_first_night" | "half" | "none" | "pending" | "host";
+
+export type CancellationPreview = {
+  canCancel: boolean;
+  actor: "guest" | "host";
+  policy: CancellationPolicy;
+  status: BookingStatus;
+  refundCents: number;
+  stayRefundCents: number;
+  feeRefundCents: number;
+  feeRetainedCents: number;
+  firstNightRetainedCents: number;
+  depositReleasedCents: number;
+  band: CancelBand;
+  hoursUntilCheckIn: number;
+  afterCheckIn: boolean;
+  summary: string;
+};
+
+export type TripParty = {
+  id: string;
+  displayName: string;
+};
+
 export type TripDetail = TripSummary & {
   guests: number;
   nightlyRateCents: number;
@@ -129,6 +153,9 @@ export type TripDetail = TripSummary & {
   claim: ClaimSummary | null;
   viewerIsHost: boolean;
   review: TripReviewState;
+  host: TripParty;
+  guest: TripParty;
+  cancellation: CancellationPreview;
 };
 
 /** Fee policy from app_config. Public: the 2% is the whole point. */
@@ -178,6 +205,43 @@ export const POLICY_LABEL: Record<CancellationPolicy, string> = {
   flexible: "Flexible cancel",
   moderate: "Moderate cancel",
   strict: "Strict cancel",
+};
+
+export type MessageThread = {
+  listingId: string;
+  guestId: string;
+  listingTitle: string;
+  listingPhoto: string | null;
+  counterpartName: string;
+  lastBody: string;
+  lastAt: string;
+  unreadCount: number;
+};
+
+export type MessageItem = {
+  id: string;
+  listingId: string;
+  bookingId: string | null;
+  senderId: string;
+  recipientId: string;
+  body: string;
+  createdAt: string;
+  readAt: string | null;
+  mine: boolean;
+};
+
+export type MessageThreadDetail = {
+  listingId: string;
+  guestId: string;
+  listingTitle: string;
+  listingPhoto: string | null;
+  counterpartName: string;
+  viewerIsHost: boolean;
+  messages: MessageItem[];
+};
+
+export type UnreadCount = {
+  unread: number;
 };
 
 /** A listing as its host sees it — including drafts and paused ones. */

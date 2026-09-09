@@ -8,19 +8,18 @@ Spec of record: `BUILD_PROMPT.md` (stack amendment at the top). One slice at a t
 | S2 Escrow lifecycle | Done on `main` | Check-in / checkout / release crons, auth_hold + card_on_file, EscrowTimeline, heartbeats, legal + illegal transition tests. |
 | S3 Host + claims | Done on `main` | Listing CRUD + photos, Connect Express, instant payout, claims with evidence, arbiter resolution. |
 | S4 Reviews + Trust Passport | Done on `main` | Double-blind reviews, `trust_stats`, TrustPassportCard, signed export + verify, `host_cancellations` on the passport. |
-| **S5 Landing + polish** | **This branch** | Landing from `/design` with a live fee slider; explore filters; branded email templates; a11y polish aimed at Lighthouse ≥ 90. |
-| S6 Messaging + cancellations | Not started | Threads, unread badges, cancellation engine + policy preview. Hard stop: do not start here. |
+| S5 Landing + polish | Done on `main` | Landing from `/design` with a live fee slider; explore filters; branded email templates; a11y polish. |
+| **S6 Messaging + cancellations** | **This branch** | Threads, unread badges, email notify; cancellation engine + policy preview on listing, checkout, and trip. |
 | S7 Trust & safety | Not started | Stripe Identity, chargeback freeze/unfreeze, review reminders, admin ops, watchdog. |
 | S8 Production readiness | Not started | Playwright e2e, rate limiting, deploy pipeline docs, backup/restore. |
 
-## Slice 5 acceptance
+## Slice 6 acceptance
 
-- `/` is the marketing landing (no longer a redirect to `/explore`). Nine sections match `/design`: hero, fee math, deposit escrow, Trust Passport, reviews-with-receipts, host payouts, member-owned, FAQ, footer CTA.
-- Fee slider is live. Stead's column is `quoteStay` (integer cents). Nights cannot drop below 30. Typical-platform comparison is display-only.
-- `/explore` filters by destination, city, type, guests, max nightly rate, and instant book. Filters are query params on `GET /api/listings` and shareable on the URL. RLS still scopes the rows; filters only narrow active listings.
-- Transactional email (magic link, deposit release, claims, review-open) uses one branded HTML layout plus a text body. Without `RESEND_API_KEY` the text still prints to the console. No invented secrets.
-- Skip link, landmarks, labelled controls, image alt text, focus styles, reduced motion. Photo placeholders remain picsum seeds. Lighthouse accessibility on `/` scored 1.00 in headless Chrome against the Vite app.
+- `/messages` lists threads keyed by `(listing_id, guest_id)`. Guests may write before they book. Unread badges on Inbox and on each thread. `send-message` emails the recipient.
+- Guest cancel follows BUILD_PROMPT §6 relative to listing-local check-in: flexible / moderate / strict exactly. Deposit always released. `refunds` row for every refund. Host cancel is 100% including the fee, dates blacked out, `host_cancellations` increments, both sides emailed.
+- `/trips/:bookingId` shows the exact refund before confirm. Policy copy is on the listing and on checkout.
+- Vitest: full refund matrix per policy × timing; cancel-booking writes; adversarial RLS on messages.
 
 ## Out of scope (HARD STOP)
 
-Messaging, cancellations, Stripe Identity, chargebacks, Playwright, and anything in S6–S8.
+Stripe Identity, chargebacks, review reminders, admin ops, watchdog, Playwright, and anything in S7–S8.
