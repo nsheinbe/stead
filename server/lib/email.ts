@@ -123,3 +123,16 @@ export function claimResolvedEmail(input: {
     text: [`The claim on ${input.listingTitle} was resolved ${what}`].join("\n"),
   };
 }
+
+/** Reviews open at listing-local checkout. Follow-up reminders are Slice 7. */
+export function reviewOpenEmail(input: { listingTitle: string }): Omit<Message, "to"> {
+  return {
+    subject: "Your review is open",
+    text: [
+      `Checkout on ${input.listingTitle} is done, so the review is open.`,
+      "",
+      "Double-blind: the other side cannot read yours until theirs is in — or 14 days pass. Then both publish at once.",
+      "Permanent once published, and tied to the booking receipt.",
+    ].join("\n"),
+  };
+}

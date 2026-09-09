@@ -20,6 +20,8 @@ import { connectRoutes } from "./routes/connect";
 import { cronRoutes } from "./routes/cron";
 import { hostRoutes } from "./routes/host";
 import { listingsRoutes } from "./routes/listings";
+import { passportRoutes } from "./routes/passport";
+import { reviewsRoutes } from "./routes/reviews";
 import { stripeRoutes } from "./routes/stripe";
 import { getConfigMap, toPublicConfig } from "./queries/listings";
 import type { SessionResponse } from "../src/lib/types";
@@ -44,6 +46,7 @@ app.get("/me", (c) => {
 app.get("/config", async (c) => c.json(toPublicConfig(await tenantQuery(c, getConfigMap))));
 
 app.route("/listings", listingsRoutes);
+app.route("/passport", passportRoutes);
 
 // Stripe and the scheduler authenticate themselves; they are not members.
 app.route("/stripe", stripeRoutes);
@@ -61,6 +64,10 @@ app.route("/bookings", bookingsRoutes);
 app.use("/claims", requireUser);
 app.use("/claims/*", requireUser);
 app.route("/claims", claimsRoutes);
+
+app.use("/reviews", requireUser);
+app.use("/reviews/*", requireUser);
+app.route("/reviews", reviewsRoutes);
 
 app.notFound((c) => c.json({ error: "No such endpoint" }, 404));
 

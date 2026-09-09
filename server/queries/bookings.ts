@@ -23,6 +23,7 @@ import {
 } from "../db/schema";
 import type { TripDetail, TripSummary } from "../../src/lib/types";
 import { getClaimForBooking } from "./claims";
+import { getTripReviewState } from "./reviews";
 
 export class DateConflictError extends Error {
   constructor() {
@@ -114,6 +115,7 @@ export async function getTripForParty(
   if (!row) return null;
 
   const claim = await getClaimForBooking(tx, bookingId);
+  const review = await getTripReviewState(tx, bookingId, viewerId);
 
   return {
     id: row.id,
@@ -145,6 +147,7 @@ export async function getTripForParty(
       : null,
     claim,
     viewerIsHost: row.guestId !== viewerId,
+    review,
     listing: {
       id: row.listing.id,
       title: row.listing.title,

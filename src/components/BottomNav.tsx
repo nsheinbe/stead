@@ -1,15 +1,19 @@
 import { NavLink } from "react-router-dom";
+import { useAuth } from "../hooks/useAuth";
 import { BagIcon, HostIcon, InboxIcon, SearchIcon, ShieldIcon } from "./Icons";
 
-const items = [
-  { to: "/explore", label: "Explore", icon: SearchIcon, live: true },
-  { to: "/trips", label: "Trips", icon: BagIcon, live: true },
-  { to: "/login", label: "Passport", icon: ShieldIcon, live: false },
-  { to: "/login", label: "Inbox", icon: InboxIcon, live: false },
-  { to: "/host/listings", label: "Host", icon: HostIcon, live: true },
-] as const;
-
 export function BottomNav() {
+  const { user } = useAuth();
+  const passportTo = user ? `/passport/${user.id}` : "/login";
+
+  const items = [
+    { to: "/explore", label: "Explore", icon: SearchIcon, live: true },
+    { to: "/trips", label: "Trips", icon: BagIcon, live: true },
+    { to: passportTo, label: "Passport", icon: ShieldIcon, live: true },
+    { to: "/login", label: "Inbox", icon: InboxIcon, live: false },
+    { to: "/host/listings", label: "Host", icon: HostIcon, live: true },
+  ] as const;
+
   return (
     <nav
       aria-label="Primary"

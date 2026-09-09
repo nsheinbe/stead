@@ -112,6 +112,12 @@ export type EscrowDetail = {
   timeline: EscrowStep[];
 };
 
+export type TripReviewState = {
+  canReview: boolean;
+  submitted: boolean;
+  published: boolean;
+};
+
 export type TripDetail = TripSummary & {
   guests: number;
   nightlyRateCents: number;
@@ -122,6 +128,7 @@ export type TripDetail = TripSummary & {
   escrow: EscrowDetail | null;
   claim: ClaimSummary | null;
   viewerIsHost: boolean;
+  review: TripReviewState;
 };
 
 /** Fee policy from app_config. Public: the 2% is the whole point. */
@@ -261,6 +268,108 @@ export type ClaimDetail = ClaimSummary & {
   canResolve: boolean;
   canFileEvidence: boolean;
 };
+
+export type ReviewDirection = "guest_reviews_host" | "host_reviews_guest";
+
+export type TrustStats = {
+  profileId: string;
+  staysCompleted: number;
+  damageFreeStreak: number;
+  avgRatingAsGuest: number | null;
+  avgRatingAsHost: number | null;
+  reviewCount: number;
+  responseRate: number | null;
+  hostCancellations: number;
+  verificationTier: number;
+  memberSince: string;
+};
+
+export type PublishedReview = {
+  id: string;
+  bookingId: string;
+  authorId: string;
+  subjectId: string;
+  direction: ReviewDirection;
+  rating: number;
+  tags: string[];
+  body: string;
+  submittedAt: string;
+  publishedAt: string;
+  authorName: string;
+  nights: number;
+  city: string;
+  checkOut: string;
+  receipt: string;
+};
+
+export type Passport = {
+  profileId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  isHost: boolean;
+  city: string | null;
+  region: string | null;
+  stats: TrustStats;
+  reviews: PublishedReview[];
+};
+
+export type PassportExport = {
+  payload: {
+    avg_rating_as_guest: number | null;
+    avg_rating_as_host: number | null;
+    damage_free_streak: number;
+    host_cancellations: number;
+    member_since: string;
+    profile_id: string;
+    response_rate: number | null;
+    review_count: number;
+    stays_completed: number;
+    verification_tier: number;
+  };
+  signature: string;
+  alg: "Ed25519";
+};
+
+export type OwnReview = {
+  id: string;
+  rating: number;
+  tags: string[];
+  body: string;
+  submittedAt: string;
+  publishedAt: string | null;
+};
+
+export type ReviewForm = {
+  bookingId: string;
+  listingTitle: string;
+  city: string;
+  timezone: string;
+  checkOut: string;
+  nights: number;
+  receipt: string;
+  direction: ReviewDirection;
+  viewerRole: "guest" | "host";
+  stayCompleted: boolean;
+  canSubmit: boolean;
+  mine: OwnReview | null;
+  published: PublishedReview[];
+};
+
+export const GUEST_REVIEW_TAGS = [
+  "Spotless",
+  "As photographed",
+  "Easy check-in",
+  "Quiet street",
+  "Would return",
+] as const;
+
+export const HOST_REVIEW_TAGS = [
+  "Left it tidy",
+  "Communicative",
+  "Respectful",
+  "On-time checkout",
+  "Would host again",
+] as const;
 
 export const CLAIM_STATE_LABEL: Record<ClaimState, string> = {
   open: "Open",

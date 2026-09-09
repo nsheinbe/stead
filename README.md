@@ -4,7 +4,7 @@ A community-owned home rental marketplace. Hosts list because they keep more —
 
 Apache-2.0. Copyright 2026 Stead contributors.
 
-Slices 1–3b are on this tree: guest booking, escrow lifecycle, the host surface, and claims with evidence and independent arbitration. Reviews and the Trust Passport are Slice 4. Spec of record: `BUILD_PROMPT.md` (see the stack amendment at the top of it). Design truth: `/design` (do not edit).
+Slices 1–4 are on this tree: guest booking, escrow lifecycle, the host surface, claims with evidence and independent arbitration, double-blind reviews, and the Trust Passport. Messaging and cancellations land later. Spec of record: `BUILD_PROMPT.md` (see the stack amendment at the top of it). Design truth: `/design` (do not edit).
 
 ## Stack
 
@@ -42,9 +42,9 @@ The owner has `BYPASSRLS` and owns every table, so none of the policies apply to
 
 **Neon makes that the likely mistake rather than a theoretical one.** A project hands you exactly one connection string, for a role that is a `neon_superuser` member with `BYPASSRLS`. Pasting it into `DATABASE_URL` turns the entire security model off — nothing errors, no policy is violated, queries simply return every member's rows. So the app checks: before it serves a single tenant query it confirms the connection role is ordinary, testing all three routes to bypassing RLS (the `BYPASSRLS` attribute, `SUPERUSER`, and table ownership) plus `row_security_active` as the ground truth. One memoized round trip per process; a privileged role gets a 503 and a loud log line instead of silent cross-member reads.
 
-State transitions are closed to `app_user` entirely. It has no `UPDATE` grant on `bookings` or `claims` and no grant at all on `stripe_events` or `cron_heartbeats`; the enumerated `SECURITY DEFINER` functions in `app` are the complete list of state changes the API can make. That is narrower than what it replaces — the Supabase service role could write any row on any table.
+State transitions are closed to `app_user` entirely. It has no `UPDATE` grant on `bookings` or `claims`, no grant that can write `reviews.published_at`, and no grant at all on `stripe_events` or `cron_heartbeats`; the enumerated `SECURITY DEFINER` functions in `app` are the complete list of state changes the API can make. That is narrower than what it replaces — the Supabase service role could write any row on any table.
 
-## Routes (Slice 1)
+## Routes
 
 | Path | Screen |
 | --- | --- |
@@ -52,6 +52,8 @@ State transitions are closed to `app_user` entirely. It has no `UPDATE` grant on
 | `/listing/:id` | Listing detail + fee arithmetic |
 | `/book/:listingId` | Book · 3 steps (dates, deposit explainer, pay) |
 | `/trips` · `/trips/:bookingId` | Guest trips; host files a claim here during the window |
+| `/review/:bookingId` | Double-blind review after checkout |
+| `/passport/:userId` | Trust Passport |
 | `/host/listings` · `/host/payouts` · `/host/claims` | Host surface |
 | `/host/claims/:id` | Claim detail, evidence, arbiter resolution |
 | `/login` | Magic-link email. Google OAuth is deferred. |
@@ -74,7 +76,12 @@ State transitions are closed to `app_user` entirely. It has no `UPDATE` grant on
 | `POST` | `/api/claims/:id/resolve` | arbiter — host / guest / split |
 | `POST` | `/api/claims/:id/evidence-upload` · `/evidence` | parties — presigned image + attach |
 | `POST` | `/api/stripe/webhook` | Stripe, verified by signature |
+| `GET` | `/api/passport/:userId` | public — Trust Passport + published reviews |
+| `GET` | `/api/passport/:userId/export` | public — canonical trust_stats signed Ed25519 |
+| `POST` | `/api/passport/verify` | public — check a signed export |
+| `GET`/`POST` | `/api/reviews/:bookingId` | stay parties — form / submit (unpublished until both or 14 days) |
 | `GET`/`POST` | `/api/cron/expire-pending` | scheduler, `Authorization: Bearer $CRON_SECRET` |
+| `GET`/`POST` | `/api/cron/publish-reviews` | both-in or 14 days after listing-local checkout |
 | `*` | `/api/auth/*` | Auth.js — csrf, signin, callback, session, signout |
 
 ## Local development
@@ -156,6 +163,7 @@ Required environment variables:
 | `RESEND_API_KEY` | magic-link delivery (without it the link only prints to the log) |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `VITE_STRIPE_PUBLISHABLE_KEY` | payments; the booking flow falls back to a mock path when unset |
 | `STRIPE_TEST_CONNECT_ACCOUNT_ID` | optional test `acct_…` stamped on the seed host; live charges fail closed without a host Connect id |
+| `PASSPORT_SIGNING_KEY` | Ed25519 PKCS8 PEM, base64 — `openssl genpkey -algorithm ed25519 \| base64 -w0` |
 
 Point the Stripe webhook endpoint at `https://<deployment>/api/stripe/webhook`.
 
@@ -169,6 +177,7 @@ Four jobs, all plain authenticated endpoints under `/api/cron/*`, all taking `Au
 | `check-in` | `scheduled` → `held` at listing-local check-in | hourly is enough; it is idempotent |
 | `check-out` | `held` → `claim_window` at listing-local checkout, stamping `window_closes_at` | hourly |
 | `release-deposits` | `claim_window` → `released` once the window closes, and emails the guest | hourly |
+| `publish-reviews` | unpublished reviews: both directions in, or 14 days after listing-local checkout | hourly |
 
 Each moves only what is due and re-running one changes nothing, so a missed tick is caught by the next rather than needing a backfill. Each records a heartbeat in `cron_heartbeats` on success and on failure, so a stale `last_ok` is the signal that one has quietly stopped.
 
@@ -181,6 +190,7 @@ curl -H "Authorization: Bearer $CRON_SECRET" https://your-host/api/cron/expire-p
 curl -H "Authorization: Bearer $CRON_SECRET" https://your-host/api/cron/check-in
 curl -H "Authorization: Bearer $CRON_SECRET" https://your-host/api/cron/check-out
 curl -H "Authorization: Bearer $CRON_SECRET" https://your-host/api/cron/release-deposits
+curl -H "Authorization: Bearer $CRON_SECRET" https://your-host/api/cron/publish-reviews
 ```
 
 Deliberately **not** in `vercel.json`: Vercel Cron on the Hobby plan fires at most once a day, and a deployment is rejected outright if the expression asks for more, which makes it both unusable here and a confusing build failure. On Pro, add them back:
@@ -190,7 +200,8 @@ Deliberately **not** in `vercel.json`: Vercel Cron on the Hobby plan fires at mo
   { "path": "/api/cron/expire-pending",   "schedule": "*/10 * * * *" },
   { "path": "/api/cron/check-in",         "schedule": "0 * * * *" },
   { "path": "/api/cron/check-out",        "schedule": "0 * * * *" },
-  { "path": "/api/cron/release-deposits", "schedule": "0 * * * *" }
+  { "path": "/api/cron/release-deposits", "schedule": "0 * * * *" },
+  { "path": "/api/cron/publish-reviews",  "schedule": "0 * * * *" }
 ]
 ```
 
