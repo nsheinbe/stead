@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { handleStripeEvent, type WebhookStore } from "../server/lib/stripeWebhook";
 import {
   claimChargeIdempotencyKey,
   claimChargeParams,
@@ -8,6 +9,19 @@ import {
   intentIdempotencyKey,
   resolveHostConnectAccount,
 } from "../server/lib/stripe";
+
+function fakeStore(overrides: Partial<WebhookStore> = {}): WebhookStore {
+  return {
+    claimEvent: async () => true,
+    confirmBookingByPaymentIntent: async () => false,
+    findExpiredBooking: async () => null,
+    recordDisputeOpened: async () => false,
+    recordDisputeClosed: async () => false,
+    markIdVerified: async () => false,
+    recordConnectReadiness: async () => false,
+    ...overrides,
+  };
+}
 
 describe("resolveHostConnectAccount", () => {
   it("accepts a Stripe connected account id", () => {
@@ -123,6 +137,61 @@ describe("intentIdempotencyKey", () => {
   it("does not carry the member id into a value Stripe stores", () => {
     const key = intentIdempotencyKey("pi", "guest-uuid-secret", "l1", "2026-10-01", "2026-10-31");
     expect(key).not.toContain("guest-uuid-secret");
+  });
+});
+
+describe("account.updated payout readiness", () => {
+  it("records charges and payouts flags for an Express account", async () => {
+    const seen: Array<{ accountId: string; chargesEnabled: boolean; payoutsEnabled: boolean }> =
+      [];
+    const result = await handleStripeEvent(
+      {
+        id: "evt_acct",
+        type: "account.updated",
+        data: {
+          object: {
+            id: "acct_host_ready",
+            charges_enabled: true,
+            payouts_enabled: true,
+            details_submitted: true,
+          },
+        },
+      },
+      fakeStore({
+        recordConnectReadiness: async (input) => {
+          seen.push(input);
+          return true;
+        },
+      }),
+    );
+    expect(result.connectReadiness).toBe(true);
+    expect(seen).toEqual([
+      {
+        accountId: "acct_host_ready",
+        chargesEnabled: true,
+        payoutsEnabled: true,
+        detailsSubmitted: true,
+      },
+    ]);
+  });
+
+  it("ignores an event that is not a connected account id", async () => {
+    let called = false;
+    const result = await handleStripeEvent(
+      {
+        id: "evt_not_acct",
+        type: "account.updated",
+        data: { object: { id: "cus_123", charges_enabled: true } },
+      },
+      fakeStore({
+        recordConnectReadiness: async () => {
+          called = true;
+          return true;
+        },
+      }),
+    );
+    expect(result.connectReadiness).toBe(false);
+    expect(called).toBe(false);
   });
 });
 

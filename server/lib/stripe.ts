@@ -20,9 +20,10 @@ export function getStripe(): Stripe {
  * Host must be the merchant of record. A missing or malformed Connect id is
  * fail-closed: never create a PaymentIntent that would settle on the platform.
  *
- * TODO(Nick): Express onboarding UI + live Connect settings. Until a host has
- * an acct_ on profiles.stripe_connect_account_id (seed: STRIPE_TEST_CONNECT_ACCOUNT_ID),
- * live Stripe bookings return 409 and charge nothing.
+ * Hosts attach an acct_ via /host/payouts (Express Account Links). Seed can
+ * stamp STRIPE_TEST_CONNECT_ACCOUNT_ID. Live Stripe bookings return 409 and
+ * charge nothing until that id exists. Dashboard Connect settings (platform
+ * profile) are outside the repo — see PREFLIGHT.
  */
 export class HostConnectError extends Error {
   constructor(message: string) {

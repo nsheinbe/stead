@@ -77,7 +77,7 @@ Required for the app to boot and serve members:
 | `CRON_SECRET` | yes | yes | Bearer secret for `/api/cron/*` |
 | `AUTH_URL` / `APP_URL` | yes | recommended | Canonical origin so magic links and Identity return correctly |
 | `RESEND_API_KEY` | yes | optional | Without it, magic links print to the function log |
-| `AUTH_EMAIL_FROM` | recommended | optional | Verified Resend from-address |
+| `AUTH_EMAIL_FROM` | **required if Resend is set** | same | `Stead <noreply@YOUR_VERIFIED_DOMAIN>`. Empty or `onboarding@resend.dev` → refuse to send (Gmail). Domain must be Verified in Resend first. |
 | `STRIPE_SECRET_KEY` | yes (live or test) | test | `sk_live_` only on Production |
 | `STRIPE_WEBHOOK_SECRET` | yes | per-endpoint | Each destination has its own `whsec_` |
 | `VITE_STRIPE_PUBLISHABLE_KEY` | yes | test | Baked in at **build** time |
@@ -126,7 +126,11 @@ Preview does not need the scheduler unless you are exercising those paths. Produ
 
 ## CI
 
-`.github/workflows/ci.yml` runs typecheck, Vitest (against Postgres 17), the production build, and Playwright. Playwright uses the mock-payment path unless `STRIPE_E2E=1` and test-mode keys are present — those stay out of the default job.
+`.github/workflows/ci.yml` runs typecheck, Vitest (against Postgres 17), the production build, and Playwright. Playwright uses the mock-payment path. Live Stripe is `npm run test:e2e:stripe` with `STRIPE_E2E=1` and your own `sk_test_` keys — **do not** put those in the default job. See `docs/e2e.md`.
+
+### Connect Express (host self-serve)
+
+The app path is `/host/payouts`. Creating the first Express account is blocked until the Stripe Dashboard platform profile exists (PREFLIGHT §3). Subscribe the webhook to `account.updated` so payout readiness lands without a page refresh.
 
 A Production deploy should be a merge to `main` after that workflow is green. Vercel then builds from `main` with Production env.
 

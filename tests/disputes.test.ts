@@ -34,6 +34,7 @@ function fakeStore(overrides: Partial<WebhookStore> = {}): WebhookStore {
     recordDisputeOpened: async () => false,
     recordDisputeClosed: async () => false,
     markIdVerified: async () => false,
+    recordConnectReadiness: async () => false,
     ...overrides,
   };
 }

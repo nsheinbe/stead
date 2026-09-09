@@ -131,6 +131,10 @@ export const profiles = pgTable("profiles", {
   memberSince: timestamp("member_since", { mode: "date", withTimezone: true }).notNull().defaultNow(),
   /** Stripe Connect Express/Standard account. Required for live charges; host is MOR. */
   stripeConnectAccountId: text("stripe_connect_account_id"),
+  /** Snapshot from account.updated / live retrieve. Members cannot write these. */
+  stripeChargesEnabled: boolean("stripe_charges_enabled").notNull().default(false),
+  stripePayoutsEnabled: boolean("stripe_payouts_enabled").notNull().default(false),
+  stripeDetailsSubmitted: boolean("stripe_details_submitted").notNull().default(false),
   /** Independent arbitration. Platform-set; members cannot write this column. */
   isArbiter: boolean("is_arbiter").notNull().default(false),
   /** Ops console. Platform-set; members cannot write this column. */

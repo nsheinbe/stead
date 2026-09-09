@@ -30,6 +30,7 @@ export const RATE_LIMITS = {
   messages: { name: "messages", windowMs: 15 * 60_000, max: 30 },
   claims: { name: "claims", windowMs: 15 * 60_000, max: 10 },
   identity: { name: "identity", windowMs: 60 * 60_000, max: 5 },
+  connect: { name: "connect", windowMs: 60 * 60_000, max: 8 },
 } as const satisfies Record<string, RateLimitRule>;
 
 export function resetRateLimitStore(): void {

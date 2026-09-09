@@ -10,6 +10,9 @@ export type StripeEventLike = {
       payment_intent?: string | { id?: string } | null;
       amount?: number;
       status?: string;
+      charges_enabled?: boolean;
+      payouts_enabled?: boolean;
+      details_submitted?: boolean;
     };
   };
 };
@@ -19,6 +22,13 @@ export type DisputeOpenedInput = {
   paymentIntentId: string;
   amountCents: number;
   status: string;
+};
+
+export type ConnectReadinessInput = {
+  accountId: string;
+  chargesEnabled: boolean;
+  payoutsEnabled: boolean;
+  detailsSubmitted: boolean;
 };
 
 export type WebhookStore = {
@@ -31,6 +41,7 @@ export type WebhookStore = {
   recordDisputeOpened: (input: DisputeOpenedInput) => Promise<boolean>;
   recordDisputeClosed: (disputeId: string, status: string) => Promise<boolean>;
   markIdVerified: (userId: string, sessionId: string) => Promise<boolean>;
+  recordConnectReadiness: (input: ConnectReadinessInput) => Promise<boolean>;
 };
 
 export type WebhookResult = {
@@ -44,7 +55,20 @@ export type WebhookResult = {
   refundDue: { paymentIntentId: string; amountCents: number } | null;
   dispute: "opened" | "closed" | null;
   identityVerified: boolean;
+  connectReadiness: boolean;
 };
+
+function result(partial: Partial<WebhookResult> = {}): WebhookResult {
+  return {
+    skipped: false,
+    confirmed: false,
+    refundDue: null,
+    dispute: null,
+    identityVerified: false,
+    connectReadiness: false,
+    ...partial,
+  };
+}
 
 function paymentIntentIdOf(object: StripeEventLike["data"]["object"]): string | null {
   const raw = object.payment_intent;
@@ -63,106 +87,42 @@ export async function handleStripeEvent(
   store: WebhookStore,
 ): Promise<WebhookResult> {
   const claimed = await store.claimEvent(event.id, event.type);
-  if (!claimed) {
-    return {
-      skipped: true,
-      confirmed: false,
-      refundDue: null,
-      dispute: null,
-      identityVerified: false,
-    };
-  }
+  if (!claimed) return result({ skipped: true });
 
   if (event.type === "payment_intent.succeeded") {
     const piId = event.data.object.id;
-    if (!piId) {
-      return {
-        skipped: false,
-        confirmed: false,
-        refundDue: null,
-        dispute: null,
-        identityVerified: false,
-      };
-    }
+    if (!piId) return result();
     const confirmed = await store.confirmBookingByPaymentIntent(piId);
-    if (confirmed) {
-      return {
-        skipped: false,
-        confirmed: true,
-        refundDue: null,
-        dispute: null,
-        identityVerified: false,
-      };
-    }
+    if (confirmed) return result({ confirmed: true });
 
     // Nothing to confirm. The case that matters is the guest whose payment
     // settled after the pending TTL had already expired their booking: they
     // paid and hold nothing, so the whole guest_total goes back.
     const expired = await store.findExpiredBooking(piId);
-    if (!expired) {
-      return {
-        skipped: false,
-        confirmed: false,
-        refundDue: null,
-        dispute: null,
-        identityVerified: false,
-      };
-    }
-    return {
-      skipped: false,
-      confirmed: false,
+    if (!expired) return result();
+    return result({
       refundDue: { paymentIntentId: piId, amountCents: expired.guestTotalCents },
-      dispute: null,
-      identityVerified: false,
-    };
+    });
   }
 
   if (event.type === "charge.dispute.created") {
     const disputeId = event.data.object.id;
     const paymentIntentId = paymentIntentIdOf(event.data.object);
-    if (!disputeId || !paymentIntentId) {
-      return {
-        skipped: false,
-        confirmed: false,
-        refundDue: null,
-        dispute: null,
-        identityVerified: false,
-      };
-    }
+    if (!disputeId || !paymentIntentId) return result();
     const opened = await store.recordDisputeOpened({
       disputeId,
       paymentIntentId,
       amountCents: Number.isInteger(event.data.object.amount) ? (event.data.object.amount as number) : 0,
       status: event.data.object.status ?? "needs_response",
     });
-    return {
-      skipped: false,
-      confirmed: false,
-      refundDue: null,
-      dispute: opened ? "opened" : null,
-      identityVerified: false,
-    };
+    return result({ dispute: opened ? "opened" : null });
   }
 
   if (event.type === "charge.dispute.closed") {
     const disputeId = event.data.object.id;
-    if (!disputeId) {
-      return {
-        skipped: false,
-        confirmed: false,
-        refundDue: null,
-        dispute: null,
-        identityVerified: false,
-      };
-    }
+    if (!disputeId) return result();
     const closed = await store.recordDisputeClosed(disputeId, event.data.object.status ?? "lost");
-    return {
-      skipped: false,
-      confirmed: false,
-      refundDue: null,
-      dispute: closed ? "closed" : null,
-      identityVerified: false,
-    };
+    return result({ dispute: closed ? "closed" : null });
   }
 
   if (
@@ -172,30 +132,22 @@ export async function handleStripeEvent(
   ) {
     const sessionId = event.data.object.id ?? "";
     const userId = metadataUserId(event.data.object);
-    if (!userId) {
-      return {
-        skipped: false,
-        confirmed: false,
-        refundDue: null,
-        dispute: null,
-        identityVerified: false,
-      };
-    }
+    if (!userId) return result();
     const verified = await store.markIdVerified(userId, sessionId);
-    return {
-      skipped: false,
-      confirmed: false,
-      refundDue: null,
-      dispute: null,
-      identityVerified: verified,
-    };
+    return result({ identityVerified: verified });
   }
 
-  return {
-    skipped: false,
-    confirmed: false,
-    refundDue: null,
-    dispute: null,
-    identityVerified: false,
-  };
+  if (event.type === "account.updated") {
+    const accountId = event.data.object.id ?? "";
+    if (!/^acct_[A-Za-z0-9_]+$/.test(accountId)) return result();
+    const recorded = await store.recordConnectReadiness({
+      accountId,
+      chargesEnabled: event.data.object.charges_enabled === true,
+      payoutsEnabled: event.data.object.payouts_enabled === true,
+      detailsSubmitted: event.data.object.details_submitted === true,
+    });
+    return result({ connectReadiness: recorded });
+  }
+
+  return result();
 }

@@ -47,6 +47,13 @@ export function HostListingsPage() {
     queryFn: () => api.hostListings(),
   });
 
+  const connect = useQuery({
+    queryKey: ["connect-status", user?.id],
+    enabled: Boolean(user),
+    queryFn: () => api.connectStatus(),
+  });
+  const payoutsReady = connect.data?.chargesEnabled && connect.data?.payoutsEnabled;
+
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: ["host-listings", user?.id] });
 
@@ -93,6 +100,21 @@ export function HostListingsPage() {
           <StatusBanner title="Sign in to manage your homes" />
         ) : (
           <>
+            {connect.data && !payoutsReady && (
+              <div className="flex flex-col gap-2 rounded-card border border-linen-tint bg-linen px-4 py-3.5">
+                <span className="text-sm font-bold">Set up payouts before a guest books</span>
+                <p className="m-0 text-[12.5px] leading-relaxed text-ink/65">
+                  Guests pay you directly. A listing can go live now; a stay cannot charge until
+                  Stripe has your payout account.
+                </p>
+                <Link
+                  to="/host/payouts"
+                  className="self-start text-sm font-bold text-spruce no-underline"
+                >
+                  Continue to payouts
+                </Link>
+              </div>
+            )}
             {creating && (
               <form
                 className="flex flex-col gap-3 rounded-card border border-linen-tint p-[18px]"

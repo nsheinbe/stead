@@ -19,6 +19,7 @@ import Resend from "@auth/core/providers/resend";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { getAuthDb } from "./db/client";
 import { accounts, sessions, users, verificationTokens } from "./db/schema";
+import { EmailFromError, authEmailFromForConfig, authEmailFromForSend } from "./lib/emailFrom";
 import { signInEmail } from "./lib/email";
 
 export type SessionUser = {
@@ -27,11 +28,10 @@ export type SessionUser = {
   name: string | null;
 };
 
-const EMAIL_FROM = process.env.AUTH_EMAIL_FROM ?? "Stead <onboarding@resend.dev>";
-
 /**
  * Resend when a key is configured; otherwise print the link so local
- * development works without an email provider.
+ * development works without an email provider. A key without a verified
+ * AUTH_EMAIL_FROM fails closed — we will not send as onboarding@resend.dev.
  */
 async function sendVerificationRequest(params: {
   identifier: string;
@@ -44,11 +44,19 @@ async function sendVerificationRequest(params: {
     console.log(`\n  Magic link for ${params.identifier}:\n  ${params.url}\n`);
     return;
   }
+  let from: string;
+  try {
+    from = authEmailFromForSend(params.provider.from);
+  } catch (err) {
+    const message = err instanceof EmailFromError ? err.message : "AUTH_EMAIL_FROM is invalid";
+    console.error(`[auth] refusing the sign-in email — ${message}`);
+    throw err instanceof EmailFromError ? err : new EmailFromError(message);
+  }
   const { subject, text, html } = signInEmail(params.url, host);
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: params.provider.from ?? EMAIL_FROM, to: params.identifier, subject, text, html }),
+    body: JSON.stringify({ from, to: params.identifier, subject, text, html }),
   });
   if (!res.ok) {
     throw new Error(`Resend refused the sign-in email: ${res.status} ${await res.text()}`);
@@ -78,7 +86,7 @@ export function authConfig(): AuthConfig {
     providers: [
       Resend({
         apiKey: process.env.RESEND_API_KEY ?? "unset",
-        from: EMAIL_FROM,
+        from: authEmailFromForConfig(),
         sendVerificationRequest,
       }),
     ],

@@ -44,6 +44,20 @@ export async function seedBookableParty(title = "E2E cottage") {
   return { hostId, guestId, listingId, cookie, token, title };
 }
 
+/** Stamp a real test-mode Connect acct_ on the host. Owner write — members cannot. */
+export async function attachTestConnectAccount(hostId: string, accountId: string): Promise<void> {
+  if (!/^acct_[A-Za-z0-9_]+$/.test(accountId)) {
+    throw new Error("STRIPE_TEST_CONNECT_ACCOUNT_ID must be an acct_… id, not a secret key");
+  }
+  await asOwner(async (db) => {
+    await db.execute(sql`
+      UPDATE public.profiles
+         SET stripe_connect_account_id = ${accountId}, is_host = true
+       WHERE id = ${hostId}::uuid
+    `);
+  });
+}
+
 export function cronHeaders(): Record<string, string> {
   return { authorization: `Bearer ${process.env.CRON_SECRET ?? E2E_CRON_SECRET}` };
 }

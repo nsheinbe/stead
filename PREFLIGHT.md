@@ -29,13 +29,18 @@ npm run verify:neon         # 16 read-only assertions against the real database
 
 * Create account (or use existing) — TEST MODE for everything.
 * Developers → API keys: secret → `STRIPE_SECRET_KEY`, publishable → `VITE_STRIPE_PUBLISHABLE_KEY`.
-* Enable Connect, platform profile, Express accounts (Settings → Connect).
+* Enable Connect — **this is a Dashboard click-path, not something the repo can do**:
+  1. Test mode: [dashboard.stripe.com/test](https://dashboard.stripe.com/test)
+  2. Platform profile: [dashboard.stripe.com/connect/registration](https://dashboard.stripe.com/connect/registration) (business name, support URL/email, icon). Required before Account Links work.
+  3. Settings → Connect: [dashboard.stripe.com/settings/connect](https://dashboard.stripe.com/settings/connect) and [applications settings](https://dashboard.stripe.com/account/applications/settings) — Express accounts, destination charges, onboarding branding.
+  4. Until this is done, `/host/payouts` → Continue to Stripe returns 503. The in-app Express path is shipped; the toggle is blocked on you.
 * Install Stripe CLI; local webhooks: `stripe listen --forward-to localhost:5173/api/stripe/webhook` → copy the `whsec_…` value → `STRIPE_WEBHOOK_SECRET`.
 * Note for Slice 7: Stripe Identity requires activating the account even for test mode — skip until that slice.
 
 ## 4. Resend (~3 min)
 
-* Create API key → `RESEND_API_KEY`. It sends the magic link and, later, the transactional email. Dev can send from `onboarding@resend.dev`; verify a real domain before anything public. Set `OPS_ALERT_EMAIL` to yourself.
+* Create API key → `RESEND_API_KEY`. Leave it blank locally and the magic link prints to the log.
+* **Do not use `onboarding@resend.dev`.** The app refuses that from-address (Gmail drops it). Verify a domain you own: [resend.com/domains](https://resend.com/domains) → Add domain → paste the DNS records (DKIM / SPF; optional DMARC) → wait for **Verified**. Then set `AUTH_EMAIL_FROM` to `Stead <noreply@YOUR_VERIFIED_DOMAIN>` in `.env` and in Vercel → Settings → Environment Variables. Until that is set, a configured `RESEND_API_KEY` will not send. Set `OPS_ALERT_EMAIL` to yourself.
 * You can skip this at first: with no key, the sign-in link prints to the server console.
 
 ## 5. Passport signing key (~1 min)

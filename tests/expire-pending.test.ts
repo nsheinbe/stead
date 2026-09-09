@@ -45,6 +45,7 @@ describe("stripe webhook handler", () => {
       recordDisputeOpened: async () => false,
       recordDisputeClosed: async () => false,
       markIdVerified: async () => false,
+      recordConnectReadiness: async () => false,
     };
 
     const event = {
@@ -61,6 +62,7 @@ describe("stripe webhook handler", () => {
       refundDue: null,
       dispute: null,
       identityVerified: false,
+      connectReadiness: false,
     });
     expect(second).toEqual({
       skipped: true,
@@ -68,6 +70,7 @@ describe("stripe webhook handler", () => {
       refundDue: null,
       dispute: null,
       identityVerified: false,
+      connectReadiness: false,
     });
     expect(confirmed).toEqual(["pi_abc"]);
   });

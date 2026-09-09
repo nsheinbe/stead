@@ -11,7 +11,8 @@ Spec of record: `BUILD_PROMPT.md` (stack amendment at the top). One slice at a t
 | S5 Landing + polish | Done on `main` | Landing from `/design` with a live fee slider; explore filters; branded email templates; a11y polish. |
 | S6 Messaging + cancellations | Done on `main` | Threads, unread badges, email notify; cancellation engine + policy preview on listing, checkout, and trip. |
 | S7 Trust & safety | Done on `main` | Stripe Identity → tier 2; chargeback freeze/unfreeze; review reminders; ops view; watchdog. |
-| **S8 Production readiness** | **This branch** | Playwright e2e, rate limiting, cross-role RLS matrix, Vercel + Neon deploy docs, backup/restore runbook. Last BUILD_PROMPT slice. |
+| S8 Production readiness | Done on `main` | Playwright e2e, rate limiting, cross-role RLS matrix, Vercel + Neon deploy docs, backup/restore runbook. Last BUILD_PROMPT slice. |
+| Soft leftovers (this PR) | This branch | `AUTH_EMAIL_FROM` fail-closed; Connect Express host self-serve + `account.updated` readiness; live Stripe e2e docs/`npm run test:e2e:stripe`. No new product slice. |
 
 ## Slice 8 acceptance
 
@@ -21,6 +22,12 @@ Spec of record: `BUILD_PROMPT.md` (stack amendment at the top). One slice at a t
 - Deploy pipeline: `docs/deploy.md` — Vercel + Neon branches, the three role URLs, webhooks, crons. Not staging/prod Supabase.
 - Backup/restore: `docs/backup-restore.md` — Neon history window + `pg_dump`, and the S3 bucket as a separate restore.
 
+## Leftovers acceptance
+
+- `AUTH_EMAIL_FROM` required when `RESEND_API_KEY` is set; `onboarding@resend.dev` refused; console path unchanged without a key.
+- `/host/payouts` Account Links + `account.updated` readiness snapshot; create-booking still fail-closed without host `acct_`.
+- `npm run test:e2e:stripe` behind `STRIPE_E2E=1`; default CI stays mock.
+
 ## Out of scope (HARD STOP)
 
-This is the last BUILD_PROMPT slice. No Slice 9.
+S1–S8 plus this leftovers PR. No new product slice.
