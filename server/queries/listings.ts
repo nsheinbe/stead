@@ -5,9 +5,10 @@
  * than replacing it. The policy is the enforcement; repeating it here keeps the
  * query's intent readable and lets a 404 be a 404 instead of an empty row set.
  */
-import { and, asc, desc, eq, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, lte, or } from "drizzle-orm";
 import type { Tx } from "../db/client";
 import { appConfig, listingPhotos, listings } from "../db/schema";
+import type { ListingFilters } from "../../src/lib/filters";
 import type {
   ListingDetail,
   ListingPhoto,
@@ -19,9 +20,31 @@ function toPhotos(rows: { id: string; storagePath: string; sortOrder: number }[]
   return rows.map((p) => ({ id: p.id, storagePath: p.storagePath, sortOrder: p.sortOrder }));
 }
 
-export async function listActiveListings(tx: Tx): Promise<ListingSummary[]> {
+function listingFilterWhere(filters: ListingFilters = {}) {
+  const parts = [eq(listings.status, "active")];
+  if (filters.city) {
+    const city = filters.city;
+    parts.push(or(ilike(listings.city, city), ilike(listings.region, city))!);
+  }
+  if (filters.q) {
+    const like = `%${filters.q.replaceAll("%", "\\%").replaceAll("_", "\\_")}%`;
+    parts.push(
+      or(ilike(listings.title, like), ilike(listings.city, like), ilike(listings.region, like))!,
+    );
+  }
+  if (filters.type) parts.push(eq(listings.type, filters.type));
+  if (filters.guests) parts.push(gte(listings.maxGuests, filters.guests));
+  if (filters.maxNightlyRateCents) parts.push(lte(listings.nightlyRateCents, filters.maxNightlyRateCents));
+  if (filters.instantBook) parts.push(eq(listings.instantBook, true));
+  return and(...parts);
+}
+
+export async function listActiveListings(
+  tx: Tx,
+  filters: ListingFilters = {},
+): Promise<ListingSummary[]> {
   const rows = await tx.query.listings.findMany({
-    where: eq(listings.status, "active"),
+    where: listingFilterWhere(filters),
     orderBy: desc(listings.nightlyRateCents),
     with: { photos: { orderBy: asc(listingPhotos.sortOrder) } },
   });

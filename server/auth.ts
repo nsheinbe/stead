@@ -19,6 +19,7 @@ import Resend from "@auth/core/providers/resend";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { getAuthDb } from "./db/client";
 import { accounts, sessions, users, verificationTokens } from "./db/schema";
+import { signInEmail } from "./lib/email";
 
 export type SessionUser = {
   id: string;
@@ -27,34 +28,6 @@ export type SessionUser = {
 };
 
 const EMAIL_FROM = process.env.AUTH_EMAIL_FROM ?? "Stead <onboarding@resend.dev>";
-
-function signInEmail(url: string, host: string): { subject: string; text: string; html: string } {
-  const subject = `Your Stead sign-in link`;
-  const text = [
-    "A link. That is the whole door.",
-    "",
-    `Sign in to Stead: ${url}`,
-    "",
-    "The link works once and expires in 24 hours. If you did not ask for it, ignore this —",
-    "nobody can sign in without opening it.",
-    "",
-    host,
-  ].join("\n");
-  const html = `
-    <div style="font-family:system-ui,-apple-system,'Hanken Grotesk',sans-serif;background:#FBFAF7;color:#17201B;padding:32px">
-      <p style="margin:0 0 8px;font-size:12px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:#B58B3E">Member sign-in</p>
-      <h1 style="margin:0 0 16px;font-size:26px;font-weight:600">A link. That is the whole door.</h1>
-      <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:rgba(23,32,27,.7)">
-        It works once and expires in 24 hours. If you did not ask for it, ignore this — nobody can sign in without opening it.
-      </p>
-      <a href="${url}" style="display:inline-block;background:#1E4034;color:#FBFAF7;text-decoration:none;padding:14px 24px;border-radius:12px;font-size:15px;font-weight:700">
-        Sign in to Stead
-      </a>
-      <p style="margin:24px 0 0;font-size:12px;color:rgba(23,32,27,.5)">${host}</p>
-    </div>
-  `;
-  return { subject, text, html };
-}
 
 /**
  * Resend when a key is configured; otherwise print the link so local

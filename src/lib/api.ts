@@ -22,6 +22,7 @@ import type {
   TripDetail,
   TripSummary,
 } from "./types";
+import { listingFiltersToSearch, type ListingFilters } from "./filters";
 
 export class ApiError extends Error {
   readonly status: number;
@@ -72,7 +73,10 @@ async function csrfToken(): Promise<string> {
 export const api = {
   me: () => request<SessionResponse>("/api/me"),
   config: () => request<PublicConfig>("/api/config"),
-  listings: () => request<ListingSummary[]>("/api/listings"),
+  listings: (filters: ListingFilters = {}) => {
+    const qs = listingFiltersToSearch(filters);
+    return request<ListingSummary[]>(qs ? `/api/listings?${qs}` : "/api/listings");
+  },
   listing: (id: string) => request<ListingDetail>(`/api/listings/${id}`),
   trips: () => request<TripSummary[]>("/api/trips"),
   trip: (id: string) => request<TripDetail>(`/api/trips/${id}`),

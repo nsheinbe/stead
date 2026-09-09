@@ -132,21 +132,26 @@ export async function insertListing(opts: {
   id: string;
   hostId: string;
   title?: string;
+  type?: "entire_home" | "apartment" | "private_room";
+  city?: string;
   timezone?: string;
   nightlyRateCents?: number;
   depositCents?: number;
   maxGuests?: number;
+  instantBook?: boolean;
   status?: "draft" | "active" | "paused";
 }): Promise<void> {
   await asOwner(async (db) => {
     await db.execute(sql`
       INSERT INTO public.listings (
         id, host_id, title, description, type, city, country, timezone,
-        nightly_rate_cents, deposit_cents, max_guests, status
+        nightly_rate_cents, deposit_cents, max_guests, instant_book, status
       ) VALUES (
         ${opts.id}::uuid, ${opts.hostId}::uuid, ${opts.title ?? "Test cottage"}, 'Test listing',
-        'entire_home', 'Hudson', 'US', ${opts.timezone ?? "America/New_York"},
+        ${opts.type ?? "entire_home"}::public.listing_type, ${opts.city ?? "Hudson"}, 'US',
+        ${opts.timezone ?? "America/New_York"},
         ${opts.nightlyRateCents ?? 20000}, ${opts.depositCents ?? 30000}, ${opts.maxGuests ?? 4},
+        ${opts.instantBook ?? false},
         ${opts.status ?? "active"}::public.listing_status
       )
       ON CONFLICT (id) DO NOTHING
