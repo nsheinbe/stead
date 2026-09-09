@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import {
+  claimEvidenceKey,
   extensionForImageType,
   listingPhotoKey,
   publicUrlForKey,
@@ -24,6 +25,13 @@ describe("upload keys", () => {
     expect(() => extensionForImageType("text/html")).toThrow(StorageError);
     expect(() => extensionForImageType("application/octet-stream")).toThrow(StorageError);
     expect(() => extensionForImageType("")).toThrow(StorageError);
+  });
+
+  it("puts claim evidence under the claim's prefix", () => {
+    const claimId = "4a2e0c9a-2222-4222-8222-222222222222";
+    const key = claimEvidenceKey(claimId, "image/webp");
+    expect(key.startsWith(`claims/${claimId}/`)).toBe(true);
+    expect(key.endsWith(".webp")).toBe(true);
   });
 
   it("puts every object under its own listing's prefix", () => {

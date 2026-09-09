@@ -464,3 +464,130 @@ describeDb("refunds are readable by the booking's parties and writable by nobody
     expect(failure).not.toBeNull();
   });
 });
+
+describeDb("claims are visible to parties and the arbiter, writable by nobody", () => {
+  afterAll(async () => {
+    await closeTestDb();
+  });
+
+  async function claimedStay() {
+    const hostId = id();
+    const guestId = id();
+    const stranger = id();
+    const arbiter = id();
+    const listingId = id();
+    const bookingId = id();
+    const claimId = id();
+
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    await insertMember(guestId, `guest-${guestId}@stead.example`, "Guest");
+    await insertMember(stranger, `other-${stranger}@stead.example`, "Stranger");
+    await insertMember(arbiter, `arb-${arbiter}@stead.example`, "Arbiter");
+    await insertListing({ id: listingId, hostId });
+    await insertBooking({
+      id: bookingId,
+      listingId,
+      guestId,
+      checkIn: "2029-03-01",
+      checkOut: "2029-03-31",
+      status: "completed",
+    });
+
+    const { owner } = await getHarness();
+    await owner.execute(sql`
+      INSERT INTO public.escrow_deposits (booking_id, amount_cents, state, method, window_closes_at)
+      VALUES (${bookingId}::uuid, 30000, 'claimed', 'card_on_file', now() + interval '1 day')
+    `);
+    await owner.execute(sql`
+      INSERT INTO public.claims (id, booking_id, filed_by, amount_cents, description, state)
+      VALUES (${claimId}::uuid, ${bookingId}::uuid, ${hostId}::uuid, 10000, 'RLS probe', 'open')
+    `);
+    await owner.execute(sql`
+      UPDATE public.profiles SET is_arbiter = true WHERE id = ${arbiter}::uuid
+    `);
+
+    return { hostId, guestId, stranger, arbiter, bookingId, claimId };
+  }
+
+  it("shows a claim to the guest, host and arbiter, and to nobody else", async () => {
+    const { hostId, guestId, stranger, arbiter, claimId } = await claimedStay();
+    const read = (viewer: string | null) =>
+      rawAsMember(viewer, (tx) => tx`SELECT id FROM public.claims WHERE id = ${claimId}::uuid`);
+
+    expect(await read(guestId)).toHaveLength(1);
+    expect(await read(hostId)).toHaveLength(1);
+    expect(await read(arbiter)).toHaveLength(1);
+    expect(await read(stranger)).toHaveLength(0);
+    expect(await read(null)).toHaveLength(0);
+  });
+
+  it("refuses a member writing or editing a claim directly", async () => {
+    const { hostId, bookingId, claimId } = await claimedStay();
+
+    const inserted = await rawAsMember(hostId, (tx) => tx`
+      INSERT INTO public.claims (booking_id, filed_by, amount_cents, description)
+      VALUES (${bookingId}::uuid, ${hostId}::uuid, 1, 'Invented')
+    `).then(
+      () => "allowed",
+      () => "refused",
+    );
+    const updated = await rawAsMember(hostId, (tx) => tx`
+      UPDATE public.claims SET state = 'resolved_host' WHERE id = ${claimId}::uuid
+    `).then(
+      () => "allowed",
+      () => "refused",
+    );
+    const deleted = await rawAsMember(hostId, (tx) => tx`
+      DELETE FROM public.claims WHERE id = ${claimId}::uuid
+    `).then(
+      () => "allowed",
+      () => "refused",
+    );
+
+    expect(inserted).toBe("refused");
+    expect(updated).toBe("refused");
+    expect(deleted).toBe("refused");
+  });
+
+  it("lets a party attach evidence and hides it from a stranger", async () => {
+    const { hostId, guestId, stranger, arbiter, claimId } = await claimedStay();
+
+    const attached = (await rawAsMember(
+      hostId,
+      (tx) => tx`
+        INSERT INTO public.claim_evidence (claim_id, uploaded_by, storage_path, note)
+        VALUES (${claimId}::uuid, ${hostId}::uuid, 'claims/x/a.jpg', 'lamp')
+        RETURNING id
+      `,
+    )) as { id: string }[];
+    expect(attached).toHaveLength(1);
+
+    const planted = await rawAsMember(stranger, (tx) => tx`
+      INSERT INTO public.claim_evidence (claim_id, uploaded_by, storage_path)
+      VALUES (${claimId}::uuid, ${stranger}::uuid, 'claims/x/evil.jpg')
+    `).then(
+      () => "allowed",
+      () => "refused",
+    );
+    expect(planted).toBe("refused");
+
+    const read = (viewer: string | null) =>
+      rawAsMember(viewer, (tx) => tx`SELECT id FROM public.claim_evidence WHERE claim_id = ${claimId}::uuid`);
+    expect(await read(guestId)).toHaveLength(1);
+    expect(await read(arbiter)).toHaveLength(1);
+    expect(await read(stranger)).toHaveLength(0);
+  });
+
+  it("refuses a member marking themselves an arbiter", async () => {
+    const member = id();
+    await insertMember(member, `m-${member}@stead.example`, "Member");
+
+    const failure = await rawAsMember(member, (tx) => tx`
+      UPDATE public.profiles SET is_arbiter = true WHERE id = ${member}::uuid
+    `).then(
+      () => null,
+      (err: unknown) => err,
+    );
+    expect(failure).not.toBeNull();
+  });
+});

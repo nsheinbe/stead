@@ -98,14 +98,15 @@ async function main(): Promise<void> {
         FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
        WHERE n.nspname = 'public' AND c.relkind = 'r'
          AND c.relname IN ('app_config','profiles','listings','listing_photos','listing_blackouts',
-                           'bookings','escrow_deposits','escrow_audit','stripe_events','cron_heartbeats')
+                           'bookings','escrow_deposits','escrow_audit','stripe_events','cron_heartbeats',
+                           'refunds','payouts','claims','claim_evidence')
        ORDER BY c.relname
     `;
     const unprotected = tables.filter((t) => !t.relrowsecurity).map((t) => t.relname);
     const forced = tables.filter((t) => t.relforcerowsecurity).map((t) => t.relname);
     record(
-      "RLS is enabled on all ten tenant tables",
-      tables.length === 10 && unprotected.length === 0,
+      "RLS is enabled on tenant tables",
+      tables.length === 14 && unprotected.length === 0,
       unprotected.length ? `no RLS on ${unprotected.join(", ")}` : `${tables.length} tables`,
     );
     record("RLS is not forced", forced.length === 0, forced.length ? forced.join(", ") : "owner can migrate");
@@ -174,10 +175,20 @@ async function main(): Promise<void> {
       SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
        WHERE n.nspname = 'app' AND p.prosecdef ORDER BY p.proname
     `;
+    const required = [
+      "file_claim",
+      "respond_claim",
+      "resolve_claim",
+      "claim_notice",
+      "release_due_escrows",
+      "is_current_user_arbiter",
+    ];
+    const present = new Set(fns.map((f) => f.proname));
+    const missingFns = required.filter((name) => !present.has(name));
     record(
-      "the four privileged transitions exist and are SECURITY DEFINER",
-      fns.length === 4,
-      fns.map((f) => f.proname).join(", "),
+      "claim transitions exist and are SECURITY DEFINER",
+      missingFns.length === 0,
+      missingFns.length ? `missing ${missingFns.join(", ")}` : required.join(", "),
     );
   } finally {
     await Promise.all([app.end(), auth.end(), owner.end()]);

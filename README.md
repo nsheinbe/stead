@@ -4,7 +4,7 @@ A community-owned home rental marketplace. Hosts list because they keep more —
 
 Apache-2.0. Copyright 2026 Stead contributors.
 
-This is Slice 1: foundation plus guest booking. Landing, host tools, claims, reviews, and messaging land in later slices. Spec of record: `BUILD_PROMPT.md` (see the stack amendment at the top of it). Design truth: `/design` (do not edit).
+Slices 1–3b are on this tree: guest booking, escrow lifecycle, the host surface, and claims with evidence and independent arbitration. Reviews and the Trust Passport are Slice 4. Spec of record: `BUILD_PROMPT.md` (see the stack amendment at the top of it). Design truth: `/design` (do not edit).
 
 ## Stack
 
@@ -42,7 +42,7 @@ The owner has `BYPASSRLS` and owns every table, so none of the policies apply to
 
 **Neon makes that the likely mistake rather than a theoretical one.** A project hands you exactly one connection string, for a role that is a `neon_superuser` member with `BYPASSRLS`. Pasting it into `DATABASE_URL` turns the entire security model off — nothing errors, no policy is violated, queries simply return every member's rows. So the app checks: before it serves a single tenant query it confirms the connection role is ordinary, testing all three routes to bypassing RLS (the `BYPASSRLS` attribute, `SUPERUSER`, and table ownership) plus `row_security_active` as the ground truth. One memoized round trip per process; a privileged role gets a 503 and a loud log line instead of silent cross-member reads.
 
-State transitions are closed to `app_user` entirely. It has no `UPDATE` grant on `bookings` and no grant at all on `stripe_events` or `cron_heartbeats`; the four `SECURITY DEFINER` functions in `app` are the complete list of state changes the API can make. That is narrower than what it replaces — the Supabase service role could write any row on any table.
+State transitions are closed to `app_user` entirely. It has no `UPDATE` grant on `bookings` or `claims` and no grant at all on `stripe_events` or `cron_heartbeats`; the enumerated `SECURITY DEFINER` functions in `app` are the complete list of state changes the API can make. That is narrower than what it replaces — the Supabase service role could write any row on any table.
 
 ## Routes (Slice 1)
 
@@ -51,7 +51,9 @@ State transitions are closed to `app_user` entirely. It has no `UPDATE` grant on
 | `/explore` | Member homes |
 | `/listing/:id` | Listing detail + fee arithmetic |
 | `/book/:listingId` | Book · 3 steps (dates, deposit explainer, pay) |
-| `/trips` · `/trips/:bookingId` | Guest trips |
+| `/trips` · `/trips/:bookingId` | Guest trips; host files a claim here during the window |
+| `/host/listings` · `/host/payouts` · `/host/claims` | Host surface |
+| `/host/claims/:id` | Claim detail, evidence, arbiter resolution |
 | `/login` | Magic-link email. Google OAuth is deferred. |
 
 `/` redirects to `/explore`. The marketing landing is Slice 5.
@@ -67,6 +69,10 @@ State transitions are closed to `app_user` entirely. It has no `UPDATE` grant on
 | `GET` | `/api/me` | current session, or `{ user: null }` |
 | `GET` | `/api/trips` · `/api/trips/:id` | signed-in guest; `/:id` also the listing host |
 | `POST` | `/api/bookings` | signed-in guest — quote, insert, Stripe client secrets |
+| `GET`/`POST` | `/api/claims` · `/api/claims/:id` | parties + arbiter; file / read |
+| `POST` | `/api/claims/:id/respond` | guest — accept or dispute |
+| `POST` | `/api/claims/:id/resolve` | arbiter — host / guest / split |
+| `POST` | `/api/claims/:id/evidence-upload` · `/evidence` | parties — presigned image + attach |
 | `POST` | `/api/stripe/webhook` | Stripe, verified by signature |
 | `GET`/`POST` | `/api/cron/expire-pending` | scheduler, `Authorization: Bearer $CRON_SECRET` |
 | `*` | `/api/auth/*` | Auth.js — csrf, signin, callback, session, signout |
@@ -229,7 +235,8 @@ The suite applies `drizzle/*.sql` to whatever `DATABASE_URL_OWNER` points at and
 - overlapping booking rejected by the gist constraint, surfaced as `DateConflictError`
 - expire-pending, and Stripe event idempotency against real Postgres
 - `tests/authorization.test.ts` — the query layer, running as `app_user`
-- `tests/rls.test.ts` — adversarial probes issued as raw SQL over the `app_user` connection, bypassing every line of query code: cross-member reads, unscoped `SELECT`, impersonating another guest on insert, transitioning a booking directly, reading `stripe_events` or the identity tables, grant disjointness, and identity not surviving the transaction
+- `tests/claims.test.ts` — legal file → accept and file → dispute → split, plus the illegal edges and the open-claim guard on release
+- `tests/rls.test.ts` — adversarial probes issued as raw SQL over the `app_user` connection, bypassing every line of query code: cross-member reads, unscoped `SELECT`, impersonating another guest on insert, transitioning a booking directly, reading `stripe_events` or the identity tables, grant disjointness, identity not surviving the transaction, and claim/evidence visibility including the arbiter
 
 Those two files fail for different reasons on purpose. Drop a `WHERE` clause and `authorization.test.ts` goes red; drop a policy and `rls.test.ts` does. Disabling RLS on `bookings` turns five of its probes red, which is how it was checked.
 
