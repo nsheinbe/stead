@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { useAuth, useSignOut } from "../hooks/useAuth";
 import { BrandMark } from "./BrandMark";
 import { BottomNav } from "./BottomNav";
+import { SkipLink } from "./SkipLink";
 
 export function Shell({
   children,
@@ -15,8 +16,9 @@ export function Shell({
 
   return (
     <div className="min-h-screen bg-paper text-ink">
+      <SkipLink />
       <header className="hidden items-center justify-between border-b border-[#EEE7D8] bg-paper px-8 py-5 md:flex lg:px-16">
-        <Link to="/explore" className="flex items-center gap-2.5 no-underline">
+        <Link to="/" className="flex items-center gap-2.5 no-underline">
           <BrandMark />
           <span className="font-display text-[27px] font-bold tracking-tight text-ink">Stead</span>
         </Link>
@@ -49,7 +51,9 @@ export function Shell({
         </div>
       </header>
       <div className="mx-auto flex min-h-screen max-w-[720px] flex-col md:min-h-0 md:max-w-5xl md:px-6 md:py-8">
-        {children}
+        <main id="main" className="flex flex-1 flex-col">
+          {children}
+        </main>
         {hideNav ? null : <BottomNav />}
       </div>
     </div>

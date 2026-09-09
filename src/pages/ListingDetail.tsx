@@ -74,7 +74,7 @@ export function ListingDetailPage() {
           <div className="relative h-[290px] shrink-0 bg-linen">
             <img
               src={photos[photoIndex]?.storagePath ?? `https://picsum.photos/seed/stead-${listing.id}/1200/800`}
-              alt=""
+              alt={`${listing.title}, photo ${photoIndex + 1} of ${Math.max(photos.length, 1)}`}
               className="h-full w-full object-cover"
             />
             <Link
@@ -91,11 +91,15 @@ export function ListingDetailPage() {
                     key={photo.id}
                     type="button"
                     aria-label={`Photo ${i + 1}`}
-                    className={`pointer-events-auto h-1.5 w-1.5 rounded-full ${
-                      i === photoIndex ? "bg-paper" : "bg-paper/45"
-                    }`}
+                    className="pointer-events-auto flex h-6 w-6 items-center justify-center"
                     onClick={() => setPhotoIndex(i)}
-                  />
+                  >
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full ${
+                        i === photoIndex ? "bg-paper" : "bg-paper/45"
+                      }`}
+                    />
+                  </button>
                 ))}
               </div>
             ) : null}

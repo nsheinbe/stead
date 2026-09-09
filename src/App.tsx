@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { BookPage } from "./pages/Book";
 import { ExplorePage } from "./pages/Explore";
+import { LandingPage } from "./pages/Landing";
 import { ListingDetailPage } from "./pages/ListingDetail";
 import { LoginPage } from "./pages/Login";
 import { TripDetailPage } from "./pages/TripDetail";
@@ -16,7 +17,7 @@ import { ReviewPage } from "./pages/Review";
 export function App() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/explore" replace />} />
+      <Route path="/" element={<LandingPage />} />
       <Route path="/explore" element={<ExplorePage />} />
       <Route path="/listing/:id" element={<ListingDetailPage />} />
       <Route path="/book/:listingId" element={<BookPage />} />

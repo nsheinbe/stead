@@ -21,7 +21,11 @@ export function ListingCard({ listing }: { listing: ListingSummary }) {
       className="block overflow-hidden rounded-card border border-[#EDE5D4] bg-paper text-inherit no-underline shadow-card"
     >
       <div className="relative h-[186px] bg-linen">
-        <img src={photoUrl(listing)} alt="" className="h-full w-full object-cover" />
+        <img
+          src={photoUrl(listing)}
+          alt={`${listing.title} in ${listing.city}`}
+          className="h-full w-full object-cover"
+        />
       </div>
       <div className="flex flex-col gap-1.5 px-4 pb-[15px] pt-[13px]">
         <div className="flex items-baseline justify-between gap-3">

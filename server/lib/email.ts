@@ -8,12 +8,15 @@
  * deposit correctly has done the important part; a bounced notification must
  * not roll that back or fail the job.
  */
+import { brandedEmailHtml } from "./emailLayout";
+
 const EMAIL_FROM = process.env.AUTH_EMAIL_FROM ?? "Stead <onboarding@resend.dev>";
 
 export interface Message {
   to: string;
   subject: string;
   text: string;
+  html: string;
 }
 
 export async function sendEmail(message: Message): Promise<boolean> {
@@ -32,6 +35,7 @@ export async function sendEmail(message: Message): Promise<boolean> {
         to: message.to,
         subject: message.subject,
         text: message.text,
+        html: message.html,
       }),
     });
     if (!res.ok) {
@@ -49,6 +53,19 @@ function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
+function mail(
+  subject: string,
+  eyebrow: string,
+  heading: string,
+  paragraphs: string[],
+): Omit<Message, "to"> {
+  return {
+    subject,
+    text: paragraphs.join("\n\n"),
+    html: brandedEmailHtml({ eyebrow, heading, paragraphs }),
+  };
+}
+
 /**
  * Deposit released. Deliberately precise about what happened to the money:
  * on a card-on-file deposit nothing was ever taken, and saying so is the whole
@@ -58,52 +75,37 @@ export function depositReleasedEmail(input: {
   listingTitle: string;
   amountCents: number;
 }): Omit<Message, "to"> {
-  return {
-    subject: "Your deposit is released",
-    text: [
-      `The claim window on your stay at ${input.listingTitle} has closed with no claim,`,
-      `so your ${formatCents(input.amountCents)} deposit is released.`,
-      "",
-      "Your card was never charged for it, and now it won't be.",
-    ].join("\n"),
-  };
+  return mail("Your deposit is released", "Neutral escrow", "Your deposit is released", [
+    `The claim window on your stay at ${input.listingTitle} has closed with no claim, so your ${formatCents(input.amountCents)} deposit is released.`,
+    "Your card was never charged for it, and now it won't be.",
+  ]);
 }
 
 export function claimFiledEmail(input: {
   listingTitle: string;
   amountCents: number;
 }): Omit<Message, "to"> {
-  return {
-    subject: "A claim was filed on your stay",
-    text: [
-      `The host of ${input.listingTitle} filed a claim for ${formatCents(input.amountCents)} against your deposit.`,
-      "",
-      "You can accept that figure or dispute it. Independent arbitration decides a dispute.",
-    ].join("\n"),
-  };
+  return mail("A claim was filed on your stay", "Claims", "A claim was filed on your stay", [
+    `The host of ${input.listingTitle} filed a claim for ${formatCents(input.amountCents)} against your deposit.`,
+    "You can accept that figure or dispute it. Independent arbitration decides a dispute.",
+  ]);
 }
 
 export function claimAcceptedEmail(input: {
   listingTitle: string;
   amountCents: number;
 }): Omit<Message, "to"> {
-  return {
-    subject: "The guest accepted your claim",
-    text: [
-      `The guest accepted your ${formatCents(input.amountCents)} claim on ${input.listingTitle}.`,
-      "That amount is charged from the card on file and lands with you.",
-    ].join("\n"),
-  };
+  return mail("The guest accepted your claim", "Claims", "The guest accepted your claim", [
+    `The guest accepted your ${formatCents(input.amountCents)} claim on ${input.listingTitle}.`,
+    "That amount is charged from the card on file and lands with you.",
+  ]);
 }
 
 export function claimDisputedEmail(input: { listingTitle: string }): Omit<Message, "to"> {
-  return {
-    subject: "The guest disputed your claim",
-    text: [
-      `The guest disputed your claim on ${input.listingTitle}.`,
-      "An independent arbiter will resolve it — host, guest, or a split.",
-    ].join("\n"),
-  };
+  return mail("The guest disputed your claim", "Claims", "The guest disputed your claim", [
+    `The guest disputed your claim on ${input.listingTitle}.`,
+    "An independent arbiter will resolve it — host, guest, or a split.",
+  ]);
 }
 
 export function claimResolvedEmail(input: {
@@ -118,21 +120,41 @@ export function claimResolvedEmail(input: {
       : input.outcome === "split"
         ? `as a split. ${figure} is charged from the card on file.`
         : `in the host's favour. ${figure} is charged from the card on file.`;
-  return {
-    subject: "A claim was resolved",
-    text: [`The claim on ${input.listingTitle} was resolved ${what}`].join("\n"),
-  };
+  return mail("A claim was resolved", "Independent arbitration", "A claim was resolved", [
+    `The claim on ${input.listingTitle} was resolved ${what}`,
+  ]);
 }
 
 /** Reviews open at listing-local checkout. Follow-up reminders are Slice 7. */
 export function reviewOpenEmail(input: { listingTitle: string }): Omit<Message, "to"> {
+  return mail("Your review is open", "Reviews with receipts", "Your review is open", [
+    `Checkout on ${input.listingTitle} is done, so the review is open.`,
+    "Double-blind: the other side cannot read yours until theirs is in — or 14 days pass. Then both publish at once.",
+    "Permanent once published, and tied to the booking receipt.",
+  ]);
+}
+
+export function signInEmail(url: string, host: string): Omit<Message, "to"> {
   return {
-    subject: "Your review is open",
+    subject: "Your Stead sign-in link",
     text: [
-      `Checkout on ${input.listingTitle} is done, so the review is open.`,
+      "A link. That is the whole door.",
       "",
-      "Double-blind: the other side cannot read yours until theirs is in — or 14 days pass. Then both publish at once.",
-      "Permanent once published, and tied to the booking receipt.",
+      `Sign in to Stead: ${url}`,
+      "",
+      "The link works once and expires in 24 hours. If you did not ask for it, ignore this —",
+      "nobody can sign in without opening it.",
+      "",
+      host,
     ].join("\n"),
+    html: brandedEmailHtml({
+      eyebrow: "Member sign-in",
+      heading: "A link. That is the whole door.",
+      paragraphs: [
+        "It works once and expires in 24 hours. If you did not ask for it, ignore this — nobody can sign in without opening it.",
+        host,
+      ],
+      cta: { href: url, label: "Sign in to Stead" },
+    }),
   };
 }

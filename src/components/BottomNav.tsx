@@ -25,6 +25,8 @@ export function BottomNav() {
           return (
             <span
               key={item.label}
+              aria-disabled="true"
+              title="Inbox arrives with messaging"
               className="flex flex-1 flex-col items-center gap-1 text-[10.5px] font-semibold text-ink/45"
             >
               <Icon />

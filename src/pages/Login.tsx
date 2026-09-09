@@ -48,7 +48,7 @@ export function LoginPage() {
         {user ? (
           <StatusBanner
             title="You are signed in"
-            detail="Head to trips, or find another stay. Host tools arrive in a later slice."
+            detail="Head to trips, find a stay, or open host tools."
           />
         ) : null}
         {sent ? (

@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { sessionUser, tenantQuery, type AppEnv } from "../lib/http";
+import { parseListingFilters } from "../../src/lib/filters";
 import { getListingForViewer, listActiveListings } from "../queries/listings";
 import {
   addListingPhoto,
@@ -91,7 +92,8 @@ async function parse<T extends z.ZodTypeAny>(c: { req: { json: () => Promise<unk
 }
 
 listingsRoutes.get("/", async (c) => {
-  return c.json(await tenantQuery(c, (tx) => listActiveListings(tx)));
+  const filters = parseListingFilters(c.req.query());
+  return c.json(await tenantQuery(c, (tx) => listActiveListings(tx, filters)));
 });
 
 // Registered before "/:id" on purpose — otherwise "mine" is read as an id.
