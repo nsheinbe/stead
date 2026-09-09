@@ -3,10 +3,15 @@
  * token for this file to hold and nothing to leak into localStorage.
  */
 import type {
+  ConnectStatus,
   CreateBookingRequest,
   CreateBookingResponse,
+  HostListing,
+  HostPayout,
   ListingDetail,
+  ListingInput,
   ListingSummary,
+  PresignedUpload,
   PublicConfig,
   SessionResponse,
   TripDetail,
@@ -66,6 +71,65 @@ export const api = {
   listing: (id: string) => request<ListingDetail>(`/api/listings/${id}`),
   trips: () => request<TripSummary[]>("/api/trips"),
   trip: (id: string) => request<TripDetail>(`/api/trips/${id}`),
+
+  // --- host surface -------------------------------------------------------
+  hostListings: () => request<HostListing[]>("/api/listings/mine"),
+
+  createListing: (body: ListingInput) =>
+    request<{ id: string }>("/api/listings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+
+  updateListing: (id: string, body: Partial<ListingInput>) =>
+    request<{ ok: true }>(`/api/listings/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+
+  deleteListing: (id: string) =>
+    request<{ ok: true }>(`/api/listings/${id}`, { method: "DELETE" }),
+
+  photoUploadUrl: (listingId: string, contentType: string) =>
+    request<PresignedUpload>(`/api/listings/${listingId}/photo-upload`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contentType }),
+    }),
+
+  attachPhoto: (listingId: string, key: string) =>
+    request<{ id: string }>(`/api/listings/${listingId}/photos`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key }),
+    }),
+
+  deletePhoto: (photoId: string) =>
+    request<{ ok: true }>(`/api/listings/photos/${photoId}`, { method: "DELETE" }),
+
+  connectStatus: () => request<ConnectStatus>("/api/connect/status"),
+
+  connectOnboard: () =>
+    request<{ url: string; accountId: string }>("/api/connect/onboard", { method: "POST" }),
+
+  hostPayouts: () => request<HostPayout[]>("/api/host/payouts"),
+
+  /**
+   * The browser PUTs straight to the bucket. The content type must match what
+   * was signed, or the upload is rejected.
+   */
+  async uploadToBucket(uploadUrl: string, file: File): Promise<void> {
+    const response = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": file.type },
+      body: file,
+    });
+    if (!response.ok) {
+      throw new ApiError(response.status, "The upload was refused. Try again.");
+    }
+  },
 
   createBooking: (body: CreateBookingRequest) =>
     request<CreateBookingResponse>("/api/bookings", {

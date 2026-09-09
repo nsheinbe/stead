@@ -14,6 +14,7 @@ import { getStripe, stripeConfigured } from "../lib/stripe";
 import { tenantQuery, type AppEnv } from "../lib/http";
 import { claimStripeEvent, confirmBookingForPaymentIntent } from "../queries/bookings";
 import { findExpiredBookingForPaymentIntent, refundExpiredBooking } from "../queries/escrow";
+import { recordPayout } from "../queries/payouts";
 
 export const stripeRoutes = new Hono<AppEnv>();
 
@@ -34,14 +35,14 @@ stripeRoutes.post("/webhook", async (c) => {
     return c.text("Signature verification failed", 400);
   }
 
+  const objectId = "id" in event.data.object ? String(event.data.object.id) : undefined;
+
   const result = await tenantQuery(c, (tx) =>
     handleStripeEvent(
       {
         id: event.id,
         type: event.type,
-        data: {
-          object: { id: "id" in event.data.object ? String(event.data.object.id) : undefined },
-        },
+        data: { object: { id: objectId } },
       },
       {
         claimEvent: (id, type) => claimStripeEvent(tx, id, type),
@@ -52,6 +53,28 @@ stripeRoutes.post("/webhook", async (c) => {
       },
     ),
   );
+
+  // Settlement already happened: a destination charge captures at payment and
+  // the funds are in the host's account. Record it, outside the transaction
+  // because reading the transfer id is an outbound call.
+  let payoutRecorded = false;
+  if (result.confirmed && objectId) {
+    let transferId: string | null = null;
+    try {
+      const intent = await getStripe().paymentIntents.retrieve(objectId, {
+        expand: ["latest_charge"],
+      });
+      const charge = intent.latest_charge;
+      if (charge && typeof charge !== "string") {
+        transferId = typeof charge.transfer === "string" ? charge.transfer : (charge.transfer?.id ?? null);
+      }
+    } catch (err) {
+      // The ledger row still gets written; only the reconciliation handle is
+      // missing, and that is better than dropping the record entirely.
+      console.error("[stripe-webhook] could not read the transfer id", err);
+    }
+    payoutRecorded = await tenantQuery(c, (tx) => recordPayout(tx, objectId, transferId));
+  }
 
   // The guest paid for a booking the TTL had already expired. The refund is an
   // outbound call, so it happens here rather than inside the transaction above.
@@ -79,7 +102,13 @@ stripeRoutes.post("/webhook", async (c) => {
 
   console.log(
     `stripe-webhook: ${event.type} (${event.id}) skipped=${result.skipped} ` +
-      `confirmed=${result.confirmed} refunded=${refunded}`,
+      `confirmed=${result.confirmed} refunded=${refunded} payout=${payoutRecorded}`,
   );
-  return c.json({ received: true, skipped: result.skipped, confirmed: result.confirmed, refunded });
+  return c.json({
+    received: true,
+    skipped: result.skipped,
+    confirmed: result.confirmed,
+    refunded,
+    payoutRecorded,
+  });
 });

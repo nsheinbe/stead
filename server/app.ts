@@ -15,7 +15,9 @@ import { handleAuthRequest } from "./auth";
 import { PrivilegedRoleError } from "./db/client";
 import { requireUser, tenantQuery, withSession, type AppEnv } from "./lib/http";
 import { bookingsRoutes, tripsRoutes } from "./routes/bookings";
+import { connectRoutes } from "./routes/connect";
 import { cronRoutes } from "./routes/cron";
+import { hostRoutes } from "./routes/host";
 import { listingsRoutes } from "./routes/listings";
 import { stripeRoutes } from "./routes/stripe";
 import { getConfigMap, toPublicConfig } from "./queries/listings";
@@ -45,6 +47,8 @@ app.route("/listings", listingsRoutes);
 // Stripe and the scheduler authenticate themselves; they are not members.
 app.route("/stripe", stripeRoutes);
 app.route("/cron", cronRoutes);
+app.route("/connect", connectRoutes);
+app.route("/host", hostRoutes);
 
 app.use("/trips", requireUser);
 app.use("/trips/*", requireUser);
