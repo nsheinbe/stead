@@ -10,6 +10,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
 import { assertTenantRole, describeRole, PrivilegedRoleError } from "../server/db/client";
 import {
+  asOwner,
   closeTestDb,
   getHarness,
   id,
@@ -222,6 +223,15 @@ describeDb("tables app_user has no business reading", () => {
     ).rejects.toMatchObject({ code: "42501" });
     await expect(
       rawAsMember(null, (tx) => tx`SELECT * FROM public.cron_heartbeats`),
+    ).rejects.toMatchObject({ code: "42501" });
+  });
+
+  it("denies stripe_disputes and review_reminders outright", async () => {
+    await expect(
+      rawAsMember(null, (tx) => tx`SELECT * FROM public.stripe_disputes`),
+    ).rejects.toMatchObject({ code: "42501" });
+    await expect(
+      rawAsMember(null, (tx) => tx`SELECT * FROM public.review_reminders`),
     ).rejects.toMatchObject({ code: "42501" });
   });
 
@@ -770,5 +780,36 @@ describeDb("messages are visible only to the two participants", () => {
       () => "refused",
     );
     expect(updated).toBe("refused");
+  });
+});
+
+describeDb("ops reads are gated by is_ops", () => {
+  afterAll(async () => {
+    await closeTestDb();
+  });
+
+  it("returns nothing to a regular member and the rows to ops", async () => {
+    const member = id();
+    const ops = id();
+    await insertMember(member, `member-${member}@stead.example`, "Member");
+    await insertMember(ops, `ops-${ops}@stead.example`, "Ops");
+    await asOwner(async (db) => {
+      await db.execute(sql`UPDATE public.profiles SET is_ops = true WHERE id = ${ops}::uuid`);
+      await db.execute(sql`
+        INSERT INTO public.stripe_disputes (id, payment_intent_id, amount_cents, status)
+        VALUES (${`dp_rls_${ops.slice(0, 8)}`}, 'pi_rls', 1000, 'needs_response')
+      `);
+    });
+
+    const asRegular = (await rawAsMember(
+      member,
+      (tx) => tx`SELECT id FROM app.list_ops_disputes()`,
+    )) as { id: string }[];
+    const asOps = (await rawAsMember(
+      ops,
+      (tx) => tx`SELECT id FROM app.list_ops_disputes()`,
+    )) as { id: string }[];
+    expect(asRegular).toHaveLength(0);
+    expect(asOps.some((row) => row.id.startsWith("dp_rls_"))).toBe(true);
   });
 });

@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { Shell } from "../components/Shell";
 import { StatusBanner } from "../components/StatusBanner";
@@ -6,6 +6,7 @@ import { TrustPassportCard } from "../components/TrustPassportCard";
 import { useAuth } from "../hooks/useAuth";
 import { api, ApiError } from "../lib/api";
 import { prettyDay } from "../lib/dates";
+import { stripePublishableKey } from "../lib/env";
 
 function StarRow({ rating }: { rating: number }) {
   return (
@@ -25,13 +26,26 @@ function StarRow({ rating }: { rating: number }) {
 export function PassportPage() {
   const { userId } = useParams<{ userId: string }>();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const isOwn = Boolean(user && userId && user.id === userId);
+  const identityReady = Boolean(stripePublishableKey());
 
   const passport = useQuery({
     queryKey: ["passport", userId],
     enabled: Boolean(userId),
     queryFn: () => api.passport(userId as string),
     retry: (count, error) => !(error instanceof ApiError && error.status === 404) && count < 1,
+  });
+
+  const verifyId = useMutation({
+    mutationFn: () => api.startIdentity(),
+    onSuccess: (result) => {
+      if (result.alreadyVerified) {
+        void queryClient.invalidateQueries({ queryKey: ["passport", userId] });
+        return;
+      }
+      if (result.url) window.location.href = result.url;
+    },
   });
 
   const exportPass = useMutation({
@@ -96,10 +110,42 @@ export function PassportPage() {
             detail={exportPass.error instanceof ApiError ? exportPass.error.message : undefined}
           />
         ) : null}
+        {verifyId.isError ? (
+          <StatusBanner
+            tone="claim"
+            title="Could not start ID verification"
+            detail={verifyId.error instanceof ApiError ? verifyId.error.message : undefined}
+          />
+        ) : null}
 
         {data ? (
           <>
             <TrustPassportCard passport={data} />
+
+            {isOwn && data.stats.verificationTier < 2 ? (
+              <div className="flex flex-col gap-2 rounded-card border border-brass/40 bg-paper/10 px-4 py-3">
+                <span className="text-sm font-bold text-paper">Raise your verification to tier 2</span>
+                <p className="m-0 text-[12.5px] leading-relaxed text-paper/75">
+                  Stripe Identity checks a government ID. Email is tier 0; a verified phone is
+                  tier 1; a verified ID is tier 2. It lands on this passport once the check
+                  completes.
+                </p>
+                {identityReady ? (
+                  <button
+                    type="button"
+                    onClick={() => verifyId.mutate()}
+                    disabled={verifyId.isPending}
+                    className="self-start rounded-full bg-brass px-4 py-2 text-sm font-bold text-ink disabled:opacity-60"
+                  >
+                    {verifyId.isPending ? "Opening Stripe…" : "Verify your ID"}
+                  </button>
+                ) : (
+                  <p className="m-0 text-[12.5px] text-paper/65">
+                    ID verification is not configured on this deployment.
+                  </p>
+                )}
+              </div>
+            ) : null}
 
             <div className="flex justify-around px-2 pt-1">
               <div className="flex flex-col items-center gap-1.5">

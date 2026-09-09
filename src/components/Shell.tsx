@@ -11,7 +11,7 @@ export function Shell({
   children: React.ReactNode;
   hideNav?: boolean;
 }) {
-  const { user } = useAuth();
+  const { user, isOps } = useAuth();
   const signOut = useSignOut();
 
   return (
@@ -32,6 +32,11 @@ export function Shell({
           {user ? (
             <Link to={`/passport/${user.id}`} className="no-underline hover:text-brass">
               Passport
+            </Link>
+          ) : null}
+          {isOps ? (
+            <Link to="/ops" className="no-underline hover:text-brass">
+              Ops
             </Link>
           ) : null}
           {user ? (
