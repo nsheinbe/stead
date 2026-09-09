@@ -1,17 +1,21 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { CancellationPolicyCard } from "../components/CancellationPolicyCard";
 import { DepositChip, PriceBreakdown } from "../components/PriceBreakdown";
-import { BackChevron, BoltIcon } from "../components/Icons";
+import { BackChevron, BoltIcon, InboxIcon } from "../components/Icons";
 import { Shell } from "../components/Shell";
 import { StatusBanner } from "../components/StatusBanner";
+import { useAuth } from "../hooks/useAuth";
 import { api, ApiError } from "../lib/api";
 import { formatUsd, MIN_STAY_NIGHTS, quoteStay } from "../lib/money";
+import { POLICY_LABEL } from "../lib/types";
 
 const PREVIEW_NIGHTS = MIN_STAY_NIGHTS;
 
 export function ListingDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
   const [photoIndex, setPhotoIndex] = useState(0);
 
   const listingQuery = useQuery({
@@ -116,8 +120,8 @@ export function ListingDetailPage() {
                     Instant book
                   </span>
                 ) : null}
-                <span className="rounded-full bg-linen px-2.5 py-1 text-[11.5px] font-bold capitalize">
-                  {listing.cancellationPolicy} cancellation
+                <span className="rounded-full bg-linen px-2.5 py-1 text-[11.5px] font-bold">
+                  {POLICY_LABEL[listing.cancellationPolicy]}
                 </span>
               </div>
             </div>
@@ -159,6 +163,16 @@ export function ListingDetailPage() {
               guestTotalCents={quote.guest_total_cents}
             />
             <DepositChip amountCents={listing.depositCents} />
+            <CancellationPolicyCard policy={listing.cancellationPolicy} />
+            {host && host.id !== user?.id ? (
+              <Link
+                to={user ? `/messages/${listing.id}` : `/login?next=/messages/${listing.id}`}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-spruce py-3.5 text-[14.5px] font-bold text-paper no-underline hover:bg-spruce-deep hover:text-paper"
+              >
+                <InboxIcon className="h-4 w-4" />
+                Message {host.displayName}
+              </Link>
+            ) : null}
           </div>
 
           <div className="flex items-center justify-between gap-4 border-t border-[#EDE6D6] bg-paper px-[18px] pb-7 pt-3.5">

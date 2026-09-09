@@ -19,8 +19,13 @@ import type {
   PublicConfig,
   ReviewForm,
   SessionResponse,
+  CancellationPreview,
+  MessageItem,
+  MessageThread,
+  MessageThreadDetail,
   TripDetail,
   TripSummary,
+  UnreadCount,
 } from "./types";
 import { listingFiltersToSearch, type ListingFilters } from "./filters";
 
@@ -80,6 +85,38 @@ export const api = {
   listing: (id: string) => request<ListingDetail>(`/api/listings/${id}`),
   trips: () => request<TripSummary[]>("/api/trips"),
   trip: (id: string) => request<TripDetail>(`/api/trips/${id}`),
+
+  cancellationPreview: (id: string) =>
+    request<CancellationPreview>(`/api/trips/${id}/cancellation`),
+
+  cancelTrip: (id: string) =>
+    request<{
+      ok: true;
+      status: string;
+      refundCents: number;
+      refundId: string | null;
+      depositReleased: boolean;
+      summary: string;
+    }>(`/api/trips/${id}/cancel`, { method: "POST" }),
+
+  messageThreads: () => request<MessageThread[]>("/api/messages"),
+
+  unreadCount: () => request<UnreadCount>("/api/messages/unread"),
+
+  thread: (listingId: string, guestId: string) =>
+    request<MessageThreadDetail>(`/api/messages/${listingId}/${guestId}`),
+
+  markThreadRead: (listingId: string, guestId: string) =>
+    request<{ ok: true; marked: number }>(`/api/messages/${listingId}/${guestId}/read`, {
+      method: "POST",
+    }),
+
+  sendMessage: (body: { listingId: string; body: string; guestId?: string; bookingId?: string }) =>
+    request<MessageItem>("/api/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
 
   // --- host surface -------------------------------------------------------
   hostListings: () => request<HostListing[]>("/api/listings/mine"),

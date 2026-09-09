@@ -134,6 +134,73 @@ export function reviewOpenEmail(input: { listingTitle: string }): Omit<Message, 
   ]);
 }
 
+export function newMessageEmail(input: {
+  senderName: string;
+  listingTitle: string;
+  preview: string;
+  threadUrl: string;
+}): Omit<Message, "to"> {
+  const preview = input.preview.length > 180 ? `${input.preview.slice(0, 177)}…` : input.preview;
+  return {
+    subject: `${input.senderName} wrote about ${input.listingTitle}`,
+    text: [
+      `${input.senderName} sent a message about ${input.listingTitle}.`,
+      "",
+      preview,
+      "",
+      `Open the thread: ${input.threadUrl}`,
+    ].join("\n"),
+    html: brandedEmailHtml({
+      eyebrow: "Inbox",
+      heading: `${input.senderName} wrote about ${input.listingTitle}`,
+      paragraphs: [preview],
+      cta: { href: input.threadUrl, label: "Open the thread" },
+    }),
+  };
+}
+
+export function guestCanceledEmail(input: {
+  listingTitle: string;
+  guestName: string;
+  refundCents: number;
+}): Omit<Message, "to"> {
+  const figure = formatCents(input.refundCents);
+  return mail("A guest canceled a stay", "Cancellations", `${input.guestName} canceled ${input.listingTitle}`, [
+    input.refundCents > 0
+      ? `The guest canceled. ${figure} goes back to their card. The deposit is released.`
+      : "The guest canceled. The policy keeps the stay. The deposit is released.",
+  ]);
+}
+
+export function guestCanceledConfirmEmail(input: {
+  listingTitle: string;
+  refundCents: number;
+}): Omit<Message, "to"> {
+  const figure = formatCents(input.refundCents);
+  return mail("Your stay is canceled", "Cancellations", "Your stay is canceled", [
+    input.refundCents > 0
+      ? `${input.listingTitle} is canceled. ${figure} returns to your card. The deposit is released.`
+      : `${input.listingTitle} is canceled. The policy keeps the stay. The deposit is released.`,
+  ]);
+}
+
+export function hostCanceledEmail(input: {
+  listingTitle: string;
+  hostName: string;
+  refundCents: number;
+  forGuest: boolean;
+}): Omit<Message, "to"> {
+  const figure = formatCents(input.refundCents);
+  if (input.forGuest) {
+    return mail("The host canceled your stay", "Cancellations", `${input.hostName} canceled ${input.listingTitle}`, [
+      `The stay and the 2% come back in full — ${figure}. The deposit is released. Those dates are blacked out.`,
+    ]);
+  }
+  return mail("You canceled a stay", "Cancellations", `You canceled ${input.listingTitle}`, [
+    `The guest is refunded ${figure}, fee included. The deposit is released. Those dates are blacked out, and this counts as a host cancel on your Trust Passport.`,
+  ]);
+}
+
 export function signInEmail(url: string, host: string): Omit<Message, "to"> {
   return {
     subject: "Your Stead sign-in link",

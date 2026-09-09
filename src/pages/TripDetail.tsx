@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
+import { CancellationPolicyCard } from "../components/CancellationPolicyCard";
 import { EscrowTimeline } from "../components/EscrowTimeline";
+import { InboxIcon } from "../components/Icons";
 import { Shell } from "../components/Shell";
 import { StatusBanner } from "../components/StatusBanner";
 import { useAuth } from "../hooks/useAuth";
@@ -17,6 +19,7 @@ export function TripDetailPage() {
   const queryClient = useQueryClient();
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
+  const [confirmCancel, setConfirmCancel] = useState(false);
 
   const trip = useQuery({
     queryKey: ["trip", bookingId],
@@ -35,6 +38,18 @@ export function TripDetailPage() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["trip", bookingId] });
+    },
+  });
+
+  const cancelStay = useMutation({
+    mutationFn: () => {
+      if (!bookingId) throw new ApiError(400, "Missing stay");
+      return api.cancelTrip(bookingId);
+    },
+    onSuccess: async () => {
+      setConfirmCancel(false);
+      await queryClient.invalidateQueries({ queryKey: ["trip", bookingId] });
+      await queryClient.invalidateQueries({ queryKey: ["trips"] });
     },
   });
 
@@ -120,6 +135,79 @@ export function TripDetailPage() {
                 <span className="font-semibold">{formatUsd(booking.depositCents)}</span>
               </div>
             </div>
+
+            <div className="flex gap-2.5">
+              <Link
+                to={`/messages/${listing.id}/${booking.guest.id}`}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-spruce py-3.5 text-[14px] font-bold text-paper no-underline hover:bg-spruce-deep hover:text-paper"
+              >
+                <InboxIcon className="h-4 w-4" />
+                Message {booking.viewerIsHost ? booking.guest.displayName : booking.host.displayName}
+              </Link>
+            </div>
+
+            <CancellationPolicyCard policy={booking.cancellationPolicy} compact />
+
+            {booking.cancellation.canCancel ? (
+              <div className="flex flex-col gap-2.5 rounded-[14px] border border-linen-tint px-4 py-3.5">
+                <span className="text-sm font-bold">
+                  {booking.viewerIsHost ? "Cancel this booking" : "Cancel this stay"}
+                </span>
+                <p className="m-0 text-[12.5px] leading-relaxed text-ink/70" data-testid="cancel-preview-summary">
+                  {booking.cancellation.summary}
+                </p>
+                <div className="flex flex-col gap-1.5 text-sm">
+                  <div className="money flex justify-between">
+                    <span className="text-ink/70">Refund to card</span>
+                    <span className="font-semibold" data-testid="cancel-preview-refund">
+                      {formatUsd(booking.cancellation.refundCents)}
+                    </span>
+                  </div>
+                  <div className="money flex justify-between">
+                    <span className="text-ink/70">Deposit released</span>
+                    <span className="font-semibold">{formatUsd(booking.cancellation.depositReleasedCents)}</span>
+                  </div>
+                </div>
+                {confirmCancel ? (
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={cancelStay.isPending}
+                      onClick={() => cancelStay.mutate()}
+                      className="rounded-full bg-claim px-4 py-2 text-sm font-bold text-paper disabled:opacity-60"
+                    >
+                      {cancelStay.isPending ? "Canceling…" : "Confirm cancel"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={cancelStay.isPending}
+                      onClick={() => setConfirmCancel(false)}
+                      className="rounded-full border border-[#D8CDB6] px-4 py-2 text-sm font-bold"
+                    >
+                      Keep this stay
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmCancel(true)}
+                    className="self-start rounded-full border border-[#D8CDB6] px-4 py-2 text-sm font-bold"
+                  >
+                    {booking.viewerIsHost ? "Cancel booking" : "Cancel this stay"}
+                  </button>
+                )}
+                {cancelStay.isError ? (
+                  <StatusBanner
+                    tone="claim"
+                    title="Could not cancel"
+                    detail={cancelStay.error instanceof ApiError ? cancelStay.error.message : undefined}
+                  />
+                ) : null}
+                {cancelStay.isSuccess ? (
+                  <StatusBanner title="Canceled" detail={cancelStay.data.summary} />
+                ) : null}
+              </div>
+            ) : null}
 
             {booking.claim ? (
               <div

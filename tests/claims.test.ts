@@ -5,7 +5,7 @@
  * way the routes do (as the member, with app.user_id set) and assert on what
  * Postgres actually did: claim state, escrow state, and the audit trail.
  */
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
 import {
   asOwner,
@@ -122,9 +122,22 @@ async function markArbiter(memberId: string) {
   );
 }
 
+async function deleteScheduledAuthHolds() {
+  await asOwner((db) =>
+    db.execute(sql`
+      DELETE FROM public.escrow_deposits
+       WHERE method = 'auth_hold' AND state = 'scheduled'
+    `),
+  );
+}
+
 describeDb("legal claim paths", () => {
   afterAll(async () => {
     await closeTestDb();
+  });
+
+  beforeEach(async () => {
+    await deleteScheduledAuthHolds();
   });
 
   it("files during the window, guest accepts, escrow releases the claimed amount", async () => {
@@ -224,6 +237,10 @@ describeDb("legal claim paths", () => {
 describeDb("illegal claim edges", () => {
   afterAll(async () => {
     await closeTestDb();
+  });
+
+  beforeEach(async () => {
+    await deleteScheduledAuthHolds();
   });
 
   it("the guest cannot file, and a second file is a no-op", async () => {

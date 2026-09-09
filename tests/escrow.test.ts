@@ -5,7 +5,7 @@
  * way the crons do and assert on what Postgres actually did: the deposit state,
  * the booking status alongside it, and the escrow_audit trail.
  */
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
 import {
   asOwner,
@@ -115,6 +115,17 @@ describeDb("escrow lifecycle", () => {
     await closeTestDb();
   });
 
+  // hold_due_escrows scans every due deposit. A leftover scheduled auth_hold
+  // from the refusal case (or a previous run) poisons claims and check-in.
+  afterEach(async () => {
+    await asOwner((db) =>
+      db.execute(sql`
+        DELETE FROM public.escrow_deposits
+         WHERE method = 'auth_hold' AND state = 'scheduled'
+      `),
+    );
+  });
+
   it("carries a stay from scheduled through to released, with an audit row each step", async () => {
     // Started 40 days ago, ended 10 days ago: check-in, checkout and the
     // 48-hour claim window have all passed.
@@ -207,7 +218,7 @@ describeDb("escrow lifecycle", () => {
 
   it("refuses an auth_hold deposit rather than treating it as held", async () => {
     const { bookingId } = await stay({ checkInOffset: -40 });
-    await scheduleDeposit(bookingId, "auth_hold");
+    const depositId = await scheduleDeposit(bookingId, "auth_hold");
 
     const failure = await asOwner((db) =>
       db.execute(sql`SELECT app.hold_due_escrows()`),
@@ -218,6 +229,7 @@ describeDb("escrow lifecycle", () => {
 
     expect(failure).not.toBeNull();
     expect(pgMessage(failure)).toMatch(/auth_hold/);
+    expect(depositId).toBeTruthy();
   });
 });
 

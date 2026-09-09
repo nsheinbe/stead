@@ -675,3 +675,100 @@ describeDb("reviews are public when published, drafts only the author", () => {
     expect(published).toBe("refused");
   });
 });
+
+describeDb("messages are visible only to the two participants", () => {
+  afterAll(async () => {
+    await closeTestDb();
+  });
+
+  async function thread() {
+    const hostId = id();
+    const guestId = id();
+    const stranger = id();
+    const listingId = id();
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    await insertMember(guestId, `guest-${guestId}@stead.example`, "Guest");
+    await insertMember(stranger, `other-${stranger}@stead.example`, "Stranger");
+    await insertListing({ id: listingId, hostId });
+    const inserted = (await rawAsMember(
+      guestId,
+      (tx) => tx`
+        INSERT INTO public.messages (listing_id, sender_id, recipient_id, body)
+        VALUES (${listingId}::uuid, ${guestId}::uuid, ${hostId}::uuid, 'Is the lemon tree still there?')
+        RETURNING id
+      `,
+    )) as { id: string }[];
+    const messageId = inserted[0]?.id;
+    if (!messageId) throw new Error("expected a message");
+    return { hostId, guestId, stranger, listingId, messageId };
+  }
+
+  it("shows a message to the guest and host, and to nobody else", async () => {
+    const { hostId, guestId, stranger, messageId } = await thread();
+    const read = (viewer: string | null) =>
+      rawAsMember(viewer, (tx) => tx`SELECT id FROM public.messages WHERE id = ${messageId}::uuid`);
+
+    expect(await read(guestId)).toHaveLength(1);
+    expect(await read(hostId)).toHaveLength(1);
+    expect(await read(stranger)).toHaveLength(0);
+    expect(await read(null)).toHaveLength(0);
+  });
+
+  it("lets a guest write the host before a booking exists", async () => {
+    const { guestId, listingId } = await thread();
+    const second = (await rawAsMember(
+      guestId,
+      (tx) => tx`
+        INSERT INTO public.messages (listing_id, sender_id, recipient_id, body)
+        VALUES (${listingId}::uuid, ${guestId}::uuid, (
+          SELECT host_id FROM public.listings WHERE id = ${listingId}::uuid
+        ), 'Second note')
+        RETURNING id
+      `,
+    )) as { id: string }[];
+    expect(second).toHaveLength(1);
+  });
+
+  it("lets a stranger inquire — they are a guest who has not booked yet", async () => {
+    const { stranger, hostId, listingId, messageId } = await thread();
+    const inquiry = (await rawAsMember(
+      stranger,
+      (tx) => tx`
+        INSERT INTO public.messages (listing_id, sender_id, recipient_id, body)
+        VALUES (${listingId}::uuid, ${stranger}::uuid, ${hostId}::uuid, 'Is August free?')
+        RETURNING id
+      `,
+    )) as { id: string }[];
+    expect(inquiry).toHaveLength(1);
+
+    // Their own row is visible; the other guest's thread is not.
+    const other = await rawAsMember(
+      stranger,
+      (tx) => tx`SELECT id FROM public.messages WHERE id = ${messageId}::uuid`,
+    );
+    expect(other).toHaveLength(0);
+  });
+
+  it("refuses a stranger writing as the host", async () => {
+    const { stranger, guestId, listingId } = await thread();
+    const impersonate = await rawAsMember(stranger, (tx) => tx`
+      INSERT INTO public.messages (listing_id, sender_id, recipient_id, body)
+      VALUES (${listingId}::uuid, ${stranger}::uuid, ${guestId}::uuid, 'I am not the host')
+    `).then(
+      () => "allowed",
+      () => "refused",
+    );
+    expect(impersonate).toBe("refused");
+  });
+
+  it("refuses a member writing read_at directly", async () => {
+    const { guestId, messageId } = await thread();
+    const updated = await rawAsMember(guestId, (tx) => tx`
+      UPDATE public.messages SET read_at = now() WHERE id = ${messageId}::uuid
+    `).then(
+      () => "allowed",
+      () => "refused",
+    );
+    expect(updated).toBe("refused");
+  });
+});

@@ -22,6 +22,7 @@ import {
   listings,
 } from "../db/schema";
 import type { TripDetail, TripSummary } from "../../src/lib/types";
+import { getCancelableBooking, previewCancellation } from "./cancellations";
 import { getClaimForBooking } from "./claims";
 import { getTripReviewState } from "./reviews";
 
@@ -116,6 +117,36 @@ export async function getTripForParty(
 
   const claim = await getClaimForBooking(tx, bookingId);
   const review = await getTripReviewState(tx, bookingId, viewerId);
+  const cancelable = await getCancelableBooking(tx, bookingId);
+  const cancellation = cancelable
+    ? await previewCancellation(tx, cancelable, viewerId)
+    : {
+        canCancel: false,
+        actor: (row.guestId === viewerId ? "guest" : "host") as "guest" | "host",
+        policy: row.cancellationPolicy,
+        status: row.status,
+        refundCents: 0,
+        stayRefundCents: 0,
+        feeRefundCents: 0,
+        feeRetainedCents: 0,
+        firstNightRetainedCents: 0,
+        depositReleasedCents: row.depositCents,
+        band: "none" as const,
+        hoursUntilCheckIn: 0,
+        afterCheckIn: true,
+        summary: "This stay cannot be canceled.",
+      };
+
+  const host = await tx.query.listings.findFirst({
+    where: eq(listings.id, row.listingId),
+    columns: { hostId: true },
+    with: { host: { columns: { id: true, displayName: true } } },
+  });
+  const guest = await tx.query.bookings.findFirst({
+    where: eq(bookings.id, bookingId),
+    columns: { guestId: true },
+    with: { guest: { columns: { id: true, displayName: true } } },
+  });
 
   return {
     id: row.id,
@@ -148,6 +179,15 @@ export async function getTripForParty(
     claim,
     viewerIsHost: row.guestId !== viewerId,
     review,
+    host: {
+      id: host?.host?.id ?? host?.hostId ?? "",
+      displayName: host?.host?.displayName || "Host",
+    },
+    guest: {
+      id: guest?.guestId ?? row.guestId,
+      displayName: guest?.guest?.displayName || "Guest",
+    },
+    cancellation,
     listing: {
       id: row.listing.id,
       title: row.listing.title,
