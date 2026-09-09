@@ -166,6 +166,7 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
+#variable_conflict use_column
 DECLARE
   v_me uuid := app.current_user_id();
   v_guest uuid;
@@ -271,10 +272,10 @@ BEGIN
   -- captured it; scheduled / held / claim_window all close here. UPDATE
   -- RETURNING would see the new state, so the old one is captured first.
   WITH due AS (
-    SELECT id, state AS from_state
-      FROM public.escrow_deposits
-     WHERE booking_id = p_booking_id
-       AND state IN ('scheduled', 'held', 'claim_window')
+    SELECT d.id, d.state AS from_state
+      FROM public.escrow_deposits d
+     WHERE d.booking_id = p_booking_id
+       AND d.state IN ('scheduled', 'held', 'claim_window')
   ),
   moved AS (
     UPDATE public.escrow_deposits d

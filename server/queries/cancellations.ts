@@ -227,7 +227,7 @@ export async function cancelBooking(
       depositReleased: row.deposit_released,
     };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "this stay cannot be canceled";
+    const message = cancelErrorMessage(err);
     if (
       /not signed in|only the host|only the guest|cannot be canceled|no charge to refund|exceed guest_total|in full|claim is open|booking not found|non-negative/i.test(
         message,
@@ -237,4 +237,14 @@ export async function cancelBooking(
     }
     throw err;
   }
+}
+
+function cancelErrorMessage(err: unknown): string {
+  for (let current = err, depth = 0; current && depth < 6; depth += 1) {
+    if (typeof current === "object" && current && "message" in current && typeof current.message === "string") {
+      if (!current.message.startsWith("Failed query")) return current.message;
+    }
+    current = typeof current === "object" && current && "cause" in current ? current.cause : undefined;
+  }
+  return err instanceof Error ? err.message : "this stay cannot be canceled";
 }

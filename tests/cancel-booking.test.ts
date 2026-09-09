@@ -85,7 +85,7 @@ describeDb("cancel-booking", () => {
     expect(preview.refundCents).toBe(engine.refundCents);
 
     const result = await asMember(guestId, (tx) =>
-      cancelBooking(tx, bookingId, preview.refundCents, "re_test_guest", false),
+      cancelBooking(tx, bookingId, preview.refundCents, `re_guest_${id()}`, false),
     );
     expect(result.newStatus).toBe("canceled_by_guest");
     expect(result.depositReleased).toBe(true);
@@ -99,7 +99,7 @@ describeDb("cancel-booking", () => {
     expect(refunds).toHaveLength(1);
     expect(Number(refunds[0]?.amount_cents)).toBe(preview.refundCents);
     expect(refunds[0]?.reason).toBe("guest_cancel");
-    expect(refunds[0]?.stripe_refund_id).toBe("re_test_guest");
+    expect(refunds[0]?.stripe_refund_id).toMatch(/^re_guest_/);
 
     const escrow = (await owner.execute(sql`
       SELECT state::text FROM public.escrow_deposits WHERE booking_id = ${bookingId}::uuid
@@ -119,7 +119,7 @@ describeDb("cancel-booking", () => {
       depositCents: 30_000,
     });
     const result = await asMember(hostId, (tx) =>
-      cancelBooking(tx, bookingId, quote.refundCents, "re_test_host", true),
+      cancelBooking(tx, bookingId, quote.refundCents, `re_host_${id()}`, true),
     );
     expect(result.newStatus).toBe("canceled_by_host");
     expect(await bookingStatus(bookingId)).toBe("canceled_by_host");
@@ -140,6 +140,14 @@ describeDb("cancel-booking", () => {
       SELECT host_cancellations FROM public.trust_stats WHERE profile_id = ${guestId}::uuid
     `)) as unknown as { host_cancellations: number }[];
     expect(Number(guestStats[0]?.host_cancellations)).toBe(0);
+
+    const refunds = (await owner.execute(sql`
+      SELECT amount_cents, reason::text
+        FROM public.refunds WHERE booking_id = ${bookingId}::uuid
+    `)) as unknown as { amount_cents: number; reason: string }[];
+    expect(refunds).toHaveLength(1);
+    expect(Number(refunds[0]?.amount_cents)).toBe(612_000);
+    expect(refunds[0]?.reason).toBe("host_cancel");
   });
 
   it("refuses a stranger driving cancel-booking", async () => {
@@ -152,9 +160,9 @@ describeDb("cancel-booking", () => {
 
   it("refuses a second cancel", async () => {
     const { guestId, bookingId } = await seedStay();
-    await asMember(guestId, (tx) => cancelBooking(tx, bookingId, 612_000, "re_once", false));
+    await asMember(guestId, (tx) => cancelBooking(tx, bookingId, 612_000, `re_once_${id()}`, false));
     await expect(
-      asMember(guestId, (tx) => cancelBooking(tx, bookingId, 612_000, "re_twice", false)),
+      asMember(guestId, (tx) => cancelBooking(tx, bookingId, 612_000, `re_twice_${id()}`, false)),
     ).rejects.toThrow(/cannot be canceled/i);
   });
 });

@@ -41,6 +41,12 @@ const TEMPLATES = [
     refundCents: 612_000,
     forGuest: true,
   }),
+  hostCanceledEmail({
+    listingTitle: "Gable End Cottage",
+    hostName: "Nora",
+    refundCents: 612_000,
+    forGuest: false,
+  }),
   signInEmail("https://stead.example/api/auth/callback?k=demo", "stead.example"),
 ];
 
