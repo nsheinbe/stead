@@ -67,6 +67,10 @@ export function listingPhotoKey(listingId: string, contentType: string): string 
   return `listings/${listingId}/${randomUUID()}.${extensionForImageType(contentType)}`;
 }
 
+export function claimEvidenceKey(claimId: string, contentType: string): string {
+  return `claims/${claimId}/${randomUUID()}.${extensionForImageType(contentType)}`;
+}
+
 export function publicUrlForKey(key: string): string {
   const base = process.env.S3_PUBLIC_URL?.replace(/\/+$/, "");
   if (!base) {

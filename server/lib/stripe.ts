@@ -123,6 +123,88 @@ export async function createIntent<T extends { status: string }>(
  * succeeded or been cancelled throws, which is why the results are settled
  * rather than awaited as a pair.
  */
+/**
+ * Off-session deposit capture on the host's connected account. The stay already
+ * settled as a destination charge; this is a separate charge for an approved
+ * claim, using the card the guest put on file at booking. No application fee —
+ * the deposit was never part of guest_total.
+ */
+export type ClaimChargeParams = {
+  amount: number;
+  currency: "usd";
+  confirm: true;
+  off_session: true;
+  payment_method: string;
+  metadata: Record<string, string>;
+};
+
+export function claimChargeParams(input: {
+  amountCents: number;
+  paymentMethodId: string;
+  metadata: Record<string, string>;
+}): ClaimChargeParams {
+  if (!Number.isInteger(input.amountCents) || input.amountCents < 1) {
+    throw new HostConnectError("claim charge must be a positive integer");
+  }
+  if (!/^pm_[A-Za-z0-9_]+$/.test(input.paymentMethodId)) {
+    throw new HostConnectError("claim charge needs a payment method on the host account");
+  }
+  return {
+    amount: input.amountCents,
+    currency: "usd",
+    confirm: true,
+    off_session: true,
+    payment_method: input.paymentMethodId,
+    metadata: input.metadata,
+  };
+}
+
+export function claimChargeIdempotencyKey(claimId: string, kind: "accept" | "resolve"): string {
+  return `claim:${kind}:${claimId}`;
+}
+
+/**
+ * Charge the guest's card-on-file on the host's connected account. The host is
+ * already the merchant of that account, so the funds land there — never on the
+ * platform. Fail closed if there is no Connect account or no payment method.
+ */
+export async function chargeClaimOnHostAccount(input: {
+  claimId: string;
+  bookingId: string;
+  amountCents: number;
+  setupIntentId: string;
+  hostAccountId: string;
+  kind: "accept" | "resolve";
+}): Promise<string> {
+  const account = resolveHostConnectAccount(input.hostAccountId);
+  const stripe = getStripe();
+  const setup = await stripe.setupIntents.retrieve(input.setupIntentId, undefined, {
+    stripeAccount: account,
+  });
+  const paymentMethod =
+    typeof setup.payment_method === "string" ? setup.payment_method : (setup.payment_method?.id ?? null);
+  if (!paymentMethod) {
+    throw new HostConnectError("No card on file for this deposit.");
+  }
+  const params = claimChargeParams({
+    amountCents: input.amountCents,
+    paymentMethodId: paymentMethod,
+    metadata: {
+      claim_id: input.claimId,
+      booking_id: input.bookingId,
+      kind: `deposit_claim_${input.kind}`,
+    },
+  });
+  const intent = await stripe.paymentIntents.create(params, {
+    stripeAccount: account,
+    idempotencyKey: claimChargeIdempotencyKey(input.claimId, input.kind),
+  });
+  if (intent.status !== "succeeded") {
+    throw new HostConnectError(`The claim charge did not succeed (${intent.status}).`);
+  }
+  return intent.id;
+}
+
 export async function cancelOrphanedIntents(
   paymentIntentId: string,
   setupIntentId: string,

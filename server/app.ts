@@ -15,6 +15,7 @@ import { handleAuthRequest } from "./auth";
 import { PrivilegedRoleError } from "./db/client";
 import { requireUser, tenantQuery, withSession, type AppEnv } from "./lib/http";
 import { bookingsRoutes, tripsRoutes } from "./routes/bookings";
+import { claimsRoutes } from "./routes/claims";
 import { connectRoutes } from "./routes/connect";
 import { cronRoutes } from "./routes/cron";
 import { hostRoutes } from "./routes/host";
@@ -56,6 +57,10 @@ app.route("/trips", tripsRoutes);
 
 app.use("/bookings", requireUser);
 app.route("/bookings", bookingsRoutes);
+
+app.use("/claims", requireUser);
+app.use("/claims/*", requireUser);
+app.route("/claims", claimsRoutes);
 
 app.notFound((c) => c.json({ error: "No such endpoint" }, 404));
 
