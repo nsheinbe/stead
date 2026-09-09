@@ -11,13 +11,14 @@ import { timingSafeEqual } from "node:crypto";
 import { Hono, type Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { tenantQuery, type AppEnv } from "../lib/http";
-import { depositReleasedEmail, sendEmail } from "../lib/email";
+import { depositReleasedEmail, reviewOpenEmail, sendEmail } from "../lib/email";
 import { expirePendingBookings, recordHeartbeat } from "../queries/bookings";
 import {
   holdDueEscrows,
   openDueClaimWindows,
   releaseDueEscrows,
 } from "../queries/escrow";
+import { listReviewOpenNotices, publishDueReviews } from "../queries/reviews";
 import { getConfigMap, intFromConfig } from "../queries/listings";
 import type { Tx } from "../db/client";
 
@@ -78,11 +79,27 @@ cronRoutes.on(["GET", "POST"], "/check-in", async (c) => {
   return c.json({ held });
 });
 
-/** held → claim_window, at each listing's local checkout time. */
+/** held → claim_window, at each listing's local checkout time. Reviews open then. */
 cronRoutes.on(["GET", "POST"], "/check-out", async (c) => {
   assertCronCaller(c.req.header("authorization"));
   const opened = await runJob(c, "check-out", (tx) => openDueClaimWindows(tx));
-  return c.json({ opened });
+  const notices = await tenantQuery(c, (tx) => listReviewOpenNotices(tx)).catch(() => []);
+  let notified = 0;
+  for (const notice of notices) {
+    const mail = reviewOpenEmail({ listingTitle: notice.listingTitle });
+    const guest = await sendEmail({ to: notice.guestEmail, ...mail });
+    const host = await sendEmail({ to: notice.hostEmail, ...mail });
+    if (guest) notified += 1;
+    if (host) notified += 1;
+  }
+  return c.json({ opened, notified });
+});
+
+/** Both reviews in → publish together; else 14 days after listing-local checkout. */
+cronRoutes.on(["GET", "POST"], "/publish-reviews", async (c) => {
+  assertCronCaller(c.req.header("authorization"));
+  const published = await runJob(c, "publish-reviews", (tx) => publishDueReviews(tx));
+  return c.json({ published });
 });
 
 /** claim_window → released, once the window has closed with no claim. */

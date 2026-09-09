@@ -61,6 +61,7 @@ export const claimState = pgEnum("claim_state", [
   "resolved_guest",
   "resolved_split",
 ]);
+export const reviewDirection = pgEnum("review_direction", ["guest_reviews_host", "host_reviews_guest"]);
 
 // --- Identity: written by Auth.js through the Drizzle adapter -----------------
 
@@ -350,6 +351,42 @@ export const claimsRelations = relations(claims, ({ one, many }) => ({
 export const claimEvidenceRelations = relations(claimEvidence, ({ one }) => ({
   claim: one(claims, { fields: [claimEvidence.claimId], references: [claims.id] }),
   uploader: one(profiles, { fields: [claimEvidence.uploadedBy], references: [profiles.id] }),
+}));
+
+export const reviews = pgTable(
+  "reviews",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    bookingId: uuid("booking_id")
+      .notNull()
+      .references(() => bookings.id, { onDelete: "cascade" }),
+    authorId: uuid("author_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "restrict" }),
+    subjectId: uuid("subject_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "restrict" }),
+    direction: reviewDirection("direction").notNull(),
+    rating: integer("rating").notNull(),
+    tags: text("tags")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    body: text("body").notNull().default(""),
+    submittedAt: timestamp("submitted_at", { mode: "date", withTimezone: true }).notNull().defaultNow(),
+    publishedAt: timestamp("published_at", { mode: "date", withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("reviews_booking_direction_key").on(table.bookingId, table.direction),
+    index("reviews_subject_idx").on(table.subjectId),
+    index("reviews_author_idx").on(table.authorId),
+  ],
+);
+
+export const reviewsRelations = relations(reviews, ({ one }) => ({
+  booking: one(bookings, { fields: [reviews.bookingId], references: [bookings.id] }),
+  author: one(profiles, { fields: [reviews.authorId], references: [profiles.id], relationName: "reviewAuthor" }),
+  subject: one(profiles, { fields: [reviews.subjectId], references: [profiles.id], relationName: "reviewSubject" }),
 }));
 
 export const stripeEvents = pgTable("stripe_events", {

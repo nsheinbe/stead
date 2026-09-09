@@ -28,6 +28,11 @@ export function Shell({
             Trips
           </Link>
           {user ? (
+            <Link to={`/passport/${user.id}`} className="no-underline hover:text-brass">
+              Passport
+            </Link>
+          ) : null}
+          {user ? (
             <button
               type="button"
               disabled={signOut.isPending}

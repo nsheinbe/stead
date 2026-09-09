@@ -118,17 +118,32 @@ export function ListingDetailPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-3 rounded-[14px] bg-linen px-3.5 py-3">
-              <div className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full border-[1.5px] border-brass bg-spruce text-[15px] font-bold text-paper">
-                {(host?.displayName ?? "H").slice(0, 2).toUpperCase()}
+            {host ? (
+              <Link
+                to={`/passport/${host.id}`}
+                className="flex items-center gap-3 rounded-[14px] bg-linen px-3.5 py-3 text-inherit no-underline"
+              >
+                <div className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full border-[1.5px] border-brass bg-spruce text-[15px] font-bold text-paper">
+                  {host.displayName.slice(0, 2).toUpperCase()}
+                </div>
+                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span className="text-[14.5px] font-bold">Hosted by {host.displayName}</span>
+                  <span className="text-xs text-ink/55">Trust Passport · portable reputation</span>
+                </div>
+              </Link>
+            ) : (
+              <div className="flex items-center gap-3 rounded-[14px] bg-linen px-3.5 py-3">
+                <div className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full border-[1.5px] border-brass bg-spruce text-[15px] font-bold text-paper">
+                  H
+                </div>
+                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span className="text-[14.5px] font-bold">Hosted by a member</span>
+                  <span className="text-xs text-ink/55">
+                    {listing.timezone} · hosts list here because they keep more at 2%
+                  </span>
+                </div>
               </div>
-              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="text-[14.5px] font-bold">Hosted by {host?.displayName ?? "a member"}</span>
-                <span className="text-xs text-ink/55">
-                  {listing.timezone} · hosts list here because they keep more at 2%
-                </span>
-              </div>
-            </div>
+            )}
 
             <p className="m-0 text-sm leading-relaxed text-ink/75">{listing.description}</p>
 

@@ -591,3 +591,87 @@ describeDb("claims are visible to parties and the arbiter, writable by nobody", 
     expect(failure).not.toBeNull();
   });
 });
+
+describeDb("reviews are public when published, drafts only the author", () => {
+  afterAll(async () => {
+    await closeTestDb();
+  });
+
+  async function stayWithDraft() {
+    const hostId = id();
+    const guestId = id();
+    const stranger = id();
+    const listingId = id();
+    const bookingId = id();
+
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    await insertMember(guestId, `guest-${guestId}@stead.example`, "Guest");
+    await insertMember(stranger, `other-${stranger}@stead.example`, "Stranger");
+    await insertListing({ id: listingId, hostId });
+    await insertBooking({
+      id: bookingId,
+      listingId,
+      guestId,
+      checkIn: "2029-05-01",
+      checkOut: "2029-05-31",
+      status: "completed",
+    });
+
+    const reviewId = (
+      (await rawAsMember(
+        guestId,
+        (tx) =>
+          tx`SELECT app.submit_review(${bookingId}::uuid, 5, '{}'::text[], 'Draft body') AS id`,
+      )) as { id: string }[]
+    )[0]?.id;
+    if (!reviewId) throw new Error("expected a draft review");
+
+    return { hostId, guestId, stranger, bookingId, reviewId };
+  }
+
+  it("hides an unpublished review from the counterpart and a stranger", async () => {
+    const { hostId, guestId, stranger, reviewId } = await stayWithDraft();
+    const read = (viewer: string | null) =>
+      rawAsMember(viewer, (tx) => tx`SELECT id FROM public.reviews WHERE id = ${reviewId}::uuid`);
+
+    expect(await read(guestId)).toHaveLength(1);
+    expect(await read(hostId)).toHaveLength(0);
+    expect(await read(stranger)).toHaveLength(0);
+    expect(await read(null)).toHaveLength(0);
+  });
+
+  it("shows a published review to anyone", async () => {
+    const { hostId, guestId, stranger, bookingId, reviewId } = await stayWithDraft();
+    await rawAsMember(
+      hostId,
+      (tx) => tx`SELECT app.submit_review(${bookingId}::uuid, 4, '{}'::text[], 'Also in')`,
+    );
+
+    const read = (viewer: string | null) =>
+      rawAsMember(viewer, (tx) => tx`SELECT id FROM public.reviews WHERE id = ${reviewId}::uuid`);
+    expect(await read(stranger)).toHaveLength(1);
+    expect(await read(null)).toHaveLength(1);
+    expect(await read(guestId)).toHaveLength(1);
+  });
+
+  it("refuses a member writing or publishing a review directly", async () => {
+    const { guestId, bookingId, reviewId } = await stayWithDraft();
+
+    const inserted = await rawAsMember(guestId, (tx) => tx`
+      INSERT INTO public.reviews (booking_id, author_id, subject_id, direction, rating, body)
+      VALUES (${bookingId}::uuid, ${guestId}::uuid, ${guestId}::uuid, 'guest_reviews_host', 1, 'Invented')
+    `).then(
+      () => "allowed",
+      () => "refused",
+    );
+    const published = await rawAsMember(guestId, (tx) => tx`
+      UPDATE public.reviews SET published_at = now() WHERE id = ${reviewId}::uuid
+    `).then(
+      () => "allowed",
+      () => "refused",
+    );
+
+    expect(inserted).toBe("refused");
+    expect(published).toBe("refused");
+  });
+});

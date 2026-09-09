@@ -190,6 +190,14 @@ async function main(): Promise<void> {
       missingFns.length === 0,
       missingFns.length ? `missing ${missingFns.join(", ")}` : required.join(", "),
     );
+
+    const reviewRequired = ["submit_review", "publish_due_reviews", "review_open_notices"];
+    const missingReview = reviewRequired.filter((name) => !present.has(name));
+    record(
+      "review transitions exist and are SECURITY DEFINER",
+      missingReview.length === 0,
+      missingReview.length ? `missing ${missingReview.join(", ")}` : reviewRequired.join(", "),
+    );
   } finally {
     await Promise.all([app.end(), auth.end(), owner.end()]);
   }

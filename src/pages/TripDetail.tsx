@@ -223,9 +223,25 @@ export function TripDetailPage() {
               </form>
             ) : null}
 
-            <p className="m-0 text-[12.5px] leading-relaxed text-ink/55">
-              Reviews land in a later slice. Checkout is 11:00 listing-local time.
-            </p>
+            <div className="flex items-center justify-between gap-2.5 border-t border-[#EDE6D6] pt-3">
+              <span className="text-[12.5px] leading-snug text-ink/55">
+                {booking.status === "completed"
+                  ? booking.review.published
+                    ? "Reviews are published — both sides, at once."
+                    : booking.review.submitted
+                      ? "Your review is in. It publishes when the other side writes theirs, or in 14 days."
+                      : "Checkout is done — your review is open. Double-blind, as always."
+                  : "Checkout is 11:00 listing-local time — your review opens then. Double-blind, as always."}
+              </span>
+              {booking.status === "completed" ? (
+                <Link
+                  to={`/review/${booking.id}`}
+                  className="whitespace-nowrap text-[12.5px] font-bold no-underline"
+                >
+                  {booking.review.submitted ? "See review →" : "Write review →"}
+                </Link>
+              ) : null}
+            </div>
             <Link to="/trips" className="text-sm font-bold no-underline">
               All trips →
             </Link>

@@ -13,8 +13,11 @@ import type {
   ListingDetail,
   ListingInput,
   ListingSummary,
+  Passport,
+  PassportExport,
   PresignedUpload,
   PublicConfig,
+  ReviewForm,
   SessionResponse,
   TripDetail,
   TripSummary,
@@ -174,6 +177,26 @@ export const api = {
       throw new ApiError(response.status, "The upload was refused. Try again.");
     }
   },
+
+  passport: (userId: string) => request<Passport>(`/api/passport/${userId}`),
+
+  exportPassport: (userId: string) => request<PassportExport>(`/api/passport/${userId}/export`),
+
+  verifyPassport: (body: PassportExport) =>
+    request<{ valid: boolean }>("/api/passport/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payload: body.payload, signature: body.signature }),
+    }),
+
+  reviewForm: (bookingId: string) => request<ReviewForm>(`/api/reviews/${bookingId}`),
+
+  submitReview: (bookingId: string, body: { rating: number; tags: string[]; body: string }) =>
+    request<ReviewForm>(`/api/reviews/${bookingId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
 
   createBooking: (body: CreateBookingRequest) =>
     request<CreateBookingResponse>("/api/bookings", {
