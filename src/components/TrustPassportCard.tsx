@@ -42,7 +42,7 @@ function Stat({
   return (
     <div className="flex flex-col gap-0.5" data-testid={testId}>
       <span className="money text-[19px] font-bold leading-none">{value}</span>
-      <span className="text-[9px] font-bold uppercase tracking-[0.08em] text-ink/55">{label}</span>
+      <span className="text-[9px] font-bold uppercase tracking-[0.08em] text-ink/70">{label}</span>
     </div>
   );
 }
@@ -80,13 +80,13 @@ export function TrustPassportCard({ passport }: { passport: Passport }) {
       aria-label="Trust Passport"
     >
       <Guilloche />
-      <div className="overflow-hidden whitespace-nowrap border-b border-brass/35 py-1.5 text-center text-[5.5px] font-bold tracking-[0.3em] text-spruce/55">
+      <div aria-hidden className="overflow-hidden whitespace-nowrap border-b border-brass/35 py-1.5 text-center text-[5.5px] font-bold tracking-[0.3em] text-spruce">
         TRUST PASSPORT · MEMBER OWNED · PORTABLE REPUTATION · NEUTRAL ESCROW · TRUST PASSPORT · MEMBER OWNED
       </div>
       <div className="relative flex flex-col gap-3.5 px-[18px] py-4">
         <div className="flex items-baseline justify-between">
           <span className="text-[10.5px] font-bold tracking-[0.22em] text-spruce">TRUST PASSPORT</span>
-          <span className="money text-[11px] font-semibold tracking-[0.06em] text-brass">Nº {number}</span>
+          <span className="money text-[11px] font-semibold tracking-[0.06em] text-brass-deep">Nº {number}</span>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-2 border-brass bg-spruce font-display text-[22px] font-semibold text-[#F8F3E9] outline outline-1 outline-offset-[3px] outline-brass/45">
@@ -94,8 +94,8 @@ export function TrustPassportCard({ passport }: { passport: Passport }) {
           </div>
           <div className="flex min-w-0 flex-col gap-1">
             <span className="font-display text-[23px] font-semibold leading-none">{displayName}</span>
-            {location ? <span className="text-[11.5px] text-ink/60">{location}</span> : null}
-            <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-brass px-2.5 py-1 text-[10.5px] font-bold text-paper">
+            {location ? <span className="text-[11.5px] text-ink/70">{location}</span> : null}
+            <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-brass px-2.5 py-1 text-[10.5px] font-bold text-ink">
               <ShieldMark />
               Tier {stats.verificationTier} verified
             </span>
@@ -113,14 +113,17 @@ export function TrustPassportCard({ passport }: { passport: Passport }) {
           <Stat value={`${formatRating(stats.avgRatingAsHost)} ★`} label="As host" />
           <Stat value={formatPct(stats.responseRate)} label="Response" />
         </div>
-        <div className="overflow-hidden whitespace-pre rounded-md bg-spruce/[0.07] px-3 py-2 font-money text-[9.5px] leading-relaxed tracking-[0.14em] text-spruce/60">
+        <div
+          aria-hidden
+          className="overflow-hidden whitespace-pre rounded-md bg-spruce/[0.07] px-3 py-2 font-money text-[9.5px] leading-relaxed tracking-[0.14em] text-spruce"
+        >
           {mrzLine(displayName, number, stats.staysCompleted, stats.hostCancellations)}
         </div>
         {isHost ? (
           <span className="sr-only">This member also hosts.</span>
         ) : null}
       </div>
-      <div className="overflow-hidden whitespace-nowrap border-t border-brass/35 py-1.5 text-center text-[5.5px] font-bold tracking-[0.3em] text-spruce/55">
+      <div aria-hidden className="overflow-hidden whitespace-nowrap border-t border-brass/35 py-1.5 text-center text-[5.5px] font-bold tracking-[0.3em] text-spruce">
         ISSUED BY THE MEMBERS · REVIEWS WITH RECEIPTS · INSTANT PAYOUT · INDEPENDENT ARBITRATION
       </div>
     </article>

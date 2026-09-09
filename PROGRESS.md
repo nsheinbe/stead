@@ -19,7 +19,7 @@ Spec of record: `BUILD_PROMPT.md` (stack amendment at the top). One slice at a t
 - Fee slider is live. Stead's column is `quoteStay` (integer cents). Nights cannot drop below 30. Typical-platform comparison is display-only.
 - `/explore` filters by destination, city, type, guests, max nightly rate, and instant book. Filters are query params on `GET /api/listings` and shareable on the URL. RLS still scopes the rows; filters only narrow active listings.
 - Transactional email (magic link, deposit release, claims, review-open) uses one branded HTML layout plus a text body. Without `RESEND_API_KEY` the text still prints to the console. No invented secrets.
-- Skip link, landmarks, labelled controls, image alt text, focus styles, reduced motion. Photo placeholders remain picsum seeds.
+- Skip link, landmarks, labelled controls, image alt text, focus styles, reduced motion. Photo placeholders remain picsum seeds. Lighthouse accessibility on `/` scored 1.00 in headless Chrome against the Vite app.
 
 ## Out of scope (HARD STOP)
 

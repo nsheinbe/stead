@@ -103,7 +103,7 @@ export function FeeCompare() {
         />
         <div className="mt-auto flex flex-col items-center gap-1 rounded-xl bg-paper p-5">
           <span className="money text-[23px] font-bold tracking-wide">{mathLine}</span>
-          <span className="text-[13.5px] text-ink/55">what the stay is actually worth</span>
+          <span className="text-[13.5px] text-ink/70">what the stay is actually worth</span>
         </div>
       </div>
 
@@ -134,22 +134,22 @@ export function FeeCompare() {
           <div className="flex flex-col gap-5 rounded-card border border-[#E5DDCA] bg-paper px-8 py-[30px]">
             <div className="flex items-center justify-between">
               <span className="font-display text-[23px] font-semibold text-ink/75">A typical platform</span>
-              <span className="rounded-full border border-[#D8CDB6] px-2.5 py-1 text-xs font-bold tracking-[0.14em] text-ink/60">
+              <span className="rounded-full border border-[#D8CDB6] px-2.5 py-1 text-xs font-bold tracking-[0.14em] text-ink/75">
                 ~{takePct}% TAKE
               </span>
             </div>
             <div className="flex items-baseline justify-between">
-              <span className="text-[15.5px] text-ink/60">Guest pays, all-in</span>
+              <span className="text-[15.5px] text-ink/70">Guest pays, all-in</span>
               <span className="money text-[30px] font-bold text-ink/82">{formatUsd(compare.otherGuestCents)}</span>
             </div>
             <div className="flex items-baseline justify-between">
-              <span className="text-[15.5px] text-ink/60">Host receives</span>
+              <span className="text-[15.5px] text-ink/70">Host receives</span>
               <span className="money text-[30px] font-bold text-ink/82">{formatUsd(compare.otherHostCents)}</span>
             </div>
             <div className="h-px bg-[#EAE2D0]" />
             <div className="flex items-baseline justify-between">
-              <span className="text-[14.5px] text-ink/60">Lost to the middle</span>
-              <span className="money text-lg font-bold text-ink/55 line-through decoration-claim/55">
+              <span className="text-[14.5px] text-ink/70">Lost to the middle</span>
+              <span className="money text-lg font-bold text-ink/70 line-through decoration-claim/55">
                 {formatUsd(compare.otherTakeCents)}
               </span>
             </div>

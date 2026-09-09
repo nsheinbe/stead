@@ -145,7 +145,7 @@ function CheckMark() {
 
 function Stars({ count }: { count: number }) {
   return (
-    <div className="flex gap-0.5" aria-label={`${count} out of 5 stars`}>
+    <div className="flex gap-0.5" role="img" aria-label={`${count} out of 5 stars`}>
       {Array.from({ length: 5 }, (_, i) => (
         <svg key={i} width="17" height="16" viewBox="0 0 17 16" aria-hidden>
           <path
@@ -244,7 +244,7 @@ export function LandingPage() {
 
         <section id="math" className="flex flex-col gap-[52px] bg-paper px-5 py-16 md:px-16 md:py-[108px]" aria-labelledby="math-heading">
           <div className="flex flex-col items-center gap-4 text-center">
-            <p className="m-0 text-[12.5px] font-bold uppercase tracking-[0.2em] text-brass">The math, in the open</p>
+            <p className="m-0 text-[12.5px] font-bold uppercase tracking-[0.2em] text-brass-deep">The math, in the open</p>
             <h2 id="math-heading" className="m-0 font-display text-[36px] font-semibold tracking-tight md:text-[46px]">
               Same stay. Different arithmetic.
             </h2>
@@ -260,7 +260,7 @@ export function LandingPage() {
 
         <section id="deposits" className="flex flex-col gap-11 bg-paper px-5 py-16 md:px-16 md:py-[108px]" aria-labelledby="deposit-heading">
           <div className="flex max-w-[900px] flex-col gap-4">
-            <p className="m-0 text-[12.5px] font-bold uppercase tracking-[0.2em] text-brass">Deposits done right</p>
+            <p className="m-0 text-[12.5px] font-bold uppercase tracking-[0.2em] text-brass-deep">Deposits done right</p>
             <h2 id="deposit-heading" className="m-0 font-display text-[36px] font-semibold tracking-tight md:text-[46px]">
               Your deposit isn't ours to keep. It isn't theirs either.
             </h2>
@@ -388,7 +388,7 @@ export function LandingPage() {
 
         <section className="flex flex-col gap-[52px] bg-paper px-5 py-16 md:px-16 md:py-[108px]" aria-labelledby="reviews-heading">
           <div className="flex flex-col items-center gap-4 text-center">
-            <p className="m-0 text-[12.5px] font-bold uppercase tracking-[0.2em] text-brass">Reviews with receipts</p>
+            <p className="m-0 text-[12.5px] font-bold uppercase tracking-[0.2em] text-brass-deep">Reviews with receipts</p>
             <h2 id="reviews-heading" className="m-0 max-w-[720px] font-display text-[36px] font-semibold tracking-tight md:text-[46px]">
               Reviews that can't be bought, buried, or deleted.
             </h2>
@@ -414,7 +414,7 @@ export function LandingPage() {
                   </div>
                   <div className="flex flex-col">
                     <span className="text-[15px] font-bold">{review.name}</span>
-                    <span className="text-[13.5px] text-ink/55">{review.meta}</span>
+                    <span className="text-[13.5px] text-ink/70">{review.meta}</span>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -436,7 +436,7 @@ export function LandingPage() {
           aria-labelledby="hosts-heading"
         >
           <div className="flex flex-col gap-[22px]">
-            <p className="m-0 text-[12.5px] font-bold uppercase tracking-[0.2em] text-brass">For hosts</p>
+            <p className="m-0 text-[12.5px] font-bold uppercase tracking-[0.2em] text-spruce">For hosts</p>
             <h2 id="hosts-heading" className="m-0 font-display text-[36px] font-semibold tracking-tight md:text-[46px]">
               Paid at check-in. Not in 3–5 business days.
             </h2>
@@ -454,7 +454,7 @@ export function LandingPage() {
             </ul>
             <div className="mt-2 flex flex-col justify-between gap-6 rounded-card bg-paper px-[30px] py-[26px] shadow-card md:flex-row md:items-center">
               <div className="flex flex-col gap-1">
-                <span className="text-[12.5px] font-bold uppercase tracking-[0.14em] text-ink/50">A month in August</span>
+                <span className="text-[12.5px] font-bold uppercase tracking-[0.14em] text-ink/70">A month in August</span>
                 <span className="money text-2xl font-bold">{formatUsd(18000)} × 30 nights = {formatUsd(hostExample)}</span>
                 <span className="money text-sm text-ink/65">
                   Elsewhere: ≈ {formatUsd(hostExample - Math.trunc((hostExample * 300) / 10_000))} after host
@@ -484,7 +484,7 @@ export function LandingPage() {
 
         <section id="owned" className="flex flex-col gap-[52px] bg-paper px-5 py-16 md:px-16 md:py-[108px]" aria-labelledby="owned-heading">
           <div className="flex flex-col items-center gap-4 text-center">
-            <p className="m-0 text-[12.5px] font-bold uppercase tracking-[0.2em] text-brass">Member-owned</p>
+            <p className="m-0 text-[12.5px] font-bold uppercase tracking-[0.2em] text-brass-deep">Member-owned</p>
             <h2 id="owned-heading" className="m-0 font-display text-[36px] font-semibold tracking-tight md:text-[46px]">
               The credit union of home rentals.
             </h2>
@@ -520,7 +520,7 @@ export function LandingPage() {
 
         <section id="faq" className="flex flex-col items-center gap-11 bg-paper px-5 py-16 md:px-16 md:pb-[110px]" aria-labelledby="faq-heading">
           <div className="flex flex-col items-center gap-4 text-center">
-            <p className="m-0 text-[12.5px] font-bold uppercase tracking-[0.2em] text-brass">Fair questions</p>
+            <p className="m-0 text-[12.5px] font-bold uppercase tracking-[0.2em] text-brass-deep">Fair questions</p>
             <h2 id="faq-heading" className="m-0 font-display text-[36px] font-semibold tracking-tight md:text-[46px]">
               Asked and answered.
             </h2>
@@ -583,7 +583,7 @@ export function LandingPage() {
               Contact
             </a>
           </nav>
-          <p className="m-0 text-sm text-paper/50">© 2026 — member-owned. The fee is 2%. That's the whole trick.</p>
+          <p className="m-0 text-sm text-paper/80">© 2026 — member-owned. The fee is 2%. That's the whole trick.</p>
         </div>
       </footer>
     </div>
