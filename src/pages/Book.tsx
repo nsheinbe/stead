@@ -288,7 +288,7 @@ export function BookPage() {
                 Held in neutral escrow — an account neither the host nor Stead controls. Auto-returned after checkout
                 plus the claim window, unless a claim is filed.
               </p>
-              <EscrowTimeline activeIndex={0} />
+              <EscrowTimeline />
             </div>
             <div className="flex items-start gap-2.5 px-1">
               <ScaleIcon />

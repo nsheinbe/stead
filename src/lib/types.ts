@@ -88,6 +88,22 @@ export type TripSummary = {
   listing: TripListing;
 };
 
+/** One step the deposit actually took, straight from escrow_audit. */
+export type EscrowStep = {
+  toState: EscrowState;
+  at: string;
+  actor: string;
+};
+
+export type EscrowDetail = {
+  amountCents: number;
+  state: EscrowState;
+  heldAt: string | null;
+  windowClosesAt: string | null;
+  releasedAt: string | null;
+  timeline: EscrowStep[];
+};
+
 export type TripDetail = TripSummary & {
   guests: number;
   nightlyRateCents: number;
@@ -95,7 +111,7 @@ export type TripDetail = TripSummary & {
   networkFeeCents: number;
   cancellationPolicy: CancellationPolicy;
   createdAt: string;
-  escrow: { amountCents: number; state: EscrowState } | null;
+  escrow: EscrowDetail | null;
 };
 
 /** Fee policy from app_config. Public: the 2% is the whole point. */

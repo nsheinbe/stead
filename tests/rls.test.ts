@@ -7,6 +7,7 @@
  * goes red; if someone deletes a policy, this file does.
  */
 import { afterAll, describe, expect, it } from "vitest";
+import { sql } from "drizzle-orm";
 import { assertTenantRole, describeRole, PrivilegedRoleError } from "../server/db/client";
 import {
   closeTestDb,
@@ -345,5 +346,104 @@ describeDb("pooled connections do not leak identity", () => {
     const { appSql } = await getHarness();
     const after = await appSql`SELECT app.current_user_id()::text AS uid`;
     expect(after[0]?.uid).toBeNull();
+  });
+});
+
+describeDb("refunds are readable by the booking's parties and writable by nobody", () => {
+  afterAll(async () => {
+    await closeTestDb();
+  });
+
+  async function bookingWithRefund() {
+    const hostId = id();
+    const guestId = id();
+    const stranger = id();
+    const listingId = id();
+    const bookingId = id();
+
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    await insertMember(guestId, `guest-${guestId}@stead.example`, "Guest");
+    await insertMember(stranger, `other-${stranger}@stead.example`, "Stranger");
+    await insertListing({ id: listingId, hostId });
+    await insertBooking({
+      id: bookingId,
+      listingId,
+      guestId,
+      checkIn: "2029-01-01",
+      checkOut: "2029-01-31",
+      status: "expired",
+      paymentIntentId: `pi_rls_${bookingId.slice(0, 10)}`,
+    });
+
+    const { owner } = await getHarness();
+    // Written as the owner, because no client role can create one.
+    await owner.execute(sql`
+      INSERT INTO public.refunds (booking_id, amount_cents, reason, stripe_refund_id)
+      VALUES (${bookingId}::uuid, 612000, 'expired', ${"re_rls_" + bookingId.slice(0, 10)})
+    `);
+
+    return { hostId, guestId, stranger, bookingId };
+  }
+
+  it("shows a refund to the guest and host, and to nobody else", async () => {
+    const { hostId, guestId, stranger, bookingId } = await bookingWithRefund();
+    const read = (viewer: string | null) =>
+      rawAsMember(viewer, (tx) => tx`SELECT id FROM public.refunds WHERE booking_id = ${bookingId}::uuid`);
+
+    expect(await read(guestId)).toHaveLength(1);
+    expect(await read(hostId)).toHaveLength(1);
+    expect(await read(stranger)).toHaveLength(0);
+    expect(await read(null)).toHaveLength(0);
+  });
+
+  it("refuses a member writing their own refund", async () => {
+    const { guestId, bookingId } = await bookingWithRefund();
+
+    // The realistic abuse: a member inventing money back for themselves.
+    // app_user holds no INSERT grant, so this is refused outright.
+    const failure = await rawAsMember(guestId, (tx) => tx`
+      INSERT INTO public.refunds (booking_id, amount_cents, reason)
+      VALUES (${bookingId}::uuid, 999999, 'expired')
+    `).then(
+      () => null,
+      (err: unknown) => err,
+    );
+
+    expect(failure).not.toBeNull();
+  });
+
+  it("refuses a member editing or deleting a refund", async () => {
+    const { guestId, bookingId } = await bookingWithRefund();
+
+    const updated = await rawAsMember(guestId, (tx) => tx`
+      UPDATE public.refunds SET amount_cents = 1 WHERE booking_id = ${bookingId}::uuid
+    `).then(
+      () => "allowed",
+      () => "refused",
+    );
+    const deleted = await rawAsMember(guestId, (tx) => tx`
+      DELETE FROM public.refunds WHERE booking_id = ${bookingId}::uuid
+    `).then(
+      () => "allowed",
+      () => "refused",
+    );
+
+    expect(updated).toBe("refused");
+    expect(deleted).toBe("refused");
+  });
+
+  it("refuses a member driving an escrow transition directly", async () => {
+    const { guestId } = await bookingWithRefund();
+
+    // The transitions are SECURITY DEFINER, but escrow_deposits itself carries
+    // no UPDATE grant — so a member cannot release their own deposit.
+    const failure = await rawAsMember(guestId, (tx) => tx`
+      UPDATE public.escrow_deposits SET state = 'released'
+    `).then(
+      () => null,
+      (err: unknown) => err,
+    );
+
+    expect(failure).not.toBeNull();
   });
 });
