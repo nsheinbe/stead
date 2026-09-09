@@ -11,15 +11,30 @@ import { timingSafeEqual } from "node:crypto";
 import { Hono, type Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { tenantQuery, type AppEnv } from "../lib/http";
-import { depositReleasedEmail, reviewOpenEmail, sendEmail } from "../lib/email";
+import {
+  depositReleasedEmail,
+  reviewOpenEmail,
+  reviewReminderEmail,
+  sendEmail,
+  watchdogAlertEmail,
+} from "../lib/email";
 import { expirePendingBookings, recordHeartbeat } from "../queries/bookings";
 import {
   holdDueEscrows,
   openDueClaimWindows,
+  refundExpiredBooking,
   releaseDueEscrows,
 } from "../queries/escrow";
 import { listReviewOpenNotices, publishDueReviews } from "../queries/reviews";
 import { getConfigMap, intFromConfig } from "../queries/listings";
+import {
+  listExpiredUnrefunded,
+  listReviewRemindersDue,
+  listWatchdogHeartbeats,
+  markReviewReminderSent,
+} from "../queries/trust";
+import { evaluateHeartbeats, watchdogHasAlerts } from "../lib/watchdog";
+import { getStripe, stripeConfigured } from "../lib/stripe";
 import type { Tx } from "../db/client";
 
 export const cronRoutes = new Hono<AppEnv>();
@@ -123,4 +138,78 @@ cronRoutes.on(["GET", "POST"], "/release-deposits", async (c) => {
   }
 
   return c.json({ released: released.length, notified });
+});
+
+/** Follow-up review reminders: day 3 and day 7 after listing-local checkout. */
+cronRoutes.on(["GET", "POST"], "/review-reminders", async (c) => {
+  assertCronCaller(c.req.header("authorization"));
+  const due = await runJob(c, "review-reminders", (tx) => listReviewRemindersDue(tx));
+  const appUrl = (process.env.APP_URL ?? "http://localhost:5173").replace(/\/$/, "");
+  let notified = 0;
+  for (const reminder of due) {
+    const sent = await sendEmail({
+      to: reminder.recipientEmail,
+      ...reviewReminderEmail({
+        listingTitle: reminder.listingTitle,
+        kind: reminder.kind,
+        reviewUrl: `${appUrl}/review/${reminder.bookingId}`,
+      }),
+    });
+    if (sent) {
+      await tenantQuery(c, (tx) =>
+        markReviewReminderSent(tx, reminder.bookingId, reminder.recipientId, reminder.kind),
+      ).catch(() => {});
+      notified += 1;
+    }
+  }
+  return c.json({ due: due.length, notified });
+});
+
+/**
+ * Daily ops watchdog. Emails OPS_ALERT_EMAIL when any heartbeat is stale or
+ * still carrying last_error. Also retries expired-and-paid bookings the
+ * webhook failed to refund — that sweep was left for this job.
+ */
+cronRoutes.on(["GET", "POST"], "/watchdog", async (c) => {
+  assertCronCaller(c.req.header("authorization"));
+
+  const heartbeats = await runJob(c, "watchdog", (tx) => listWatchdogHeartbeats(tx));
+  const report = evaluateHeartbeats(heartbeats);
+  let emailed = false;
+  if (watchdogHasAlerts(report)) {
+    const to = process.env.OPS_ALERT_EMAIL;
+    if (to) {
+      emailed = await sendEmail({ to, ...watchdogAlertEmail(report) });
+    } else {
+      console.error("[watchdog] OPS_ALERT_EMAIL is unset; alerts printed only");
+      console.error("[watchdog]", JSON.stringify(report));
+      emailed = false;
+    }
+  }
+
+  let refunded = 0;
+  if (stripeConfigured()) {
+    const due = await tenantQuery(c, (tx) => listExpiredUnrefunded(tx)).catch(() => []);
+    for (const row of due) {
+      try {
+        const refund = await getStripe().refunds.create({
+          payment_intent: row.paymentIntentId,
+          amount: row.guestTotalCents,
+        });
+        const ok = await tenantQuery(c, (tx) =>
+          refundExpiredBooking(tx, row.paymentIntentId, refund.id, row.guestTotalCents),
+        );
+        if (ok) refunded += 1;
+      } catch (err) {
+        console.error("[watchdog] could not refund an expired booking", row.bookingId, err);
+      }
+    }
+  }
+
+  return c.json({
+    stale: report.stale.length,
+    errored: report.errored.length,
+    emailed,
+    expiredRefunded: refunded,
+  });
 });

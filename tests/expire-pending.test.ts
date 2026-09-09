@@ -42,6 +42,9 @@ describe("stripe webhook handler", () => {
         return true;
       },
       findExpiredBooking: async () => null,
+      recordDisputeOpened: async () => false,
+      recordDisputeClosed: async () => false,
+      markIdVerified: async () => false,
     };
 
     const event = {
@@ -52,8 +55,20 @@ describe("stripe webhook handler", () => {
 
     const first = await handleStripeEvent(event, store);
     const second = await handleStripeEvent(event, store);
-    expect(first).toEqual({ skipped: false, confirmed: true, refundDue: null });
-    expect(second).toEqual({ skipped: true, confirmed: false, refundDue: null });
+    expect(first).toEqual({
+      skipped: false,
+      confirmed: true,
+      refundDue: null,
+      dispute: null,
+      identityVerified: false,
+    });
+    expect(second).toEqual({
+      skipped: true,
+      confirmed: false,
+      refundDue: null,
+      dispute: null,
+      identityVerified: false,
+    });
     expect(confirmed).toEqual(["pi_abc"]);
   });
 });

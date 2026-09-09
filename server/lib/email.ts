@@ -125,13 +125,57 @@ export function claimResolvedEmail(input: {
   ]);
 }
 
-/** Reviews open at listing-local checkout. Follow-up reminders are Slice 7. */
+/** Reviews open at listing-local checkout. Follow-up reminders are below. */
 export function reviewOpenEmail(input: { listingTitle: string }): Omit<Message, "to"> {
   return mail("Your review is open", "Reviews with receipts", "Your review is open", [
     `Checkout on ${input.listingTitle} is done, so the review is open.`,
     "Double-blind: the other side cannot read yours until theirs is in — or 14 days pass. Then both publish at once.",
     "Permanent once published, and tied to the booking receipt.",
   ]);
+}
+
+export function reviewReminderEmail(input: {
+  listingTitle: string;
+  kind: "day3" | "day7";
+  reviewUrl: string;
+}): Omit<Message, "to"> {
+  const when = input.kind === "day7" ? "A week has passed" : "A few days have passed";
+  return {
+    subject: `Still time to review ${input.listingTitle}`,
+    text: [
+      `${when} since checkout at ${input.listingTitle}, and your review is still open.`,
+      "",
+      "Double-blind: the other side cannot read yours until theirs is in — or 14 days pass. Then both publish at once.",
+      "",
+      `Write it here: ${input.reviewUrl}`,
+    ].join("\n"),
+    html: brandedEmailHtml({
+      eyebrow: "Reviews with receipts",
+      heading: `Still time to review ${input.listingTitle}`,
+      paragraphs: [
+        `${when} since checkout, and your review is still open.`,
+        "Double-blind: the other side cannot read yours until theirs is in — or 14 days pass. Then both publish at once.",
+      ],
+      cta: { href: input.reviewUrl, label: "Write your review" },
+    }),
+  };
+}
+
+export function watchdogAlertEmail(input: {
+  stale: { job: string; lastOk: Date | null; lastError: string | null }[];
+  errored: { job: string; lastOk: Date | null; lastError: string | null }[];
+}): Omit<Message, "to"> {
+  const staleLines = input.stale.map((row) => {
+    const when = row.lastOk ? row.lastOk.toISOString() : "never";
+    return `• ${row.job} — last ok ${when}`;
+  });
+  const errorLines = input.errored.map((row) => `• ${row.job} — ${row.lastError ?? "errored"}`);
+  const paragraphs = [
+    "A scheduled job on Stead is stale or still carrying an error. Check the ops view.",
+    staleLines.length ? `Stale:\n${staleLines.join("\n")}` : "",
+    errorLines.length ? `Errored:\n${errorLines.join("\n")}` : "",
+  ].filter(Boolean);
+  return mail("Stead watchdog: a job needs a look", "Ops", "A scheduled job needs a look", paragraphs);
 }
 
 export function newMessageEmail(input: {

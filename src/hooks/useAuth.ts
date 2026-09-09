@@ -12,6 +12,7 @@ export function useAuth() {
   return {
     loading: query.isLoading,
     user: query.data?.user ?? null,
+    isOps: query.data?.isOps === true,
   };
 }
 

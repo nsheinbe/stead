@@ -10,7 +10,9 @@ import {
   hostCanceledEmail,
   newMessageEmail,
   reviewOpenEmail,
+  reviewReminderEmail,
   signInEmail,
+  watchdogAlertEmail,
 } from "../server/lib/email";
 import { brandedEmailHtml, escapeHtml } from "../server/lib/emailLayout";
 
@@ -48,6 +50,15 @@ const TEMPLATES = [
     forGuest: false,
   }),
   signInEmail("https://stead.example/api/auth/callback?k=demo", "stead.example"),
+  reviewReminderEmail({
+    listingTitle: "Gable End Cottage",
+    kind: "day3",
+    reviewUrl: "https://stead.example/review/demo",
+  }),
+  watchdogAlertEmail({
+    stale: [{ job: "check-in", lastOk: new Date("2026-09-01T00:00:00Z"), lastError: null }],
+    errored: [{ job: "expire-pending", lastOk: null, lastError: "boom" }],
+  }),
 ];
 
 describe("branded transactional email", () => {

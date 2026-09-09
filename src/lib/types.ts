@@ -169,6 +169,46 @@ export type PublicConfig = {
 
 export type SessionResponse = {
   user: { id: string; email: string; name: string | null } | null;
+  isOps?: boolean;
+};
+
+export type IdentitySessionResponse = {
+  alreadyVerified: boolean;
+  url: string | null;
+};
+
+export type OpsDispute = {
+  id: string;
+  paymentIntentId: string | null;
+  bookingId: string | null;
+  amountCents: number;
+  status: string;
+  createdAt: string;
+  closedAt: string | null;
+};
+
+export type OpsHeartbeat = {
+  job: string;
+  lastOk: string | null;
+  lastError: string | null;
+  stale: boolean;
+  errored: boolean;
+};
+
+export type OpsFrozenPayout = {
+  id: string;
+  bookingId: string;
+  hostId: string;
+  amountCents: number;
+  state: string;
+  paidAt: string | null;
+  stripeTransferId: string | null;
+};
+
+export type OpsSnapshot = {
+  disputes: OpsDispute[];
+  heartbeats: OpsHeartbeat[];
+  frozenPayouts: OpsFrozenPayout[];
 };
 
 export type CreateBookingRequest = {

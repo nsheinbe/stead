@@ -13,6 +13,7 @@ import { HostPayoutsPage } from "./pages/HostPayouts";
 import { HostClaimsPage } from "./pages/HostClaims";
 import { HostClaimDetailPage } from "./pages/HostClaimDetail";
 import { PassportPage } from "./pages/Passport";
+import { OpsPage } from "./pages/Ops";
 import { ReviewPage } from "./pages/Review";
 
 export function App() {
@@ -34,6 +35,7 @@ export function App() {
       <Route path="/host/payouts" element={<HostPayoutsPage />} />
       <Route path="/host/claims" element={<HostClaimsPage />} />
       <Route path="/host/claims/:claimId" element={<HostClaimDetailPage />} />
+      <Route path="/ops" element={<OpsPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="*" element={<Navigate to="/explore" replace />} />
     </Routes>

@@ -26,6 +26,8 @@ import type {
   TripDetail,
   TripSummary,
   UnreadCount,
+  IdentitySessionResponse,
+  OpsSnapshot,
 } from "./types";
 import { listingFiltersToSearch, type ListingFilters } from "./filters";
 
@@ -218,6 +220,11 @@ export const api = {
       throw new ApiError(response.status, "The upload was refused. Try again.");
     }
   },
+
+  startIdentity: () =>
+    request<IdentitySessionResponse>("/api/identity/session", { method: "POST" }),
+
+  ops: () => request<OpsSnapshot>("/api/ops"),
 
   passport: (userId: string) => request<Passport>(`/api/passport/${userId}`),
 

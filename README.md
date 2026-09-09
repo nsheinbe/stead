@@ -4,7 +4,7 @@ A community-owned home rental marketplace. Hosts list because they keep more —
 
 Apache-2.0. Copyright 2026 Stead contributors.
 
-Slices 1–6 are on this tree: guest booking, escrow lifecycle, the host surface, claims with evidence and independent arbitration, double-blind reviews, the Trust Passport, the marketing landing with a live fee slider, explore filters, branded transactional email, messaging threads, and the cancellation engine. Spec of record: `BUILD_PROMPT.md` (see the stack amendment at the top of it). Design truth: `/design` (do not edit). Slice status: `PROGRESS.md`.
+Slices 1–7 are on this tree: guest booking, escrow lifecycle, the host surface, claims with evidence and independent arbitration, double-blind reviews, the Trust Passport, the marketing landing with a live fee slider, explore filters, branded transactional email, messaging threads, the cancellation engine, Stripe Identity, chargeback freeze/unfreeze, review reminders, the ops view, and the heartbeat watchdog. Spec of record: `BUILD_PROMPT.md` (see the stack amendment at the top of it). Design truth: `/design` (do not edit). Slice status: `PROGRESS.md`.
 
 ## Stack
 
@@ -55,7 +55,8 @@ State transitions are closed to `app_user` entirely. It has no `UPDATE` grant on
 | `/trips` · `/trips/:bookingId` | Guest trips; cancel with policy preview; host files a claim here during the window |
 | `/messages` · `/messages/:listingId/:guestId` | Threads keyed by listing + guest; unread badges |
 | `/review/:bookingId` | Double-blind review after checkout |
-| `/passport/:userId` | Trust Passport |
+| `/passport/:userId` | Trust Passport; own page can start Stripe Identity |
+| `/ops` | Minimal ops view — disputes, stale heartbeats, frozen payouts. Gated by `is_ops`. |
 | `/host/listings` · `/host/payouts` · `/host/claims` | Host surface |
 | `/host/claims/:id` | Claim detail, evidence, arbiter resolution |
 | `/login` | Magic-link email. Google OAuth is deferred. |
@@ -84,8 +85,12 @@ The landing fee slider uses `quoteStay` for Stead's column so it cannot disagree
 | `GET` | `/api/passport/:userId/export` | public — canonical trust_stats signed Ed25519 |
 | `POST` | `/api/passport/verify` | public — check a signed export |
 | `GET`/`POST` | `/api/reviews/:bookingId` | stay parties — form / submit (unpublished until both or 14 days) |
+| `POST` | `/api/identity/session` | signed-in member — Stripe Identity VerificationSession |
+| `GET` | `/api/ops` | ops flag — disputes, heartbeats, frozen payouts |
 | `GET`/`POST` | `/api/cron/expire-pending` | scheduler, `Authorization: Bearer $CRON_SECRET` |
 | `GET`/`POST` | `/api/cron/publish-reviews` | both-in or 14 days after listing-local checkout |
+| `GET`/`POST` | `/api/cron/review-reminders` | day 3 / day 7 after listing-local checkout |
+| `GET`/`POST` | `/api/cron/watchdog` | stale/errored heartbeats → `OPS_ALERT_EMAIL` |
 | `*` | `/api/auth/*` | Auth.js — csrf, signin, callback, session, signout |
 
 ## Local development
@@ -168,12 +173,15 @@ Required environment variables:
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `VITE_STRIPE_PUBLISHABLE_KEY` | payments; the booking flow falls back to a mock path when unset |
 | `STRIPE_TEST_CONNECT_ACCOUNT_ID` | optional test `acct_…` stamped on the seed host; live charges fail closed without a host Connect id |
 | `PASSPORT_SIGNING_KEY` | Ed25519 PKCS8 PEM, base64 — `openssl genpkey -algorithm ed25519 \| base64 -w0` |
+| `OPS_ALERT_EMAIL` | watchdog destination when a cron heartbeat is stale or errored |
 
-Point the Stripe webhook endpoint at `https://<deployment>/api/stripe/webhook`.
+Point the Stripe webhook endpoint at `https://<deployment>/api/stripe/webhook`. Subscribe to `payment_intent.succeeded`, `charge.dispute.created`, `charge.dispute.closed`, `identity.verification_session.verified`, `identity.verification_session.requires_input`, and `account.updated`.
+
+Ops is a platform flag on `profiles.is_ops` — set it as the owner, the same way as `is_arbiter`. There is no designed admin screen; `/ops` is a utilitarian table.
 
 ## Scheduling the cron endpoints
 
-Four jobs, all plain authenticated endpoints under `/api/cron/*`, all taking `Authorization: Bearer $CRON_SECRET`:
+Jobs are plain authenticated endpoints under `/api/cron/*`, all taking `Authorization: Bearer $CRON_SECRET`:
 
 | Endpoint | What it does | How often |
 | --- | --- | --- |
@@ -182,6 +190,8 @@ Four jobs, all plain authenticated endpoints under `/api/cron/*`, all taking `Au
 | `check-out` | `held` → `claim_window` at listing-local checkout, stamping `window_closes_at` | hourly |
 | `release-deposits` | `claim_window` → `released` once the window closes, and emails the guest | hourly |
 | `publish-reviews` | unpublished reviews: both directions in, or 14 days after listing-local checkout | hourly |
+| `review-reminders` | day 3 and day 7 follow-ups if that party has not submitted | daily is enough |
+| `watchdog` | emails ops if any heartbeat is stale or errored; retries expired-and-paid refunds | daily |
 
 Each moves only what is due and re-running one changes nothing, so a missed tick is caught by the next rather than needing a backfill. Each records a heartbeat in `cron_heartbeats` on success and on failure, so a stale `last_ok` is the signal that one has quietly stopped.
 
@@ -195,6 +205,8 @@ curl -H "Authorization: Bearer $CRON_SECRET" https://your-host/api/cron/check-in
 curl -H "Authorization: Bearer $CRON_SECRET" https://your-host/api/cron/check-out
 curl -H "Authorization: Bearer $CRON_SECRET" https://your-host/api/cron/release-deposits
 curl -H "Authorization: Bearer $CRON_SECRET" https://your-host/api/cron/publish-reviews
+curl -H "Authorization: Bearer $CRON_SECRET" https://your-host/api/cron/review-reminders
+curl -H "Authorization: Bearer $CRON_SECRET" https://your-host/api/cron/watchdog
 ```
 
 Deliberately **not** in `vercel.json`: Vercel Cron on the Hobby plan fires at most once a day, and a deployment is rejected outright if the expression asks for more, which makes it both unusable here and a confusing build failure. On Pro, add them back:
@@ -205,7 +217,9 @@ Deliberately **not** in `vercel.json`: Vercel Cron on the Hobby plan fires at mo
   { "path": "/api/cron/check-in",         "schedule": "0 * * * *" },
   { "path": "/api/cron/check-out",        "schedule": "0 * * * *" },
   { "path": "/api/cron/release-deposits", "schedule": "0 * * * *" },
-  { "path": "/api/cron/publish-reviews",  "schedule": "0 * * * *" }
+  { "path": "/api/cron/publish-reviews",  "schedule": "0 * * * *" },
+  { "path": "/api/cron/review-reminders", "schedule": "0 15 * * *" },
+  { "path": "/api/cron/watchdog",         "schedule": "0 16 * * *" }
 ]
 ```
 

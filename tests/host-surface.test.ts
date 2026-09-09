@@ -107,7 +107,7 @@ describeDb("platform-controlled profile columns", () => {
     const member = id();
     await insertMember(member, `m-${member}@stead.example`, "Member");
 
-    for (const column of ["id_verified", "phone_verified"]) {
+    for (const column of ["id_verified", "phone_verified", "is_ops"]) {
       const failure = await rawAsMember(member, (tx) =>
         tx.unsafe(`UPDATE public.profiles SET ${column} = true WHERE id = '${member}'`),
       ).then(

@@ -64,6 +64,6 @@ After Slices 2, 3, and 6: walk the money paths yourself in Stripe's test dashboa
 
 This repo is built from a remote agent environment, so §3's `stripe listen` step doesn't apply — there is no localhost to forward webhooks to. Instead:
 
-* Deploy the app (Vercel or any Node host) and create the webhook endpoint via the Stripe API pointing at `https://<deployment>/api/stripe/webhook`, subscribed to the events BUILD_PROMPT §7 handles: `payment_intent.succeeded`, `charge.dispute.created`, `charge.dispute.closed`, `account.updated`. The route authenticates callers by verifying the Stripe signature, so it needs no session.
+* Deploy the app (Vercel or any Node host) and create the webhook endpoint via the Stripe API pointing at `https://<deployment>/api/stripe/webhook`, subscribed to the events BUILD_PROMPT §7 handles: `payment_intent.succeeded`, `charge.dispute.created`, `charge.dispute.closed`, `identity.verification_session.verified`, `identity.verification_session.requires_input`, `account.updated`. The route authenticates callers by verifying the Stripe signature, so it needs no session.
 * Store the endpoint's signing secret as `STRIPE_WEBHOOK_SECRET` in the host's environment and in local `.env`.
 * Secrets enter the sandbox via the environment's variable settings, never via chat, and never into git.
