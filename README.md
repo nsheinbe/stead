@@ -4,7 +4,7 @@ A community-owned home rental marketplace. Hosts list because they keep more —
 
 Apache-2.0. Copyright 2026 Stead contributors.
 
-Slices 1–4 are on this tree: guest booking, escrow lifecycle, the host surface, claims with evidence and independent arbitration, double-blind reviews, and the Trust Passport. Messaging and cancellations land later. Spec of record: `BUILD_PROMPT.md` (see the stack amendment at the top of it). Design truth: `/design` (do not edit).
+Slices 1–5 are on this tree: guest booking, escrow lifecycle, the host surface, claims with evidence and independent arbitration, double-blind reviews, the Trust Passport, the marketing landing with a live fee slider, explore filters, and branded transactional email. Messaging and cancellations land later. Spec of record: `BUILD_PROMPT.md` (see the stack amendment at the top of it). Design truth: `/design` (do not edit). Slice status: `PROGRESS.md`.
 
 ## Stack
 
@@ -48,7 +48,8 @@ State transitions are closed to `app_user` entirely. It has no `UPDATE` grant on
 
 | Path | Screen |
 | --- | --- |
-| `/explore` | Member homes |
+| `/` | Landing — nine sections from `/design`, live fee slider (integer cents, 30-night floor) |
+| `/explore` | Member homes, filterable by city, type, guests, nightly rate, instant book |
 | `/listing/:id` | Listing detail + fee arithmetic |
 | `/book/:listingId` | Book · 3 steps (dates, deposit explainer, pay) |
 | `/trips` · `/trips/:bookingId` | Guest trips; host files a claim here during the window |
@@ -58,7 +59,7 @@ State transitions are closed to `app_user` entirely. It has no `UPDATE` grant on
 | `/host/claims/:id` | Claim detail, evidence, arbiter resolution |
 | `/login` | Magic-link email. Google OAuth is deferred. |
 
-`/` redirects to `/explore`. The marketing landing is Slice 5.
+The landing fee slider uses `quoteStay` for Stead's column so it cannot disagree with checkout. Nights start at 30. Compare-against-a-typical-platform math is display-only and never snaps onto a booking.
 
 ## API
 
@@ -66,7 +67,7 @@ State transitions are closed to `app_user` entirely. It has no `UPDATE` grant on
 | --- | --- | --- |
 | `GET` | `/api/health` | public — liveness; no database |
 | `GET` | `/api/config` | public — fee policy |
-| `GET` | `/api/listings` | public — active listings |
+| `GET` | `/api/listings` | public — active listings; `q`, `city`, `type`, `guests`, `maxRate` (cents), `instant=1` |
 | `GET` | `/api/listings/:id` | public if active; the host also sees their own draft/paused |
 | `GET` | `/api/me` | current session, or `{ user: null }` |
 | `GET` | `/api/trips` · `/api/trips/:id` | signed-in guest; `/:id` also the listing host |

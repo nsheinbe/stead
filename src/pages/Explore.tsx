@@ -1,15 +1,29 @@
 import { useQuery } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
+import { ExploreFilters, filtersFromSearch } from "../components/ExploreFilters";
 import { ListingCard } from "../components/ListingCard";
 import { SearchIcon } from "../components/Icons";
 import { Shell } from "../components/Shell";
 import { StatusBanner } from "../components/StatusBanner";
 import { api } from "../lib/api";
+import { listingFiltersKey } from "../lib/filters";
 
 export function ExplorePage() {
-  const listings = useQuery({
+  const [searchParams] = useSearchParams();
+  const filters = filtersFromSearch(searchParams);
+
+  const catalog = useQuery({
     queryKey: ["listings", "active"],
     queryFn: () => api.listings(),
   });
+
+  const listings = useQuery({
+    queryKey: ["listings", "active", listingFiltersKey(filters)],
+    queryFn: () => api.listings(filters),
+  });
+
+  const count = listings.data?.length;
+  const emptyFiltered = Boolean(listings.data && listings.data.length === 0 && listingFiltersKey(filters));
 
   return (
     <Shell>
@@ -18,21 +32,18 @@ export function ExplorePage() {
           <SearchIcon className="h-[19px] w-[19px] text-spruce" />
           <div className="flex flex-col">
             <span className="text-[15.5px] font-bold">Where to?</span>
-            <span className="text-xs text-ink/55">Member homes · any week</span>
+            <span className="text-xs text-ink/55">Member homes · 30 nights or more</span>
           </div>
         </div>
+
+        <ExploreFilters listings={catalog.data ?? []} filters={filters} />
+
         <div className="flex items-center justify-between">
           <span className="text-[13px] font-semibold text-ink/55">
-            {listings.data
-              ? `${listings.data.length} member ${listings.data.length === 1 ? "home" : "homes"}`
+            {typeof count === "number"
+              ? `${count} member ${count === 1 ? "home" : "homes"}`
               : "Member homes"}
           </span>
-          <div className="flex rounded-full bg-linen p-[3px]">
-            <span className="rounded-full bg-paper px-4 py-[7px] text-[12.5px] font-bold shadow-[0_1px_3px_rgba(23,32,27,.12)]">
-              List
-            </span>
-            <span className="px-4 py-[7px] text-[12.5px] font-semibold text-ink/55">Map</span>
-          </div>
         </div>
 
         {listings.isLoading ? (
@@ -45,10 +56,16 @@ export function ExplorePage() {
             detail={listings.error instanceof Error ? listings.error.message : "Try again shortly."}
           />
         ) : null}
-        {listings.data && listings.data.length === 0 ? (
+        {listings.data && listings.data.length === 0 && !emptyFiltered ? (
           <StatusBanner
             title="No homes yet"
             detail="Run npm run db:seed against the database — one host, six listings across timezones."
+          />
+        ) : null}
+        {emptyFiltered ? (
+          <StatusBanner
+            title="Nothing matches those filters"
+            detail="Clear them, or widen the city, type, or nightly rate."
           />
         ) : null}
 

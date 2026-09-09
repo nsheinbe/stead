@@ -9,7 +9,7 @@ export function StatusBanner({
 }) {
   return (
     <div
-      role="status"
+      role={tone === "claim" ? "alert" : "status"}
       className={`rounded-card px-4 py-4 ${
         tone === "claim" ? "bg-claim/10 text-claim" : "bg-linen text-ink"
       }`}
