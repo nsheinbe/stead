@@ -131,5 +131,6 @@ describe("sensitive routes vs the webhook", () => {
     expect(RATE_LIMITS.messages.max).toBeGreaterThan(0);
     expect(RATE_LIMITS.claims.max).toBeGreaterThan(0);
     expect(RATE_LIMITS.identity.max).toBeGreaterThan(0);
+    expect(RATE_LIMITS.connect.max).toBeGreaterThan(0);
   });
 });

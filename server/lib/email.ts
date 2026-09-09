@@ -8,9 +8,8 @@
  * deposit correctly has done the important part; a bounced notification must
  * not roll that back or fail the job.
  */
+import { EmailFromError, authEmailFromForSend } from "./emailFrom";
 import { brandedEmailHtml } from "./emailLayout";
-
-const EMAIL_FROM = process.env.AUTH_EMAIL_FROM ?? "Stead <onboarding@resend.dev>";
 
 export interface Message {
   to: string;
@@ -26,12 +25,21 @@ export async function sendEmail(message: Message): Promise<boolean> {
     return true;
   }
 
+  let from: string;
+  try {
+    from = authEmailFromForSend();
+  } catch (err) {
+    const message = err instanceof EmailFromError ? err.message : "AUTH_EMAIL_FROM is invalid";
+    console.error(`[email] refusing to send — ${message}`);
+    return false;
+  }
+
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from: EMAIL_FROM,
+        from,
         to: message.to,
         subject: message.subject,
         text: message.text,

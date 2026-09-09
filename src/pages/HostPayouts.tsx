@@ -1,4 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { HostSubnav } from "../components/HostSubnav";
 import { Shell } from "../components/Shell";
 import { StatusBanner } from "../components/StatusBanner";
@@ -16,11 +17,20 @@ const PAYOUT_LABEL: Record<HostPayout["state"], string> = {
 
 export function HostPayoutsPage() {
   const { user, loading } = useAuth();
+  const [params] = useSearchParams();
+  const returning = params.get("done") === "1";
+  const refresh = params.get("refresh") === "1";
 
   const status = useQuery({
     queryKey: ["connect-status", user?.id],
     enabled: Boolean(user),
     queryFn: () => api.connectStatus(),
+    refetchInterval: (query) => {
+      if (!returning) return false;
+      const data = query.state.data;
+      if (data?.chargesEnabled && data?.payoutsEnabled) return false;
+      return 3_000;
+    },
   });
 
   const payouts = useQuery({
@@ -38,6 +48,7 @@ export function HostPayoutsPage() {
   });
 
   const ready = status.data?.chargesEnabled && status.data?.payoutsEnabled;
+  const nextPayout = payouts.data?.find((row) => row.state === "scheduled") ?? payouts.data?.[0];
 
   return (
     <Shell>
@@ -51,6 +62,23 @@ export function HostPayoutsPage() {
           <StatusBanner title="Sign in to set up payouts" />
         ) : (
           <>
+            {refresh && !ready && (
+              <StatusBanner
+                title="That Stripe link expired"
+                detail="Continue to Stripe to pick up where you left off. Nothing was charged."
+              />
+            )}
+            {returning && status.data && !ready && (
+              <StatusBanner
+                title={
+                  status.data.detailsSubmitted
+                    ? "Stripe has your details"
+                    : "Finishing payout setup"
+                }
+                detail="Payouts go live once charges and payouts are enabled — usually a few minutes. You can leave this page."
+              />
+            )}
+
             {status.isLoading && <StatusBanner title="Checking your payout account…" />}
             {status.isError && (
               <StatusBanner
@@ -82,17 +110,26 @@ export function HostPayoutsPage() {
                   <StatusBanner
                     tone="claim"
                     title="Could not start onboarding"
-                    detail="Stripe did not hand back a link. Try again shortly."
+                    detail="Stripe did not hand back a link. If this keeps happening, Connect is not enabled on the platform yet."
                   />
                 )}
               </div>
             )}
 
             {ready && (
-              <StatusBanner
-                title="Your payout account is live"
-                detail="Stays settle to your account when the guest pays."
-              />
+              <div className="flex flex-col gap-1.5 rounded-card bg-spruce px-[18px] py-4 text-paper">
+                <span className="text-[11px] font-bold tracking-[0.16em] text-paper/60">
+                  {nextPayout ? "NEXT PAYOUT" : "PAYOUTS LIVE"}
+                </span>
+                <span className="money font-display text-[40px] font-bold leading-none">
+                  {nextPayout ? formatUsd(nextPayout.amountCents) : "Ready"}
+                </span>
+                <p className="m-0 mt-1 text-xs text-paper/75">
+                  {nextPayout
+                    ? "Stays settle to your account when the guest pays. Stead keeps only the 2% network fee."
+                    : "Your payout account is live. Stays settle here when the guest pays."}
+                </p>
+              </div>
             )}
 
             <h2 className="m-0 mt-2 font-display text-lg font-semibold">Settled stays</h2>

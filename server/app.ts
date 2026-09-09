@@ -26,9 +26,12 @@ import { opsRoutes } from "./routes/ops";
 import { passportRoutes } from "./routes/passport";
 import { reviewsRoutes } from "./routes/reviews";
 import { stripeRoutes } from "./routes/stripe";
+import { logEmailFromMisconfig } from "./lib/emailFrom";
 import { getConfigMap, toPublicConfig } from "./queries/listings";
 import { isCurrentUserOps } from "./queries/trust";
 import type { SessionResponse } from "../src/lib/types";
+
+logEmailFromMisconfig();
 
 export const app = new Hono<AppEnv>().basePath("/api");
 
@@ -57,6 +60,8 @@ app.route("/passport", passportRoutes);
 // Stripe and the scheduler authenticate themselves; they are not members.
 app.route("/stripe", stripeRoutes);
 app.route("/cron", cronRoutes);
+app.use("/connect", requireUser);
+app.use("/connect/*", requireUser);
 app.route("/connect", connectRoutes);
 app.route("/host", hostRoutes);
 app.route("/identity", identityRoutes);

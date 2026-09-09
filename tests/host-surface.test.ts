@@ -139,6 +139,51 @@ describeDb("platform-controlled profile columns", () => {
     expect(row?.is_host).toBe(true);
   });
 
+  it("records payout readiness from account.updated and refuses a member writing it", async () => {
+    const member = id();
+    await insertMember(member, `m-${member}@stead.example`, "Member");
+    await rawAsMember(member, (tx) => tx`
+      SELECT app.attach_connect_account('acct_ready_host') AS attached
+    `);
+
+    const recorded = (await rawAsMember(
+      null,
+      (tx) =>
+        tx`SELECT app.record_connect_readiness('acct_ready_host', true, true, true) AS recorded`,
+    )) as { recorded: boolean }[];
+    expect(recorded[0]?.recorded).toBe(true);
+
+    const [row] = (await asOwner((db) =>
+      db.execute(sql`
+        SELECT stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted
+          FROM public.profiles WHERE id = ${member}::uuid
+      `),
+    )) as unknown as {
+      stripe_charges_enabled: boolean;
+      stripe_payouts_enabled: boolean;
+      stripe_details_submitted: boolean;
+    }[];
+    expect(row?.stripe_charges_enabled).toBe(true);
+    expect(row?.stripe_payouts_enabled).toBe(true);
+    expect(row?.stripe_details_submitted).toBe(true);
+
+    const unknown = (await rawAsMember(
+      null,
+      (tx) => tx`SELECT app.record_connect_readiness('acct_nobody', true, true, true) AS recorded`,
+    )) as { recorded: boolean }[];
+    expect(unknown[0]?.recorded).toBe(false);
+
+    const selfWrite = await rawAsMember(
+      member,
+      (tx) =>
+        tx`UPDATE public.profiles SET stripe_payouts_enabled = false WHERE id = ${member}::uuid`,
+    ).then(
+      () => "allowed",
+      () => "refused",
+    );
+    expect(selfWrite).toBe("refused");
+  });
+
   it("rejects a value that is not a connected account id", async () => {
     const member = id();
     await insertMember(member, `m-${member}@stead.example`, "Member");

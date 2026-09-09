@@ -4,7 +4,8 @@
  * uses, then serve. Prefers the built SPA (`npm start`) so CI is production-
  * shaped; falls back to Vite when dist/ is missing.
  *
- * Stripe keys are cleared so create-booking takes the mock-payment path.
+ * Stripe keys are cleared so create-booking takes the mock-payment path,
+ * unless STRIPE_E2E=1 (the gated live suite in playwright.stripe.config.ts).
  */
 import { existsSync } from "node:fs";
 import { bootstrapRoles } from "./bootstrap-roles";
@@ -30,9 +31,11 @@ process.env.AUTH_SECRET ??= E2E_AUTH_SECRET;
 process.env.CRON_SECRET ??= E2E_CRON_SECRET;
 process.env.PORT = port;
 process.env.APP_URL ??= `http://127.0.0.1:${port}`;
-delete process.env.STRIPE_SECRET_KEY;
-delete process.env.VITE_STRIPE_PUBLISHABLE_KEY;
-delete process.env.STRIPE_WEBHOOK_SECRET;
+if (process.env.STRIPE_E2E !== "1") {
+  delete process.env.STRIPE_SECRET_KEY;
+  delete process.env.VITE_STRIPE_PUBLISHABLE_KEY;
+  delete process.env.STRIPE_WEBHOOK_SECRET;
+}
 
 await runMigrations(owner);
 await bootstrapRoles(owner, { appUser: TEST_APP_USER_PASSWORD, authUser: TEST_AUTH_USER_PASSWORD });

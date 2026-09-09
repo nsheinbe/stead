@@ -344,6 +344,16 @@ describeDb("regulatory columns stay behind existing policies", () => {
     );
     expect(ownerWrite).toBe("refused");
 
+    const readinessWrite = await rawAsMember(
+      hostId,
+      (tx) =>
+        tx`UPDATE public.profiles SET stripe_charges_enabled = true, stripe_payouts_enabled = true WHERE id = ${hostId}::uuid RETURNING id`,
+    ).then(
+      () => "allowed",
+      () => "refused",
+    );
+    expect(readinessWrite).toBe("refused");
+
     const hostWrote = await rawAsMember(
       hostId,
       (tx) =>

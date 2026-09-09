@@ -2,7 +2,7 @@
  * Idempotent Stripe webhook, per BUILD_PROMPT §7. Insert the event id first and
  * skip if it is already there. payment_intent.succeeded confirms the booking;
  * charge.dispute.created/closed freeze and unfreeze; Identity verified raises
- * verification_tier to 2. account.updated is acknowledged.
+ * verification_tier to 2. account.updated writes host payout readiness.
  *
  * Stripe is not a member, so this runs with no app.user_id. The operations it
  * performs are SECURITY DEFINER functions — app_user cannot read stripe_events
@@ -15,6 +15,7 @@ import { getStripe, stripeConfigured } from "../lib/stripe";
 import { tenantQuery, type AppEnv } from "../lib/http";
 import { claimStripeEvent, confirmBookingForPaymentIntent } from "../queries/bookings";
 import { findExpiredBookingForPaymentIntent, refundExpiredBooking } from "../queries/escrow";
+import { recordConnectReadiness } from "../queries/hostProfile";
 import { recordPayout } from "../queries/payouts";
 import { markIdVerified, recordDisputeClosed, recordDisputeOpened } from "../queries/trust";
 
@@ -46,6 +47,9 @@ stripeRoutes.post("/webhook", async (c) => {
     payment_intent?: string | { id?: string } | null;
     amount?: number;
     status?: string;
+    charges_enabled?: boolean;
+    payouts_enabled?: boolean;
+    details_submitted?: boolean;
   };
   const objectId = object.id;
 
@@ -61,6 +65,9 @@ stripeRoutes.post("/webhook", async (c) => {
             payment_intent: object.payment_intent,
             amount: object.amount,
             status: object.status,
+            charges_enabled: object.charges_enabled,
+            payouts_enabled: object.payouts_enabled,
+            details_submitted: object.details_submitted,
           },
         },
       },
@@ -73,6 +80,7 @@ stripeRoutes.post("/webhook", async (c) => {
         recordDisputeOpened: (input) => recordDisputeOpened(tx, input),
         recordDisputeClosed: (disputeId, status) => recordDisputeClosed(tx, disputeId, status),
         markIdVerified: (userId, sessionId) => markIdVerified(tx, userId, sessionId),
+        recordConnectReadiness: (input) => recordConnectReadiness(tx, input),
       },
     ),
   );
@@ -126,7 +134,8 @@ stripeRoutes.post("/webhook", async (c) => {
   console.log(
     `stripe-webhook: ${event.type} (${event.id}) skipped=${result.skipped} ` +
       `confirmed=${result.confirmed} refunded=${refunded} payout=${payoutRecorded} ` +
-      `dispute=${result.dispute} identity=${result.identityVerified}`,
+      `dispute=${result.dispute} identity=${result.identityVerified} ` +
+      `connect=${result.connectReadiness}`,
   );
   return c.json({
     received: true,
@@ -136,5 +145,6 @@ stripeRoutes.post("/webhook", async (c) => {
     payoutRecorded,
     dispute: result.dispute,
     identityVerified: result.identityVerified,
+    connectReadiness: result.connectReadiness,
   });
 });

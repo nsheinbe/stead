@@ -14,7 +14,7 @@ Vite + React 18 + TypeScript (strict) · Tailwind · React Router · TanStack Qu
 
 Money is integer cents. Pricing constants live in `app_config` (`network_fee_bps = 200`, and the rest of BUILD_PROMPT §3) and are snapshotted onto bookings. Stays are 30 nights or more — `nightsBetween` / `quoteStay` / create-booking reject anything shorter with a 400, and Postgres enforces the same floor. Availability is the `btree_gist` exclusion constraint — never check-then-insert.
 
-Guest stay charges are destination charges on Stripe Connect: the host's connected account is the merchant of record (`transfer_data.destination` + `on_behalf_of`), and Stead takes only the 2% network fee as `application_fee_amount`. A host without `profiles.stripe_connect_account_id` cannot take a live payment — the route fails closed and never creates a platform-MOR PaymentIntent. Seed a test `acct_` via `STRIPE_TEST_CONNECT_ACCOUNT_ID`; do not put secret keys in git. Express onboarding UI is still blocked on live Connect settings.
+Guest stay charges are destination charges on Stripe Connect: the host's connected account is the merchant of record (`transfer_data.destination` + `on_behalf_of`), and Stead takes only the 2% network fee as `application_fee_amount`. A host without `profiles.stripe_connect_account_id` cannot take a live payment — the route fails closed and never creates a platform-MOR PaymentIntent. Hosts attach an Express `acct_` from `/host/payouts` (Account Links; return `/host/payouts?done=1`, refresh `?refresh=1`). `account.updated` writes charges/payouts readiness. Seed a test `acct_` via `STRIPE_TEST_CONNECT_ACCOUNT_ID`; do not put secret keys in git. Creating the first Express account requires the Stripe Dashboard platform profile — that click-path is outside the repo (PREFLIGHT §3).
 
 ## Shape of the thing
 
@@ -88,6 +88,8 @@ The landing fee slider uses `quoteStay` for Stead's column so it cannot disagree
 | `GET` | `/api/passport/:userId/export` | public — canonical trust_stats signed Ed25519 |
 | `POST` | `/api/passport/verify` | public — check a signed export |
 | `GET`/`POST` | `/api/reviews/:bookingId` | stay parties — form / submit (unpublished until both or 14 days) |
+| `GET` | `/api/connect/status` | signed-in host — Express account + payout readiness |
+| `POST` | `/api/connect/onboard` | signed-in host — create/reuse Express account, Account Link. Rate-limited. |
 | `POST` | `/api/identity/session` | signed-in — Stripe Identity VerificationSession. Rate-limited. |
 | `GET` | `/api/ops` | `is_ops` — disputes, heartbeats, frozen payouts |
 | `GET`/`POST` | `/api/cron/expire-pending` | scheduler, `Authorization: Bearer $CRON_SECRET` |
@@ -96,7 +98,7 @@ The landing fee slider uses `quoteStay` for Stead's column so it cannot disagree
 | `GET`/`POST` | `/api/cron/watchdog` | stale/errored heartbeats → `OPS_ALERT_EMAIL` |
 | `*` | `/api/auth/*` | Auth.js — csrf, signin, callback, session, signout |
 
-Write quotas are a process-local sliding window (`server/lib/rateLimit.ts`): create-booking, cancel, send-message, file/respond/resolve-claim, Identity session. The Stripe webhook is **not** limited — it is already idempotent via `stripe_events`, and a 429 would drop a retry. Set `RATE_LIMIT_DISABLED=1` only on a laptop.
+Write quotas are a process-local sliding window (`server/lib/rateLimit.ts`): create-booking, cancel, send-message, file/respond/resolve-claim, Identity session, Connect onboard. The Stripe webhook is **not** limited — it is already idempotent via `stripe_events`, and a 429 would drop a retry. Set `RATE_LIMIT_DISABLED=1` only on a laptop.
 
 ## Local development
 
@@ -120,10 +122,47 @@ Shell environment beats `.env`, so if you have exported `DATABASE_URL` in the te
 
 Without `RESEND_API_KEY`, the magic link prints to the server console instead of being emailed — sign in locally by pasting it into the browser.
 
+### Sending mail (Resend)
+
+`onboarding@resend.dev` is refused. Gmail drops it; we fail closed rather than send and bounce.
+
+| Until you… | What breaks |
+| --- | --- |
+| Leave `RESEND_API_KEY` blank | Nothing — links print to the server log. Intended local-dev path. |
+| Set `RESEND_API_KEY` without `AUTH_EMAIL_FROM` | Magic links and transactional mail do **not** send. Logs: `AUTH_EMAIL_FROM is not set`. |
+| Set `AUTH_EMAIL_FROM` to `Stead <onboarding@resend.dev>` | Same refusal. Logs name the sandbox address. |
+| Verify a domain in Resend and set `AUTH_EMAIL_FROM` | Mail sends from that address. |
+
+Exact env var: **`AUTH_EMAIL_FROM`**. Shape: `Stead <noreply@YOUR_VERIFIED_DOMAIN>` — a domain you own and verified, not a placeholder we invented.
+
+**Nick — Resend domain (blocked until done):**
+
+1. [resend.com/domains](https://resend.com/domains) → **Add domain**. Prefer a subdomain (`mail.YOUR_DOMAIN` or `noreply.YOUR_DOMAIN`) so transactional reputation stays off the root.
+2. Add the DNS records Resend shows (typically MX/TXT for DKIM, SPF; optional DMARC). Wait until the domain status is **Verified**.
+3. Vercel → project → **Settings → Environment Variables** → Production (and Preview if you send from previews):
+   - `RESEND_API_KEY` = the API key
+   - `AUTH_EMAIL_FROM` = `Stead <noreply@YOUR_VERIFIED_DOMAIN>`
+4. Redeploy. Until those two are set and the domain is verified, members who request a magic link see a send error and nothing lands in Gmail.
+
+### Host payouts (Connect Express)
+
+The in-app path is live: `/host/payouts` → **Continue to Stripe** → Account Link → return `?done=1` or resume `?refresh=1`. Readiness comes from a live retrieve plus `account.updated`.
+
+**Nick — Stripe Dashboard (blocked until done).** The API cannot create the first Express account until the platform profile exists:
+
+1. Open the Stripe Dashboard in **test mode**: [dashboard.stripe.com/test](https://dashboard.stripe.com/test)
+2. Complete the **platform profile**: [dashboard.stripe.com/connect/registration](https://dashboard.stripe.com/connect/registration) — business name, support URL/email, icon. Account Links fail until this is saved.
+3. **Settings → Connect** ([dashboard.stripe.com/settings/connect](https://dashboard.stripe.com/settings/connect) and [dashboard.stripe.com/account/applications/settings](https://dashboard.stripe.com/account/applications/settings)) — Express connected accounts, destination charges, onboarding branding (name / color / icon).
+4. Confirm the webhook at `/api/stripe/webhook` includes `account.updated`.
+5. Optional: create one test Express account and put its `acct_…` in `STRIPE_TEST_CONNECT_ACCOUNT_ID` for seed + `npm run test:e2e:stripe`.
+
+Until those dashboard steps land, `/host/payouts` shows the Continue button and Stripe returns 503 ("Connect is not enabled on this platform yet"). Stay charges still fail closed without a host `acct_`.
+
 ```bash
 npm run typecheck
 npm test                  # pricing + webhook unit tests always; DB tests need DATABASE_URL_OWNER
-npm run test:e2e          # Playwright; needs DATABASE_URL_OWNER (see docs/e2e.md)
+npm run test:e2e          # Playwright mock path; needs DATABASE_URL_OWNER (docs/e2e.md)
+# npm run test:e2e:stripe # opt-in; STRIPE_E2E=1 + your sk_test_ keys — never CI
 npm run build
 ```
 
@@ -178,6 +217,7 @@ Required environment variables:
 | `DATABASE_URL_OWNER` | the owner on the **direct** host; migrations only |
 | `CRON_SECRET` | so only the scheduler can run `expire-pending` |
 | `RESEND_API_KEY` | magic-link delivery (without it the link only prints to the log) |
+| `AUTH_EMAIL_FROM` | required once `RESEND_API_KEY` is set; verified-domain from. `onboarding@resend.dev` is refused |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `VITE_STRIPE_PUBLISHABLE_KEY` | payments; the booking flow falls back to a mock path when unset |
 | `STRIPE_TEST_CONNECT_ACCOUNT_ID` | optional test `acct_…` stamped on the seed host; live charges fail closed without a host Connect id |
 | `PASSPORT_SIGNING_KEY` | Ed25519 PKCS8 PEM, base64 — `openssl genpkey -algorithm ed25519 \| base64 -w0` |

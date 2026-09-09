@@ -1,6 +1,12 @@
 import { defineConfig, devices } from "@playwright/test";
 import { E2E_AUTH_SECRET, E2E_CRON_SECRET } from "./tests/helpers/session";
 
+// The default suite is mock-Stripe. A leftover STRIPE_E2E=1 in the shell
+// must not opt the live spec in here — that belongs to playwright.stripe.config.ts.
+if (process.env.STEAD_E2E_SUITE !== "stripe") {
+  delete process.env.STRIPE_E2E;
+}
+
 process.env.AUTH_SECRET ??= E2E_AUTH_SECRET;
 process.env.CRON_SECRET ??= E2E_CRON_SECRET;
 
@@ -47,6 +53,7 @@ export default defineConfig({
           CRON_SECRET: process.env.CRON_SECRET ?? E2E_CRON_SECRET,
           PORT: port,
           APP_URL: baseURL,
+          STRIPE_E2E: "",
         },
       }
     : undefined,
