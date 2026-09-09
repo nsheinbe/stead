@@ -9,6 +9,7 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { sessionUser, tenantQuery, type AppEnv } from "../lib/http";
+import { RATE_LIMITS, rateLimit } from "../lib/rateLimit";
 import {
   claimFiledEmail,
   claimAcceptedEmail,
@@ -132,7 +133,7 @@ claimsRoutes.get("/", async (c) => {
   return c.json(await tenantQuery(c, (tx) => listClaimsForViewer(tx, viewer.id)));
 });
 
-claimsRoutes.post("/", async (c) => {
+claimsRoutes.post("/", rateLimit(RATE_LIMITS.claims), async (c) => {
   const host = sessionUser(c);
   const input = await parse(c, fileSchema);
 
@@ -173,7 +174,7 @@ claimsRoutes.get("/:id", async (c) => {
   return c.json(claim);
 });
 
-claimsRoutes.post("/:id/respond", async (c) => {
+claimsRoutes.post("/:id/respond", rateLimit(RATE_LIMITS.claims), async (c) => {
   const guest = sessionUser(c);
   const claimId = c.req.param("id");
   const { accept } = await parse(c, respondSchema);
@@ -212,7 +213,7 @@ claimsRoutes.post("/:id/respond", async (c) => {
   return c.json(claim);
 });
 
-claimsRoutes.post("/:id/resolve", async (c) => {
+claimsRoutes.post("/:id/resolve", rateLimit(RATE_LIMITS.claims), async (c) => {
   const arbiter = sessionUser(c);
   const claimId = c.req.param("id");
   const input = await parse(c, resolveSchema);
