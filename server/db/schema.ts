@@ -389,6 +389,38 @@ export const reviewsRelations = relations(reviews, ({ one }) => ({
   subject: one(profiles, { fields: [reviews.subjectId], references: [profiles.id], relationName: "reviewSubject" }),
 }));
 
+export const messages = pgTable(
+  "messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    listingId: uuid("listing_id")
+      .notNull()
+      .references(() => listings.id, { onDelete: "cascade" }),
+    bookingId: uuid("booking_id").references(() => bookings.id, { onDelete: "set null" }),
+    senderId: uuid("sender_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "restrict" }),
+    recipientId: uuid("recipient_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "restrict" }),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull().defaultNow(),
+    readAt: timestamp("read_at", { mode: "date", withTimezone: true }),
+  },
+  (table) => [index("messages_thread_idx").on(table.listingId, table.createdAt)],
+);
+
+export const messagesRelations = relations(messages, ({ one }) => ({
+  listing: one(listings, { fields: [messages.listingId], references: [listings.id] }),
+  booking: one(bookings, { fields: [messages.bookingId], references: [bookings.id] }),
+  sender: one(profiles, { fields: [messages.senderId], references: [profiles.id], relationName: "messageSender" }),
+  recipient: one(profiles, {
+    fields: [messages.recipientId],
+    references: [profiles.id],
+    relationName: "messageRecipient",
+  }),
+}));
+
 export const stripeEvents = pgTable("stripe_events", {
   id: text("id").primaryKey(),
   type: text("type").notNull(),

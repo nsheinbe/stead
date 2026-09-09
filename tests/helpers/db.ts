@@ -140,19 +140,21 @@ export async function insertListing(opts: {
   maxGuests?: number;
   instantBook?: boolean;
   status?: "draft" | "active" | "paused";
+  cancellationPolicy?: "flexible" | "moderate" | "strict";
 }): Promise<void> {
   await asOwner(async (db) => {
     await db.execute(sql`
       INSERT INTO public.listings (
         id, host_id, title, description, type, city, country, timezone,
-        nightly_rate_cents, deposit_cents, max_guests, instant_book, status
+        nightly_rate_cents, deposit_cents, max_guests, instant_book, status, cancellation_policy
       ) VALUES (
         ${opts.id}::uuid, ${opts.hostId}::uuid, ${opts.title ?? "Test cottage"}, 'Test listing',
         ${opts.type ?? "entire_home"}::public.listing_type, ${opts.city ?? "Hudson"}, 'US',
         ${opts.timezone ?? "America/New_York"},
         ${opts.nightlyRateCents ?? 20000}, ${opts.depositCents ?? 30000}, ${opts.maxGuests ?? 4},
         ${opts.instantBook ?? false},
-        ${opts.status ?? "active"}::public.listing_status
+        ${opts.status ?? "active"}::public.listing_status,
+        ${opts.cancellationPolicy ?? "moderate"}::public.cancellation_policy
       )
       ON CONFLICT (id) DO NOTHING
     `);
@@ -168,6 +170,7 @@ type BookingRow = {
   status?: string;
   createdAt?: string;
   paymentIntentId?: string;
+  cancellationPolicy?: "flexible" | "moderate" | "strict";
 };
 
 /**
@@ -189,7 +192,8 @@ export async function insertBooking(row: BookingRow): Promise<string> {
       ) VALUES (
         COALESCE(${row.id ?? null}::uuid, gen_random_uuid()),
         ${row.listingId}::uuid, ${row.guestId}::uuid, ${row.checkIn}::date, ${row.checkOut}::date,
-        2, ${nights}, 20000, ${subtotal}, ${fee}, ${subtotal + fee}, 30000, 'moderate',
+        2, ${nights}, 20000, ${subtotal}, ${fee}, ${subtotal + fee}, 30000,
+        ${row.cancellationPolicy ?? "moderate"}::public.cancellation_policy,
         ${row.status ?? "pending_payment"}::public.booking_status,
         COALESCE(${row.createdAt ?? null}::timestamptz, now()),
         ${row.paymentIntentId ?? null}

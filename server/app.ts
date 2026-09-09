@@ -20,6 +20,7 @@ import { connectRoutes } from "./routes/connect";
 import { cronRoutes } from "./routes/cron";
 import { hostRoutes } from "./routes/host";
 import { listingsRoutes } from "./routes/listings";
+import { messagesRoutes } from "./routes/messages";
 import { passportRoutes } from "./routes/passport";
 import { reviewsRoutes } from "./routes/reviews";
 import { stripeRoutes } from "./routes/stripe";
@@ -68,6 +69,10 @@ app.route("/claims", claimsRoutes);
 app.use("/reviews", requireUser);
 app.use("/reviews/*", requireUser);
 app.route("/reviews", reviewsRoutes);
+
+app.use("/messages", requireUser);
+app.use("/messages/*", requireUser);
+app.route("/messages", messagesRoutes);
 
 app.notFound((c) => c.json({ error: "No such endpoint" }, 404));
 

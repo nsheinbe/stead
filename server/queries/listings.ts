@@ -135,4 +135,4 @@ export function toPublicConfig(map: Record<string, unknown>): PublicConfig {
   };
 }
 
-export { intFromConfig };
+export { intFromConfig, stringFromConfig };

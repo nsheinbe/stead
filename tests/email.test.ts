@@ -5,6 +5,10 @@ import {
   claimFiledEmail,
   claimResolvedEmail,
   depositReleasedEmail,
+  guestCanceledConfirmEmail,
+  guestCanceledEmail,
+  hostCanceledEmail,
+  newMessageEmail,
   reviewOpenEmail,
   signInEmail,
 } from "../server/lib/email";
@@ -23,6 +27,20 @@ const TEMPLATES = [
     outcome: "split",
   }),
   reviewOpenEmail({ listingTitle: "Gable End Cottage" }),
+  newMessageEmail({
+    senderName: "Sam",
+    listingTitle: "Gable End Cottage",
+    preview: "Is August still free?",
+    threadUrl: "https://stead.example/messages/listing/guest",
+  }),
+  guestCanceledEmail({ listingTitle: "Gable End Cottage", guestName: "Sam", refundCents: 612_000 }),
+  guestCanceledConfirmEmail({ listingTitle: "Gable End Cottage", refundCents: 612_000 }),
+  hostCanceledEmail({
+    listingTitle: "Gable End Cottage",
+    hostName: "Nora",
+    refundCents: 612_000,
+    forGuest: true,
+  }),
   signInEmail("https://stead.example/api/auth/callback?k=demo", "stead.example"),
 ];
 

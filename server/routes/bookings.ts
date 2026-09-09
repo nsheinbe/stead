@@ -23,9 +23,17 @@ import {
   getStripe,
   HostConnectError,
   intentIdempotencyKey,
+  refundStayCharge,
   resolveHostConnectAccount,
   stripeConfigured,
 } from "../lib/stripe";
+import {
+  guestCanceledConfirmEmail,
+  guestCanceledEmail,
+  hostCanceledEmail,
+  sendEmail,
+} from "../lib/email";
+import { canCancelStatus } from "../lib/cancellation";
 import { sessionUser, tenantQuery, type AppEnv } from "../lib/http";
 import {
   createBookingWithEscrow,
@@ -35,6 +43,7 @@ import {
   listTripsForGuest,
   overlapsBlackout,
 } from "../queries/bookings";
+import { CancelError, cancelBooking, getCancelableBooking, previewCancellation } from "../queries/cancellations";
 import { getConfigMap, intFromConfig } from "../queries/listings";
 import type { CreateBookingResponse } from "../../src/lib/types";
 
@@ -60,6 +69,116 @@ tripsRoutes.get("/:id", async (c) => {
     throw new HTTPException(404, { message: "Trip not found" });
   }
   return c.json(trip);
+});
+
+tripsRoutes.get("/:id/cancellation", async (c) => {
+  const viewer = sessionUser(c);
+  const preview = await tenantQuery(c, async (tx) => {
+    const booking = await getCancelableBooking(tx, c.req.param("id"));
+    if (!booking) return null;
+    if (viewer.id !== booking.guestId && viewer.id !== booking.hostId) return null;
+    return previewCancellation(tx, booking, viewer.id);
+  });
+  if (!preview) throw new HTTPException(404, { message: "Trip not found" });
+  return c.json(preview);
+});
+
+tripsRoutes.post("/:id/cancel", async (c) => {
+  const viewer = sessionUser(c);
+  const bookingId = c.req.param("id");
+
+  const loaded = await tenantQuery(c, async (tx) => {
+    const booking = await getCancelableBooking(tx, bookingId);
+    if (!booking) return null;
+    if (viewer.id !== booking.guestId && viewer.id !== booking.hostId) return null;
+    const preview = await previewCancellation(tx, booking, viewer.id);
+    return { booking, preview };
+  });
+  if (!loaded) throw new HTTPException(404, { message: "Trip not found" });
+  if (!loaded.preview.canCancel || !canCancelStatus(loaded.booking.status)) {
+    throw new HTTPException(409, { message: "This stay cannot be canceled" });
+  }
+
+  const asHost = viewer.id === loaded.booking.hostId;
+  const refundCents = loaded.preview.refundCents;
+  const reverseTransfer =
+    loaded.booking.status === "confirmed" && !loaded.preview.afterCheckIn && refundCents > 0;
+  const refundApplicationFee = loaded.preview.feeRefundCents > 0;
+
+  let stripeRefundId: string | null = null;
+  if (loaded.booking.status === "pending_payment") {
+    await cancelOrphanedIntents(
+      loaded.booking.stripePaymentIntentId ?? `pi_none_${bookingId}`,
+      loaded.booking.stripeSetupIntentId ?? `seti_none_${bookingId}`,
+      loaded.booking.hostConnectAccountId,
+    );
+  } else if (refundCents > 0 && loaded.booking.stripePaymentIntentId) {
+    try {
+      stripeRefundId = await refundStayCharge({
+        paymentIntentId: loaded.booking.stripePaymentIntentId,
+        amountCents: refundCents,
+        refundApplicationFee,
+        reverseTransfer,
+      });
+    } catch (err) {
+      console.error("[cancel-booking] Stripe refund failed", err);
+      throw new HTTPException(502, { message: "The refund could not be issued. Try again shortly." });
+    }
+  }
+
+  let result;
+  try {
+    result = await tenantQuery(c, (tx) =>
+      cancelBooking(tx, bookingId, refundCents, stripeRefundId, asHost),
+    );
+  } catch (err) {
+    if (err instanceof CancelError) {
+      throw new HTTPException(409, { message: err.message });
+    }
+    throw err;
+  }
+
+  if (asHost) {
+    const guestMail = hostCanceledEmail({
+      listingTitle: result.listingTitle,
+      hostName: result.hostName,
+      refundCents,
+      forGuest: true,
+    });
+    const hostMail = hostCanceledEmail({
+      listingTitle: result.listingTitle,
+      hostName: result.hostName,
+      refundCents,
+      forGuest: false,
+    });
+    void sendEmail({ to: result.guestEmail, ...guestMail });
+    void sendEmail({ to: result.hostEmail, ...hostMail });
+  } else {
+    void sendEmail({
+      to: result.guestEmail,
+      ...guestCanceledConfirmEmail({
+        listingTitle: result.listingTitle,
+        refundCents,
+      }),
+    });
+    void sendEmail({
+      to: result.hostEmail,
+      ...guestCanceledEmail({
+        listingTitle: result.listingTitle,
+        guestName: result.guestName,
+        refundCents,
+      }),
+    });
+  }
+
+  return c.json({
+    ok: true,
+    status: result.newStatus,
+    refundCents,
+    refundId: result.refundId,
+    depositReleased: result.depositReleased,
+    summary: loaded.preview.summary,
+  });
 });
 
 export const bookingsRoutes = new Hono<AppEnv>();

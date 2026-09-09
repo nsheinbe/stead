@@ -205,6 +205,30 @@ export async function chargeClaimOnHostAccount(input: {
   return intent.id;
 }
 
+/**
+ * Refund a destination-charge stay. `reverse_transfer` pulls the Connect
+ * transfer back when the host has not been paid out yet (pre-check-in).
+ * After check-in the refund is funded from the platform balance —
+ * TODO: flag negative-balance risk if the connected account cannot cover it.
+ */
+export async function refundStayCharge(input: {
+  paymentIntentId: string;
+  amountCents: number;
+  refundApplicationFee: boolean;
+  reverseTransfer: boolean;
+}): Promise<string | null> {
+  if (!stripeConfigured() || input.paymentIntentId.startsWith("pi_mock_")) return null;
+  if (!Number.isInteger(input.amountCents) || input.amountCents < 1) return null;
+  const refund = await getStripe().refunds.create({
+    payment_intent: input.paymentIntentId,
+    amount: input.amountCents,
+    refund_application_fee: input.refundApplicationFee,
+    reverse_transfer: input.reverseTransfer,
+    metadata: { kind: "cancel-booking" },
+  });
+  return refund.id;
+}
+
 export async function cancelOrphanedIntents(
   paymentIntentId: string,
   setupIntentId: string,
