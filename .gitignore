@@ -12,6 +12,10 @@ dist-api/
 coverage/
 *.tsbuildinfo
 .vercel/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
 
 # Editor/OS noise
 .DS_Store

@@ -16,8 +16,10 @@ import { profiles, users } from "../../server/db/schema";
 import { runMigrations } from "../../scripts/migrate";
 import { bootstrapRoles } from "../../scripts/bootstrap-roles";
 
-const APP_USER_PASSWORD = "app_user_test_password";
-const AUTH_USER_PASSWORD = "auth_user_test_password";
+export const TEST_APP_USER_PASSWORD = "app_user_test_password";
+export const TEST_AUTH_USER_PASSWORD = "auth_user_test_password";
+const APP_USER_PASSWORD = TEST_APP_USER_PASSWORD;
+const AUTH_USER_PASSWORD = TEST_AUTH_USER_PASSWORD;
 
 type Harness = {
   owner: Db;
@@ -39,7 +41,7 @@ export function id(): string {
   return crypto.randomUUID();
 }
 
-function urlAs(base: string, role: string, password: string): string {
+export function urlAs(base: string, role: string, password: string): string {
   const url = new URL(base);
   url.username = role;
   url.password = password;
