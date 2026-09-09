@@ -35,6 +35,7 @@ import {
 } from "../lib/email";
 import { canCancelStatus } from "../lib/cancellation";
 import { sessionUser, tenantQuery, type AppEnv } from "../lib/http";
+import { RATE_LIMITS, rateLimit } from "../lib/rateLimit";
 import {
   createBookingWithEscrow,
   DateConflictError,
@@ -83,7 +84,7 @@ tripsRoutes.get("/:id/cancellation", async (c) => {
   return c.json(preview);
 });
 
-tripsRoutes.post("/:id/cancel", async (c) => {
+tripsRoutes.post("/:id/cancel", rateLimit(RATE_LIMITS.cancel), async (c) => {
   const viewer = sessionUser(c);
   const bookingId = c.req.param("id");
 
@@ -183,7 +184,7 @@ tripsRoutes.post("/:id/cancel", async (c) => {
 
 export const bookingsRoutes = new Hono<AppEnv>();
 
-bookingsRoutes.post("/", async (c) => {
+bookingsRoutes.post("/", rateLimit(RATE_LIMITS.bookings), async (c) => {
   const guest = sessionUser(c);
 
   const parsed = createBookingSchema.safeParse(await c.req.json().catch(() => null));

@@ -7,6 +7,7 @@ import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { newMessageEmail, sendEmail } from "../lib/email";
 import { sessionUser, tenantQuery, type AppEnv } from "../lib/http";
+import { RATE_LIMITS, rateLimit } from "../lib/rateLimit";
 import {
   getThread,
   listThreadsFor,
@@ -65,7 +66,7 @@ messagesRoutes.post("/:listingId/:guestId/read", async (c) => {
   }
 });
 
-messagesRoutes.post("/", async (c) => {
+messagesRoutes.post("/", rateLimit(RATE_LIMITS.messages), async (c) => {
   const me = sessionUser(c);
   const parsed = sendSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) {

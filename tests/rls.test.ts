@@ -813,3 +813,157 @@ describeDb("ops reads are gated by is_ops", () => {
     expect(asOps.some((row) => row.id.startsWith("dp_rls_"))).toBe(true);
   });
 });
+
+/**
+ * Slice 8 — one fixture, every role. Guest A / guest B / host / arbiter / ops /
+ * anonymous against the same booking, deposit, claim, payout, and message.
+ * The earlier blocks prove individual policies; this one is the isolation matrix.
+ */
+describeDb("cross-role isolation matrix", () => {
+  afterAll(async () => {
+    await closeTestDb();
+  });
+
+  async function matrix() {
+    const hostId = id();
+    const guestA = id();
+    const guestB = id();
+    const arbiter = id();
+    const ops = id();
+    const listingId = id();
+    const bookingId = id();
+    const claimId = id();
+
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    await insertMember(guestA, `guest-a-${guestA}@stead.example`, "Guest A");
+    await insertMember(guestB, `guest-b-${guestB}@stead.example`, "Guest B");
+    await insertMember(arbiter, `arb-${arbiter}@stead.example`, "Arbiter");
+    await insertMember(ops, `ops-${ops}@stead.example`, "Ops");
+    await insertListing({ id: listingId, hostId, title: "Matrix cottage" });
+    await insertBooking({
+      id: bookingId,
+      listingId,
+      guestId: guestA,
+      checkIn: "2032-01-01",
+      checkOut: "2032-01-31",
+      status: "completed",
+      paymentIntentId: `pi_matrix_${bookingId.slice(0, 8)}`,
+    });
+
+    await asOwner(async (db) => {
+      await db.execute(sql`UPDATE public.profiles SET is_arbiter = true WHERE id = ${arbiter}::uuid`);
+      await db.execute(sql`UPDATE public.profiles SET is_ops = true WHERE id = ${ops}::uuid`);
+      await db.execute(sql`
+        INSERT INTO public.escrow_deposits (booking_id, amount_cents, state, method, window_closes_at)
+        VALUES (${bookingId}::uuid, 30000, 'claimed', 'card_on_file', now() + interval '1 day')
+      `);
+      await db.execute(sql`
+        INSERT INTO public.claims (id, booking_id, filed_by, amount_cents, description, state)
+        VALUES (${claimId}::uuid, ${bookingId}::uuid, ${hostId}::uuid, 10000, 'Matrix claim', 'open')
+      `);
+      await db.execute(sql`
+        INSERT INTO public.payouts (booking_id, host_id, amount_cents, state)
+        VALUES (${bookingId}::uuid, ${hostId}::uuid, 600000, 'paid')
+      `);
+      await db.execute(sql`
+        INSERT INTO public.refunds (booking_id, amount_cents, reason)
+        VALUES (${bookingId}::uuid, 1000, 'dispute')
+      `);
+      await db.execute(sql`
+        INSERT INTO public.escrow_audit (deposit_id, from_state, to_state, actor)
+        SELECT id, 'held', 'claimed', 'test:matrix' FROM public.escrow_deposits
+         WHERE booking_id = ${bookingId}::uuid
+      `);
+    });
+
+    const inserted = (await rawAsMember(
+      guestA,
+      (tx) => tx`
+        INSERT INTO public.messages (listing_id, sender_id, recipient_id, body)
+        VALUES (${listingId}::uuid, ${guestA}::uuid, ${hostId}::uuid, 'Matrix thread')
+        RETURNING id
+      `,
+    )) as { id: string }[];
+    const mid = inserted[0]?.id;
+    if (!mid) throw new Error("expected a matrix message");
+
+    return { hostId, guestA, guestB, arbiter, ops, listingId, bookingId, claimId, messageId: mid };
+  }
+
+  it("shows each row only to the roles that own it", async () => {
+    const { hostId, guestA, guestB, arbiter, ops, bookingId, claimId, messageId } = await matrix();
+
+    const count = async (viewer: string | null, sqlText: string) => {
+      const rows = (await rawAsMember(viewer, (tx) => tx.unsafe(sqlText))) as { id: string }[];
+      return rows.length;
+    };
+
+    const bookingSql = `SELECT id FROM public.bookings WHERE id = '${bookingId}'`;
+    expect(await count(guestA, bookingSql)).toBe(1);
+    expect(await count(hostId, bookingSql)).toBe(1);
+    expect(await count(guestB, bookingSql)).toBe(0);
+    expect(await count(arbiter, bookingSql)).toBe(0);
+    expect(await count(ops, bookingSql)).toBe(0);
+    expect(await count(null, bookingSql)).toBe(0);
+
+    const escrowSql = `SELECT id FROM public.escrow_deposits WHERE booking_id = '${bookingId}'`;
+    expect(await count(guestA, escrowSql)).toBe(1);
+    expect(await count(hostId, escrowSql)).toBe(1);
+    expect(await count(arbiter, escrowSql)).toBe(1);
+    expect(await count(guestB, escrowSql)).toBe(0);
+    expect(await count(ops, escrowSql)).toBe(0);
+
+    const auditSql = `SELECT id FROM public.escrow_audit WHERE actor = 'test:matrix'`;
+    expect(await count(guestA, auditSql)).toBe(1);
+    expect(await count(arbiter, auditSql)).toBe(1);
+    expect(await count(guestB, auditSql)).toBe(0);
+
+    const claimSql = `SELECT id FROM public.claims WHERE id = '${claimId}'`;
+    expect(await count(guestA, claimSql)).toBe(1);
+    expect(await count(hostId, claimSql)).toBe(1);
+    expect(await count(arbiter, claimSql)).toBe(1);
+    expect(await count(guestB, claimSql)).toBe(0);
+    expect(await count(ops, claimSql)).toBe(0);
+
+    const payoutSql = `SELECT id FROM public.payouts WHERE booking_id = '${bookingId}'`;
+    expect(await count(hostId, payoutSql)).toBe(1);
+    expect(await count(guestA, payoutSql)).toBe(0);
+    expect(await count(guestB, payoutSql)).toBe(0);
+    expect(await count(arbiter, payoutSql)).toBe(0);
+    expect(await count(ops, payoutSql)).toBe(0);
+
+    const refundSql = `SELECT id FROM public.refunds WHERE booking_id = '${bookingId}'`;
+    expect(await count(guestA, refundSql)).toBe(1);
+    expect(await count(hostId, refundSql)).toBe(1);
+    expect(await count(guestB, refundSql)).toBe(0);
+    expect(await count(ops, refundSql)).toBe(0);
+
+    const messageSql = `SELECT id FROM public.messages WHERE id = '${messageId}'`;
+    expect(await count(guestA, messageSql)).toBe(1);
+    expect(await count(hostId, messageSql)).toBe(1);
+    expect(await count(guestB, messageSql)).toBe(0);
+    expect(await count(arbiter, messageSql)).toBe(0);
+    expect(await count(ops, messageSql)).toBe(0);
+  });
+
+  it("does not let ops or the arbiter grant themselves the other flag", async () => {
+    const { arbiter, ops } = await matrix();
+
+    const arbiterOps = await rawAsMember(
+      arbiter,
+      (tx) => tx`UPDATE public.profiles SET is_ops = true WHERE id = ${arbiter}::uuid`,
+    ).then(
+      () => "allowed",
+      () => "refused",
+    );
+    const opsArbiter = await rawAsMember(
+      ops,
+      (tx) => tx`UPDATE public.profiles SET is_arbiter = true WHERE id = ${ops}::uuid`,
+    ).then(
+      () => "allowed",
+      () => "refused",
+    );
+    expect(arbiterOps).toBe("refused");
+    expect(opsArbiter).toBe("refused");
+  });
+});

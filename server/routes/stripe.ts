@@ -20,6 +20,9 @@ import { markIdVerified, recordDisputeClosed, recordDisputeOpened } from "../que
 
 export const stripeRoutes = new Hono<AppEnv>();
 
+// Intentionally not rate-limited. Stripe retries on 429 and the handler is
+// already idempotent via stripe_events — dropping a delivery is worse than
+// processing a duplicate no-op.
 stripeRoutes.post("/webhook", async (c) => {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!webhookSecret || !stripeConfigured()) {

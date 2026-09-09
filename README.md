@@ -4,11 +4,13 @@ A community-owned home rental marketplace. Hosts list because they keep more —
 
 Apache-2.0. Copyright 2026 Stead contributors.
 
-Slices 1–7 are on this tree: guest booking, escrow lifecycle, the host surface, claims with evidence and independent arbitration, double-blind reviews, the Trust Passport, the marketing landing with a live fee slider, explore filters, branded transactional email, messaging threads, the cancellation engine, Stripe Identity, chargeback freeze/unfreeze, review reminders, the ops view, and the heartbeat watchdog. Spec of record: `BUILD_PROMPT.md` (see the stack amendment at the top of it). Design truth: `/design` (do not edit). Slice status: `PROGRESS.md`.
+Slices 1–8 are on this tree — the full BUILD_PROMPT plan. Guest booking, escrow, host surface, claims, reviews and the Trust Passport, the landing, messaging and cancellations, Identity and ops, then production readiness (Playwright, rate limits, Vercel + Neon deploy docs, backup/restore). Spec of record: `BUILD_PROMPT.md` (see the stack amendment at the top of it). Design truth: `/design` (do not edit). Slice status: `PROGRESS.md`.
+
+Deploy: [`docs/deploy.md`](docs/deploy.md). Backup/restore: [`docs/backup-restore.md`](docs/backup-restore.md). Playwright: [`docs/e2e.md`](docs/e2e.md).
 
 ## Stack
 
-Vite + React 18 + TypeScript (strict) · Tailwind · React Router · TanStack Query · react-hook-form + zod · date-fns / date-fns-tz · **Neon Postgres + Drizzle ORM (postgres.js)** · **Hono API** · **Auth.js v5 magic link, JWT in an httpOnly cookie** · Stripe Payment Element (test mode, behind env) · Vitest
+Vite + React 18 + TypeScript (strict) · Tailwind · React Router · TanStack Query · react-hook-form + zod · date-fns / date-fns-tz · **Neon Postgres + Drizzle ORM (postgres.js)** · **Hono API** · **Auth.js v5 magic link, JWT in an httpOnly cookie** · Stripe Payment Element (test mode, behind env) · Vitest · Playwright
 
 Money is integer cents. Pricing constants live in `app_config` (`network_fee_bps = 200`, and the rest of BUILD_PROMPT §3) and are snapshotted onto bookings. Stays are 30 nights or more — `nightsBetween` / `quoteStay` / create-booking reject anything shorter with a 400, and Postgres enforces the same floor. Availability is the `btree_gist` exclusion constraint — never check-then-insert.
 
@@ -23,7 +25,8 @@ server/       Hono API — auth, queries, routes. The only thing that touches Po
 api/index.js  Vercel function; vercel.json rewrites /api/* here.
               Loads dist-api/handler.js, which is server/ bundled at build time.
 drizzle/      Append-only SQL migrations. Source of truth for the schema and the policies.
-scripts/      db:migrate, db:seed, db:bootstrap-roles, verify:neon.
+scripts/      db:migrate, db:seed, db:bootstrap-roles, verify:neon, e2e-server.
+docs/         deploy pipeline, backup/restore, Playwright.
 ```
 
 ## Row-level security
@@ -73,25 +76,27 @@ The landing fee slider uses `quoteStay` for Stead's column so it cannot disagree
 | `GET` | `/api/listings/:id` | public if active; the host also sees their own draft/paused |
 | `GET` | `/api/me` | current session, or `{ user: null }` |
 | `GET` | `/api/trips` · `/api/trips/:id` | signed-in guest; `/:id` also the listing host |
-| `GET`/`POST` | `/api/trips/:id/cancellation` · `/cancel` | stay parties — preview / cancel-booking |
-| `GET`/`POST` | `/api/messages` · `/unread` · `/:listingId/:guestId` | participants — threads, send-message, mark-read |
-| `POST` | `/api/bookings` | signed-in guest — quote, insert, Stripe client secrets |
-| `GET`/`POST` | `/api/claims` · `/api/claims/:id` | parties + arbiter; file / read |
+| `GET`/`POST` | `/api/trips/:id/cancellation` · `/cancel` | stay parties — preview / cancel-booking. Cancel is rate-limited. |
+| `GET`/`POST` | `/api/messages` · `/unread` · `/:listingId/:guestId` | participants — threads, send-message (rate-limited), mark-read |
+| `POST` | `/api/bookings` | signed-in guest — quote, insert, Stripe client secrets. Rate-limited. |
+| `GET`/`POST` | `/api/claims` · `/api/claims/:id` | parties + arbiter; file / respond / resolve are rate-limited |
 | `POST` | `/api/claims/:id/respond` | guest — accept or dispute |
 | `POST` | `/api/claims/:id/resolve` | arbiter — host / guest / split |
 | `POST` | `/api/claims/:id/evidence-upload` · `/evidence` | parties — presigned image + attach |
-| `POST` | `/api/stripe/webhook` | Stripe, verified by signature |
+| `POST` | `/api/stripe/webhook` | Stripe, verified by signature. Not rate-limited. |
 | `GET` | `/api/passport/:userId` | public — Trust Passport + published reviews |
 | `GET` | `/api/passport/:userId/export` | public — canonical trust_stats signed Ed25519 |
 | `POST` | `/api/passport/verify` | public — check a signed export |
 | `GET`/`POST` | `/api/reviews/:bookingId` | stay parties — form / submit (unpublished until both or 14 days) |
-| `POST` | `/api/identity/session` | signed-in member — Stripe Identity VerificationSession |
-| `GET` | `/api/ops` | ops flag — disputes, heartbeats, frozen payouts |
+| `POST` | `/api/identity/session` | signed-in — Stripe Identity VerificationSession. Rate-limited. |
+| `GET` | `/api/ops` | `is_ops` — disputes, heartbeats, frozen payouts |
 | `GET`/`POST` | `/api/cron/expire-pending` | scheduler, `Authorization: Bearer $CRON_SECRET` |
 | `GET`/`POST` | `/api/cron/publish-reviews` | both-in or 14 days after listing-local checkout |
 | `GET`/`POST` | `/api/cron/review-reminders` | day 3 / day 7 after listing-local checkout |
 | `GET`/`POST` | `/api/cron/watchdog` | stale/errored heartbeats → `OPS_ALERT_EMAIL` |
 | `*` | `/api/auth/*` | Auth.js — csrf, signin, callback, session, signout |
+
+Write quotas are a process-local sliding window (`server/lib/rateLimit.ts`): create-booking, cancel, send-message, file/respond/resolve-claim, Identity session. The Stripe webhook is **not** limited — it is already idempotent via `stripe_events`, and a 429 would drop a retry. Set `RATE_LIMIT_DISABLED=1` only on a laptop.
 
 ## Local development
 
@@ -117,7 +122,8 @@ Without `RESEND_API_KEY`, the magic link prints to the server console instead of
 
 ```bash
 npm run typecheck
-npm test                  # pricing + webhook unit tests always; DB tests need DATABASE_URL
+npm test                  # pricing + webhook unit tests always; DB tests need DATABASE_URL_OWNER
+npm run test:e2e          # Playwright; needs DATABASE_URL_OWNER (see docs/e2e.md)
 npm run build
 ```
 
@@ -147,6 +153,8 @@ npm run verify:neon
 Sixteen read-only assertions against a real deployment, covering what a throwaway local cluster cannot: role shape for all three roles, migration arrival, RLS enabled-but-not-forced, grant disjointness between `app_user` and `auth_user`, identity not leaking across pooled requests, and the transition functions being present and `SECURITY DEFINER`. Pointing `DATABASE_URL` at the owner turns it red.
 
 ## Deploying to Vercel
+
+The production recipe — Neon branches, the three role URLs, Stripe webhooks, and cron — is [`docs/deploy.md`](docs/deploy.md). Backup and restore (Neon history window, `pg_dump`, the S3 bucket) is [`docs/backup-restore.md`](docs/backup-restore.md).
 
 `vercel.json` builds the SPA to `dist/` and rewrites `/api/*` to the function in `api/`. `npm run build` also emits `dist-api/handler.js` — the Hono app bundled so the serverless function does not import extensionless TypeScript paths (that is what produced `Cannot find module '/var/task/server/app'`).
 
@@ -258,14 +266,16 @@ docker compose --profile test up -d db_test
 DATABASE_URL_OWNER=postgres://postgres:postgres@127.0.0.1:5433/stead_test npm test
 ```
 
-The suite applies `drizzle/*.sql` to whatever `DATABASE_URL_OWNER` points at and then provisions the same two roles the migration defines, so a policy that only works in tests is impossible. CI starts Postgres 17 and runs typecheck, the full Vitest suite, and the build:
+The suite applies `drizzle/*.sql` to whatever `DATABASE_URL_OWNER` points at and then provisions the same two roles the migration defines, so a policy that only works in tests is impossible. CI starts Postgres 17 and runs typecheck, the full Vitest suite, the production build, and Playwright:
 
 - pricing math table tests
 - overlapping booking rejected by the gist constraint, surfaced as `DateConflictError`
 - expire-pending, and Stripe event idempotency against real Postgres
 - `tests/authorization.test.ts` — the query layer, running as `app_user`
 - `tests/claims.test.ts` — legal file → accept and file → dispute → split, plus the illegal edges and the open-claim guard on release
-- `tests/rls.test.ts` — adversarial probes issued as raw SQL over the `app_user` connection, bypassing every line of query code: cross-member reads, unscoped `SELECT`, impersonating another guest on insert, transitioning a booking directly, reading `stripe_events` or the identity tables, grant disjointness, identity not surviving the transaction, and claim/evidence visibility including the arbiter
+- `tests/rls.test.ts` — adversarial probes issued as raw SQL over the `app_user` connection, bypassing every line of query code: cross-member reads, unscoped `SELECT`, impersonating another guest on insert, transitioning a booking directly, reading `stripe_events` or the identity tables, grant disjointness, identity not surviving the transaction, claim/evidence visibility including the arbiter, and a Slice 8 isolation matrix (guest A / guest B / host / arbiter / ops / anonymous)
+- `tests/rate-limit.test.ts` — sliding-window math and the webhook staying off the limiter
+- `e2e/` — Playwright (see `docs/e2e.md`): lifecycle + cancel-with-refund on the mock-payment path; live Stripe gated behind `STRIPE_E2E=1`
 
 Those two files fail for different reasons on purpose. Drop a `WHERE` clause and `authorization.test.ts` goes red; drop a policy and `rls.test.ts` does. Disabling RLS on `bookings` turns five of its probes red, which is how it was checked.
 

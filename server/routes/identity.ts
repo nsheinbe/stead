@@ -6,6 +6,7 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { requireUser, sessionUser, tenantQuery, type AppEnv } from "../lib/http";
+import { RATE_LIMITS, rateLimit } from "../lib/rateLimit";
 import { getStripe, stripeConfigured } from "../lib/stripe";
 import { profileIdVerified, setIdentitySession } from "../queries/trust";
 
@@ -13,7 +14,7 @@ export const identityRoutes = new Hono<AppEnv>();
 
 identityRoutes.use("*", requireUser);
 
-identityRoutes.post("/session", async (c) => {
+identityRoutes.post("/session", rateLimit(RATE_LIMITS.identity), async (c) => {
   const user = sessionUser(c);
   if (!stripeConfigured()) {
     throw new HTTPException(503, { message: "ID verification is not configured on this deployment." });
