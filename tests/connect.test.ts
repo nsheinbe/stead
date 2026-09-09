@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  claimChargeIdempotencyKey,
+  claimChargeParams,
   createIntent,
   destinationChargeParams,
   HostConnectError,
@@ -62,6 +64,45 @@ describe("destinationChargeParams", () => {
         metadata: {},
       }),
     ).toThrow(HostConnectError);
+  });
+});
+
+describe("claimChargeParams", () => {
+  it("charges the deposit on the host account with no platform fee", () => {
+    const params = claimChargeParams({
+      amountCents: 15_000,
+      paymentMethodId: "pm_card_visa",
+      metadata: { claim_id: "c1", booking_id: "b1" },
+    });
+    expect(params.amount).toBe(15_000);
+    expect(params.confirm).toBe(true);
+    expect(params.off_session).toBe(true);
+    expect(params.payment_method).toBe("pm_card_visa");
+    expect(params).not.toHaveProperty("application_fee_amount");
+    expect(params).not.toHaveProperty("transfer_data");
+    expect(params).not.toHaveProperty("on_behalf_of");
+  });
+
+  it("refuses a zero or non-integer amount", () => {
+    expect(() =>
+      claimChargeParams({ amountCents: 0, paymentMethodId: "pm_card_visa", metadata: {} }),
+    ).toThrow(HostConnectError);
+    expect(() =>
+      claimChargeParams({ amountCents: 10.5, paymentMethodId: "pm_card_visa", metadata: {} }),
+    ).toThrow(HostConnectError);
+  });
+
+  it("refuses a value that is not a payment method id", () => {
+    expect(() =>
+      claimChargeParams({ amountCents: 100, paymentMethodId: "tok_visa", metadata: {} }),
+    ).toThrow(HostConnectError);
+  });
+
+  it("is stable per claim so a retry cannot charge twice", () => {
+    expect(claimChargeIdempotencyKey("claim-1", "accept")).toBe("claim:accept:claim-1");
+    expect(claimChargeIdempotencyKey("claim-1", "resolve")).not.toBe(
+      claimChargeIdempotencyKey("claim-1", "accept"),
+    );
   });
 });
 

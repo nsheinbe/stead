@@ -52,6 +52,15 @@ export const refundReason = pgEnum("refund_reason", [
   // Payment settled after the TTL had already expired the booking.
   "expired",
 ]);
+export const claimState = pgEnum("claim_state", [
+  "open",
+  "guest_accepted",
+  "guest_disputed",
+  "arbitration",
+  "resolved_host",
+  "resolved_guest",
+  "resolved_split",
+]);
 
 // --- Identity: written by Auth.js through the Drizzle adapter -----------------
 
@@ -121,6 +130,8 @@ export const profiles = pgTable("profiles", {
   memberSince: timestamp("member_since", { mode: "date", withTimezone: true }).notNull().defaultNow(),
   /** Stripe Connect Express/Standard account. Required for live charges; host is MOR. */
   stripeConnectAccountId: text("stripe_connect_account_id"),
+  /** Independent arbitration. Platform-set; members cannot write this column. */
+  isArbiter: boolean("is_arbiter").notNull().default(false),
 });
 
 export const listings = pgTable(
@@ -290,6 +301,55 @@ export const payouts = pgTable(
 export const payoutsRelations = relations(payouts, ({ one }) => ({
   booking: one(bookings, { fields: [payouts.bookingId], references: [bookings.id] }),
   host: one(profiles, { fields: [payouts.hostId], references: [profiles.id] }),
+}));
+
+export const claims = pgTable(
+  "claims",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    bookingId: uuid("booking_id")
+      .notNull()
+      .unique()
+      .references(() => bookings.id, { onDelete: "cascade" }),
+    filedBy: uuid("filed_by")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "restrict" }),
+    amountCents: integer("amount_cents").notNull(),
+    description: text("description").notNull(),
+    state: claimState("state").notNull().default("open"),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull().defaultNow(),
+    resolvedAt: timestamp("resolved_at", { mode: "date", withTimezone: true }),
+    resolutionAmountCents: integer("resolution_amount_cents"),
+    resolutionNote: text("resolution_note"),
+  },
+  (table) => [index("claims_filed_by_idx").on(table.filedBy), index("claims_state_idx").on(table.state)],
+);
+
+export const claimEvidence = pgTable(
+  "claim_evidence",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    claimId: uuid("claim_id")
+      .notNull()
+      .references(() => claims.id, { onDelete: "cascade" }),
+    uploadedBy: uuid("uploaded_by")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "restrict" }),
+    storagePath: text("storage_path").notNull(),
+    note: text("note"),
+  },
+  (table) => [index("claim_evidence_claim_idx").on(table.claimId)],
+);
+
+export const claimsRelations = relations(claims, ({ one, many }) => ({
+  booking: one(bookings, { fields: [claims.bookingId], references: [bookings.id] }),
+  filer: one(profiles, { fields: [claims.filedBy], references: [profiles.id] }),
+  evidence: many(claimEvidence),
+}));
+
+export const claimEvidenceRelations = relations(claimEvidence, ({ one }) => ({
+  claim: one(claims, { fields: [claimEvidence.claimId], references: [claims.id] }),
+  uploader: one(profiles, { fields: [claimEvidence.uploadedBy], references: [profiles.id] }),
 }));
 
 export const stripeEvents = pgTable("stripe_events", {

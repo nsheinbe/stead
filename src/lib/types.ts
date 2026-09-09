@@ -22,6 +22,14 @@ export type EscrowState =
   | "claimed"
   | "disputed"
   | "arbitrated";
+export type ClaimState =
+  | "open"
+  | "guest_accepted"
+  | "guest_disputed"
+  | "arbitration"
+  | "resolved_host"
+  | "resolved_guest"
+  | "resolved_split";
 
 export type ListingAmenities = {
   bedrooms?: number;
@@ -112,6 +120,8 @@ export type TripDetail = TripSummary & {
   cancellationPolicy: CancellationPolicy;
   createdAt: string;
   escrow: EscrowDetail | null;
+  claim: ClaimSummary | null;
+  viewerIsHost: boolean;
 };
 
 /** Fee policy from app_config. Public: the 2% is the whole point. */
@@ -219,4 +229,45 @@ export type HostPayout = {
   state: "scheduled" | "paid" | "frozen" | "failed";
   paidAt: string | null;
   stripeTransferId: string | null;
+};
+
+export type ClaimEvidenceItem = {
+  id: string;
+  uploadedBy: string;
+  storagePath: string;
+  note: string | null;
+};
+
+export type ClaimSummary = {
+  id: string;
+  bookingId: string;
+  amountCents: number;
+  description: string;
+  state: ClaimState;
+  createdAt: string;
+  listingTitle: string;
+  checkIn: string;
+  checkOut: string;
+};
+
+export type ClaimDetail = ClaimSummary & {
+  filedBy: string;
+  resolvedAt: string | null;
+  resolutionAmountCents: number | null;
+  resolutionNote: string | null;
+  evidence: ClaimEvidenceItem[];
+  viewerRole: "host" | "guest" | "arbiter";
+  canRespond: boolean;
+  canResolve: boolean;
+  canFileEvidence: boolean;
+};
+
+export const CLAIM_STATE_LABEL: Record<ClaimState, string> = {
+  open: "Open",
+  guest_accepted: "Guest accepted",
+  guest_disputed: "Disputed",
+  arbitration: "In arbitration",
+  resolved_host: "Resolved — host",
+  resolved_guest: "Resolved — guest",
+  resolved_split: "Resolved — split",
 };

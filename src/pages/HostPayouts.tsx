@@ -1,4 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { HostSubnav } from "../components/HostSubnav";
 import { Shell } from "../components/Shell";
 import { StatusBanner } from "../components/StatusBanner";
 import { useAuth } from "../hooks/useAuth";
@@ -41,6 +42,7 @@ export function HostPayoutsPage() {
   return (
     <Shell>
       <div className="flex flex-1 flex-col gap-3.5 px-[18px] pb-4 pt-16 md:pt-4">
+        <HostSubnav />
         <h1 className="m-0 font-display text-2xl font-semibold">Payouts</h1>
 
         {loading ? (

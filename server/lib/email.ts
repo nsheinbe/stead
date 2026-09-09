@@ -68,3 +68,58 @@ export function depositReleasedEmail(input: {
     ].join("\n"),
   };
 }
+
+export function claimFiledEmail(input: {
+  listingTitle: string;
+  amountCents: number;
+}): Omit<Message, "to"> {
+  return {
+    subject: "A claim was filed on your stay",
+    text: [
+      `The host of ${input.listingTitle} filed a claim for ${formatCents(input.amountCents)} against your deposit.`,
+      "",
+      "You can accept that figure or dispute it. Independent arbitration decides a dispute.",
+    ].join("\n"),
+  };
+}
+
+export function claimAcceptedEmail(input: {
+  listingTitle: string;
+  amountCents: number;
+}): Omit<Message, "to"> {
+  return {
+    subject: "The guest accepted your claim",
+    text: [
+      `The guest accepted your ${formatCents(input.amountCents)} claim on ${input.listingTitle}.`,
+      "That amount is charged from the card on file and lands with you.",
+    ].join("\n"),
+  };
+}
+
+export function claimDisputedEmail(input: { listingTitle: string }): Omit<Message, "to"> {
+  return {
+    subject: "The guest disputed your claim",
+    text: [
+      `The guest disputed your claim on ${input.listingTitle}.`,
+      "An independent arbiter will resolve it — host, guest, or a split.",
+    ].join("\n"),
+  };
+}
+
+export function claimResolvedEmail(input: {
+  listingTitle: string;
+  resolutionAmountCents: number;
+  outcome: "host" | "guest" | "split";
+}): Omit<Message, "to"> {
+  const figure = formatCents(input.resolutionAmountCents);
+  const what =
+    input.outcome === "guest"
+      ? "in the guest's favour. Nothing is charged."
+      : input.outcome === "split"
+        ? `as a split. ${figure} is charged from the card on file.`
+        : `in the host's favour. ${figure} is charged from the card on file.`;
+  return {
+    subject: "A claim was resolved",
+    text: [`The claim on ${input.listingTitle} was resolved ${what}`].join("\n"),
+  };
+}
