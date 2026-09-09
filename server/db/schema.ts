@@ -133,6 +133,10 @@ export const profiles = pgTable("profiles", {
   stripeConnectAccountId: text("stripe_connect_account_id"),
   /** Independent arbitration. Platform-set; members cannot write this column. */
   isArbiter: boolean("is_arbiter").notNull().default(false),
+  /** Ops console. Platform-set; members cannot write this column. */
+  isOps: boolean("is_ops").notNull().default(false),
+  /** Latest Stripe Identity VerificationSession id. */
+  stripeIdentitySessionId: text("stripe_identity_session_id"),
 });
 
 export const listings = pgTable(
@@ -432,6 +436,35 @@ export const cronHeartbeats = pgTable("cron_heartbeats", {
   lastOk: timestamp("last_ok", { mode: "date", withTimezone: true }),
   lastError: text("last_error"),
 });
+
+export const stripeDisputes = pgTable(
+  "stripe_disputes",
+  {
+    id: text("id").primaryKey(),
+    paymentIntentId: text("payment_intent_id"),
+    bookingId: uuid("booking_id").references(() => bookings.id, { onDelete: "set null" }),
+    amountCents: integer("amount_cents").notNull(),
+    status: text("status").notNull(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull().defaultNow(),
+    closedAt: timestamp("closed_at", { mode: "date", withTimezone: true }),
+  },
+  (table) => [index("stripe_disputes_booking_idx").on(table.bookingId)],
+);
+
+export const reviewReminders = pgTable(
+  "review_reminders",
+  {
+    bookingId: uuid("booking_id")
+      .notNull()
+      .references(() => bookings.id, { onDelete: "cascade" }),
+    recipientId: uuid("recipient_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    sentAt: timestamp("sent_at", { mode: "date", withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.bookingId, table.recipientId, table.kind] })],
+);
 
 // --- Relations ----------------------------------------------------------------
 

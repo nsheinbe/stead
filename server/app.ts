@@ -19,12 +19,15 @@ import { claimsRoutes } from "./routes/claims";
 import { connectRoutes } from "./routes/connect";
 import { cronRoutes } from "./routes/cron";
 import { hostRoutes } from "./routes/host";
+import { identityRoutes } from "./routes/identity";
 import { listingsRoutes } from "./routes/listings";
 import { messagesRoutes } from "./routes/messages";
+import { opsRoutes } from "./routes/ops";
 import { passportRoutes } from "./routes/passport";
 import { reviewsRoutes } from "./routes/reviews";
 import { stripeRoutes } from "./routes/stripe";
 import { getConfigMap, toPublicConfig } from "./queries/listings";
+import { isCurrentUserOps } from "./queries/trust";
 import type { SessionResponse } from "../src/lib/types";
 
 export const app = new Hono<AppEnv>().basePath("/api");
@@ -39,8 +42,10 @@ app.all("/auth/*", (c) => handleAuthRequest(c.req.raw));
 
 app.use("*", withSession);
 
-app.get("/me", (c) => {
-  const body: SessionResponse = { user: c.get("user") };
+app.get("/me", async (c) => {
+  const user = c.get("user");
+  const isOps = user ? await tenantQuery(c, (tx) => isCurrentUserOps(tx)) : false;
+  const body: SessionResponse = { user, isOps };
   return c.json(body);
 });
 
@@ -54,6 +59,8 @@ app.route("/stripe", stripeRoutes);
 app.route("/cron", cronRoutes);
 app.route("/connect", connectRoutes);
 app.route("/host", hostRoutes);
+app.route("/identity", identityRoutes);
+app.route("/ops", opsRoutes);
 
 app.use("/trips", requireUser);
 app.use("/trips/*", requireUser);

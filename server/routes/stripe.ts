@@ -1,9 +1,10 @@
 /**
  * Idempotent Stripe webhook, per BUILD_PROMPT §7. Insert the event id first and
- * skip if it is already there; payment_intent.succeeded confirms the booking.
- * Disputes and account.updated are acknowledged here and handled in later slices.
+ * skip if it is already there. payment_intent.succeeded confirms the booking;
+ * charge.dispute.created/closed freeze and unfreeze; Identity verified raises
+ * verification_tier to 2. account.updated is acknowledged.
  *
- * Stripe is not a member, so this runs with no app.user_id. Both operations it
+ * Stripe is not a member, so this runs with no app.user_id. The operations it
  * performs are SECURITY DEFINER functions — app_user cannot read stripe_events
  * or update a booking directly.
  */
@@ -15,6 +16,7 @@ import { tenantQuery, type AppEnv } from "../lib/http";
 import { claimStripeEvent, confirmBookingForPaymentIntent } from "../queries/bookings";
 import { findExpiredBookingForPaymentIntent, refundExpiredBooking } from "../queries/escrow";
 import { recordPayout } from "../queries/payouts";
+import { markIdVerified, recordDisputeClosed, recordDisputeOpened } from "../queries/trust";
 
 export const stripeRoutes = new Hono<AppEnv>();
 
@@ -35,14 +37,29 @@ stripeRoutes.post("/webhook", async (c) => {
     return c.text("Signature verification failed", 400);
   }
 
-  const objectId = "id" in event.data.object ? String(event.data.object.id) : undefined;
+  const object = event.data.object as {
+    id?: string;
+    metadata?: Record<string, string> | null;
+    payment_intent?: string | { id?: string } | null;
+    amount?: number;
+    status?: string;
+  };
+  const objectId = object.id;
 
   const result = await tenantQuery(c, (tx) =>
     handleStripeEvent(
       {
         id: event.id,
         type: event.type,
-        data: { object: { id: objectId } },
+        data: {
+          object: {
+            id: objectId,
+            metadata: object.metadata,
+            payment_intent: object.payment_intent,
+            amount: object.amount,
+            status: object.status,
+          },
+        },
       },
       {
         claimEvent: (id, type) => claimStripeEvent(tx, id, type),
@@ -50,6 +67,9 @@ stripeRoutes.post("/webhook", async (c) => {
           confirmBookingForPaymentIntent(tx, paymentIntentId),
         findExpiredBooking: (paymentIntentId) =>
           findExpiredBookingForPaymentIntent(tx, paymentIntentId),
+        recordDisputeOpened: (input) => recordDisputeOpened(tx, input),
+        recordDisputeClosed: (disputeId, status) => recordDisputeClosed(tx, disputeId, status),
+        markIdVerified: (userId, sessionId) => markIdVerified(tx, userId, sessionId),
       },
     ),
   );
@@ -102,7 +122,8 @@ stripeRoutes.post("/webhook", async (c) => {
 
   console.log(
     `stripe-webhook: ${event.type} (${event.id}) skipped=${result.skipped} ` +
-      `confirmed=${result.confirmed} refunded=${refunded} payout=${payoutRecorded}`,
+      `confirmed=${result.confirmed} refunded=${refunded} payout=${payoutRecorded} ` +
+      `dispute=${result.dispute} identity=${result.identityVerified}`,
   );
   return c.json({
     received: true,
@@ -110,5 +131,7 @@ stripeRoutes.post("/webhook", async (c) => {
     confirmed: result.confirmed,
     refunded,
     payoutRecorded,
+    dispute: result.dispute,
+    identityVerified: result.identityVerified,
   });
 });

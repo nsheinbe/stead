@@ -198,6 +198,21 @@ async function main(): Promise<void> {
       missingReview.length === 0,
       missingReview.length ? `missing ${missingReview.join(", ")}` : reviewRequired.join(", "),
     );
+
+    const trustRequired = [
+      "record_dispute_opened",
+      "record_dispute_closed",
+      "mark_id_verified",
+      "list_review_reminders_due",
+      "list_ops_disputes",
+      "list_watchdog_heartbeats",
+    ];
+    const missingTrust = trustRequired.filter((name) => !present.has(name));
+    record(
+      "trust-and-safety transitions exist and are SECURITY DEFINER",
+      missingTrust.length === 0,
+      missingTrust.length ? `missing ${missingTrust.join(", ")}` : trustRequired.join(", "),
+    );
   } finally {
     await Promise.all([app.end(), auth.end(), owner.end()]);
   }
