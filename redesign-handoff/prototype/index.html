@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Stead complete UI/UX redesign. Offline interactive design reference with illustrative content.">
+  <title>Stead — UI/UX design reference</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#app">Skip to screen</a>
+  <aside class="preview-tools" aria-label="Design preview controls">
+    <div><strong>STEAD / DESIGN PREVIEW</strong><span>Illustrative data. No real transactions.</span></div>
+    <label>Screen <select id="screen-picker" aria-label="Preview screen"></select></label>
+    <label>Layout <select id="layout-picker"><option value="wide">Responsive desktop</option><option value="narrow">Mobile · 390px</option></select></label>
+    <label>State <select id="state-picker"><option value="default">Default</option><option value="loading">Loading</option><option value="empty">Empty</option><option value="error">Error</option></select></label>
+    <a href="../README.md">Handoff guide</a>
+  </aside>
+  <div id="stage" class="stage"><div id="app" tabindex="-1"></div></div>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <dialog id="dialog" aria-labelledby="dialog-title"></dialog>
+  <noscript>This interactive design reference requires JavaScript. Read the screen specifications in the design folder for the complete handoff.</noscript>
+</body>
+</html>
