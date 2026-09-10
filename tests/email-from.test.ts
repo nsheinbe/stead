@@ -10,22 +10,37 @@ import {
 
 const saved = {
   from: process.env.AUTH_EMAIL_FROM,
-  key: process.env.RESEND_API_KEY,
+  resend: process.env.RESEND_API_KEY,
+  postmark: process.env.POSTMARK_SERVER_TOKEN,
+  postmarkAlias: process.env.POSTMARK_API_TOKEN,
 };
 
-afterEach(() => {
-  if (saved.from === undefined) delete process.env.AUTH_EMAIL_FROM;
-  else process.env.AUTH_EMAIL_FROM = saved.from;
-  if (saved.key === undefined) delete process.env.RESEND_API_KEY;
-  else process.env.RESEND_API_KEY = saved.key;
-});
+function restoreEnv() {
+  restore("AUTH_EMAIL_FROM", saved.from);
+  restore("RESEND_API_KEY", saved.resend);
+  restore("POSTMARK_SERVER_TOKEN", saved.postmark);
+  restore("POSTMARK_API_TOKEN", saved.postmarkAlias);
+}
+
+function restore(key: string, value: string | undefined) {
+  if (value === undefined) delete process.env[key];
+  else process.env[key] = value;
+}
+
+function clearSendKeys() {
+  delete process.env.RESEND_API_KEY;
+  delete process.env.POSTMARK_SERVER_TOKEN;
+  delete process.env.POSTMARK_API_TOKEN;
+}
+
+afterEach(restoreEnv);
 
 describe("authEmailFromForSend", () => {
   it("accepts a verified-domain display address", () => {
-    expect(authEmailFromForSend("Stead <noreply@mail.example.com>")).toBe(
-      "Stead <noreply@mail.example.com>",
+    expect(authEmailFromForSend("Stead <noreply@openstead.app>")).toBe(
+      "Stead <noreply@openstead.app>",
     );
-    expect(extractFromEmail("Stead <noreply@mail.example.com>")).toBe("noreply@mail.example.com");
+    expect(extractFromEmail("Stead <noreply@openstead.app>")).toBe("noreply@openstead.app");
   });
 
   it("refuses an empty value", () => {
@@ -44,7 +59,7 @@ describe("authEmailFromForSend", () => {
     expect(() => authEmailFromForSend("Stead")).toThrow(/must be an email/);
   });
 
-  it("names the placeholder, not a domain we do not own", () => {
+  it("names the owned-domain example, not a domain we do not own", () => {
     try {
       authEmailFromForSend("");
     } catch (err) {
@@ -56,20 +71,43 @@ describe("authEmailFromForSend", () => {
 });
 
 describe("authEmailFromForConfig", () => {
-  it("uses a never-sent localhost from when Resend is unset", () => {
-    delete process.env.RESEND_API_KEY;
+  it("uses a never-sent localhost from when no send key is set", () => {
+    clearSendKeys();
     delete process.env.AUTH_EMAIL_FROM;
     expect(authEmailFromForConfig()).toBe("Stead <dev@localhost>");
   });
 
-  it("still refuses onboarding@ when a key is present", () => {
+  it("still refuses onboarding@ when a Resend key is present", () => {
+    clearSendKeys();
     process.env.RESEND_API_KEY = "re_test";
     process.env.AUTH_EMAIL_FROM = "Stead <onboarding@resend.dev>";
     expect(() => authEmailFromForConfig()).toThrow(EmailFromError);
   });
 
-  it("requires AUTH_EMAIL_FROM once a key is present", () => {
+  it("still refuses onboarding@ when a Postmark token is present", () => {
+    clearSendKeys();
+    process.env.POSTMARK_SERVER_TOKEN = "pm_test";
+    process.env.AUTH_EMAIL_FROM = "Stead <onboarding@resend.dev>";
+    expect(() => authEmailFromForConfig()).toThrow(EmailFromError);
+  });
+
+  it("requires AUTH_EMAIL_FROM once a Resend key is present", () => {
+    clearSendKeys();
     process.env.RESEND_API_KEY = "re_test";
+    delete process.env.AUTH_EMAIL_FROM;
+    expect(() => authEmailFromForConfig()).toThrow(/AUTH_EMAIL_FROM is not set/);
+  });
+
+  it("requires AUTH_EMAIL_FROM once a Postmark token is present", () => {
+    clearSendKeys();
+    process.env.POSTMARK_SERVER_TOKEN = "pm_test";
+    delete process.env.AUTH_EMAIL_FROM;
+    expect(() => authEmailFromForConfig()).toThrow(/AUTH_EMAIL_FROM is not set/);
+  });
+
+  it("requires AUTH_EMAIL_FROM for the POSTMARK_API_TOKEN alias", () => {
+    clearSendKeys();
+    process.env.POSTMARK_API_TOKEN = "pm_alias";
     delete process.env.AUTH_EMAIL_FROM;
     expect(() => authEmailFromForConfig()).toThrow(/AUTH_EMAIL_FROM is not set/);
   });

@@ -37,11 +37,12 @@ npm run verify:neon         # 16 read-only assertions against the real database
 * Install Stripe CLI; local webhooks: `stripe listen --forward-to localhost:5173/api/stripe/webhook` → copy the `whsec_…` value → `STRIPE_WEBHOOK_SECRET`.
 * Note for Slice 7: Stripe Identity requires activating the account even for test mode — skip until that slice.
 
-## 4. Resend (~3 min)
+## 4. Email — Postmark (~3 min)
 
-* Create API key → `RESEND_API_KEY`. Leave it blank locally and the magic link prints to the log.
-* **Do not use `onboarding@resend.dev`.** The app refuses that from-address (Gmail drops it). Verify a domain you own: [resend.com/domains](https://resend.com/domains) → Add domain → paste the DNS records (DKIM / SPF; optional DMARC) → wait for **Verified**. Then set `AUTH_EMAIL_FROM` to `Stead <noreply@YOUR_VERIFIED_DOMAIN>` in `.env` and in Vercel → Settings → Environment Variables. Until that is set, a configured `RESEND_API_KEY` will not send. Set `OPS_ALERT_EMAIL` to yourself.
-* You can skip this at first: with no key, the sign-in link prints to the server console.
+* Stead production uses **Postmark free** with **openstead.app**. Verify that domain in Postmark, then set `POSTMARK_SERVER_TOKEN` (or `POSTMARK_API_TOKEN`) and `AUTH_EMAIL_FROM` to `Stead <noreply@openstead.app>` or `Stead <hello@openstead.app>` in `.env` and in Vercel → Settings → Environment Variables.
+* **Do not use `onboarding@resend.dev`.** The app refuses that from-address (Gmail drops it). A send key without `AUTH_EMAIL_FROM` fails closed.
+* Leave Resend domains alone (Free is at 3/3 on other projects). `RESEND_API_KEY` remains a fallback if Postmark is unset.
+* You can skip this at first: with no send key, the sign-in link prints to the server console. Set `OPS_ALERT_EMAIL` to yourself.
 
 ## 5. Passport signing key (~1 min)
 

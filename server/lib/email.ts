@@ -1,8 +1,8 @@
 /**
- * Transactional email over Resend, matching how server/auth.ts sends the magic
- * link: a plain fetch, and without RESEND_API_KEY the message prints to the
- * server console instead. That console path is the intended local-dev
- * behaviour, not a degraded mode — see README.
+ * Transactional email over Postmark (preferred) or Resend, matching how
+ * server/auth.ts sends the magic link: a plain fetch. Without a send key the
+ * message prints to the server console instead. That console path is the
+ * intended local-dev behaviour, not a degraded mode — see README.
  *
  * Sending never throws into a caller's critical path. A cron that released a
  * deposit correctly has done the important part; a bounced notification must
@@ -10,6 +10,7 @@
  */
 import { EmailFromError, authEmailFromForSend } from "./emailFrom";
 import { brandedEmailHtml } from "./emailLayout";
+import { deliverViaProvider, selectEmailProvider } from "./emailProvider";
 
 export interface Message {
   to: string;
@@ -19,8 +20,8 @@ export interface Message {
 }
 
 export async function sendEmail(message: Message): Promise<boolean> {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
+  const provider = selectEmailProvider();
+  if (!provider) {
     console.log(`\n  Email to ${message.to} — ${message.subject}\n  ${message.text}\n`);
     return true;
   }
@@ -29,30 +30,22 @@ export async function sendEmail(message: Message): Promise<boolean> {
   try {
     from = authEmailFromForSend();
   } catch (err) {
-    const message = err instanceof EmailFromError ? err.message : "AUTH_EMAIL_FROM is invalid";
-    console.error(`[email] refusing to send — ${message}`);
+    const detail = err instanceof EmailFromError ? err.message : "AUTH_EMAIL_FROM is invalid";
+    console.error(`[email] refusing to send — ${detail}`);
     return false;
   }
 
   try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        from,
-        to: message.to,
-        subject: message.subject,
-        text: message.text,
-        html: message.html,
-      }),
+    await deliverViaProvider(provider, {
+      from,
+      to: message.to,
+      subject: message.subject,
+      text: message.text,
+      html: message.html,
     });
-    if (!res.ok) {
-      console.error(`[email] Resend refused ${message.subject}: ${res.status} ${await res.text()}`);
-      return false;
-    }
     return true;
   } catch (err) {
-    console.error("[email] could not reach Resend", err);
+    console.error(`[email] ${err instanceof Error ? err.message : err}`);
     return false;
   }
 }
