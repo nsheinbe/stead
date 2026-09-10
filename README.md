@@ -120,29 +120,31 @@ Shell environment beats `.env`, so if you have exported `DATABASE_URL` in the te
 
 `npm run dev` serves the Hono API inside Vite's dev server, so cookies are same-origin and there is no CORS to configure.
 
-Without `RESEND_API_KEY`, the magic link prints to the server console instead of being emailed — sign in locally by pasting it into the browser.
+Without a send key (`POSTMARK_SERVER_TOKEN` / `POSTMARK_API_TOKEN`, or `RESEND_API_KEY`), the magic link prints to the server console instead of being emailed — sign in locally by pasting it into the browser.
 
-### Sending mail (Resend)
+### Sending mail (Postmark, then Resend)
+
+Stead production uses **Postmark free** with **openstead.app**. If `POSTMARK_SERVER_TOKEN` (or the `POSTMARK_API_TOKEN` alias) is set, mail goes to `https://api.postmarkapp.com/email`. Otherwise a set `RESEND_API_KEY` keeps the old Resend path. When both are set, Postmark wins.
 
 `onboarding@resend.dev` is refused. Gmail drops it; we fail closed rather than send and bounce.
 
 | Until you… | What breaks |
 | --- | --- |
-| Leave `RESEND_API_KEY` blank | Nothing — links print to the server log. Intended local-dev path. |
-| Set `RESEND_API_KEY` without `AUTH_EMAIL_FROM` | Magic links and transactional mail do **not** send. Logs: `AUTH_EMAIL_FROM is not set`. |
+| Leave both send keys blank | Nothing — links print to the server log. Intended local-dev path. |
+| Set a send key without `AUTH_EMAIL_FROM` | Magic links and transactional mail do **not** send. Logs: `AUTH_EMAIL_FROM is not set`. |
 | Set `AUTH_EMAIL_FROM` to `Stead <onboarding@resend.dev>` | Same refusal. Logs name the sandbox address. |
-| Verify a domain in Resend and set `AUTH_EMAIL_FROM` | Mail sends from that address. |
+| Verify `openstead.app` in Postmark and set `AUTH_EMAIL_FROM` | Mail sends from that address. |
 
-Exact env var: **`AUTH_EMAIL_FROM`**. Shape: `Stead <noreply@YOUR_VERIFIED_DOMAIN>` — a domain you own and verified, not a placeholder we invented.
+Exact env var: **`AUTH_EMAIL_FROM`**. Shape: `Stead <noreply@openstead.app>` or `Stead <hello@openstead.app>`.
 
-**Nick — Resend domain (blocked until done):**
+**Ops — Postmark + openstead.app (required before production mail lands):**
 
-1. [resend.com/domains](https://resend.com/domains) → **Add domain**. Prefer a subdomain (`mail.YOUR_DOMAIN` or `noreply.YOUR_DOMAIN`) so transactional reputation stays off the root.
-2. Add the DNS records Resend shows (typically MX/TXT for DKIM, SPF; optional DMARC). Wait until the domain status is **Verified**.
-3. Vercel → project → **Settings → Environment Variables** → Production (and Preview if you send from previews):
-   - `RESEND_API_KEY` = the API key
-   - `AUTH_EMAIL_FROM` = `Stead <noreply@YOUR_VERIFIED_DOMAIN>`
-4. Redeploy. Until those two are set and the domain is verified, members who request a magic link see a send error and nothing lands in Gmail.
+1. Verify **openstead.app** in Postmark (DNS: DKIM / Return-Path / optional DMARC) until the domain is confirmed.
+2. Vercel → project → **Settings → Environment Variables** → Production (and Preview if you send from previews):
+   - `POSTMARK_SERVER_TOKEN` = the Postmark server token (not a Resend key)
+   - `AUTH_EMAIL_FROM` = `Stead <noreply@openstead.app>` or `Stead <hello@openstead.app>`
+3. Redeploy. Until those two are set and the domain is verified in Postmark, members who request a magic link see a send error and nothing lands in Gmail.
+4. Leave Resend domains alone. Resend Free is already at 3/3 elsewhere; Stead does not add one.
 
 ### Host payouts (Connect Express)
 
@@ -216,8 +218,9 @@ Required environment variables:
 | `AUTH_DATABASE_URL` | `auth_user` on the pooled host |
 | `DATABASE_URL_OWNER` | the owner on the **direct** host; migrations only |
 | `CRON_SECRET` | so only the scheduler can run `expire-pending` |
-| `RESEND_API_KEY` | magic-link delivery (without it the link only prints to the log) |
-| `AUTH_EMAIL_FROM` | required once `RESEND_API_KEY` is set; verified-domain from. `onboarding@resend.dev` is refused |
+| `POSTMARK_SERVER_TOKEN` | magic-link + transactional delivery (Postmark preferred). Alias: `POSTMARK_API_TOKEN`. Without any send key the link only prints to the log |
+| `RESEND_API_KEY` | fallback if Postmark is unset |
+| `AUTH_EMAIL_FROM` | required once any send key is set; e.g. `Stead <noreply@openstead.app>`. `onboarding@resend.dev` is refused |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `VITE_STRIPE_PUBLISHABLE_KEY` | payments; the booking flow falls back to a mock path when unset |
 | `STRIPE_TEST_CONNECT_ACCOUNT_ID` | optional test `acct_…` stamped on the seed host; live charges fail closed without a host Connect id |
 | `PASSPORT_SIGNING_KEY` | Ed25519 PKCS8 PEM, base64 — `openssl genpkey -algorithm ed25519 \| base64 -w0` |

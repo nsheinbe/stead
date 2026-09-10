@@ -21,6 +21,7 @@ import { getAuthDb } from "./db/client";
 import { accounts, sessions, users, verificationTokens } from "./db/schema";
 import { EmailFromError, authEmailFromForConfig, authEmailFromForSend } from "./lib/emailFrom";
 import { signInEmail } from "./lib/email";
+import { deliverViaProvider, selectEmailProvider } from "./lib/emailProvider";
 
 export type SessionUser = {
   id: string;
@@ -29,18 +30,19 @@ export type SessionUser = {
 };
 
 /**
- * Resend when a key is configured; otherwise print the link so local
- * development works without an email provider. A key without a verified
- * AUTH_EMAIL_FROM fails closed — we will not send as onboarding@resend.dev.
+ * Postmark (preferred) or Resend when a send key is configured; otherwise
+ * print the link so local development works without an email provider. A
+ * key without a verified AUTH_EMAIL_FROM fails closed — we will not send
+ * as onboarding@resend.dev.
  */
-async function sendVerificationRequest(params: {
+export async function sendVerificationRequest(params: {
   identifier: string;
   url: string;
   provider: { from?: string };
 }): Promise<void> {
   const host = new URL(params.url).host;
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
+  const emailProvider = selectEmailProvider();
+  if (!emailProvider) {
     console.log(`\n  Magic link for ${params.identifier}:\n  ${params.url}\n`);
     return;
   }
@@ -53,14 +55,13 @@ async function sendVerificationRequest(params: {
     throw err instanceof EmailFromError ? err : new EmailFromError(message);
   }
   const { subject, text, html } = signInEmail(params.url, host);
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from, to: params.identifier, subject, text, html }),
+  await deliverViaProvider(emailProvider, {
+    from,
+    to: params.identifier,
+    subject,
+    text,
+    html,
   });
-  if (!res.ok) {
-    throw new Error(`Resend refused the sign-in email: ${res.status} ${await res.text()}`);
-  }
 }
 
 let cached: AuthConfig | undefined;

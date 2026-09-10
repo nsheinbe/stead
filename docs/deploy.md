@@ -76,8 +76,9 @@ Required for the app to boot and serve members:
 | `AUTH_SECRET` | yes | yes | `openssl rand -base64 32`. Different per environment. |
 | `CRON_SECRET` | yes | yes | Bearer secret for `/api/cron/*` |
 | `AUTH_URL` / `APP_URL` | yes | recommended | Canonical origin so magic links and Identity return correctly |
-| `RESEND_API_KEY` | yes | optional | Without it, magic links print to the function log |
-| `AUTH_EMAIL_FROM` | **required if Resend is set** | same | `Stead <noreply@YOUR_VERIFIED_DOMAIN>`. Empty or `onboarding@resend.dev` → refuse to send (Gmail). Domain must be Verified in Resend first. |
+| `POSTMARK_SERVER_TOKEN` | yes (Stead prod) | optional | Postmark server token. Alias: `POSTMARK_API_TOKEN`. Preferred over Resend when both are set. Verify `openstead.app` in Postmark first. |
+| `RESEND_API_KEY` | no if Postmark is set | optional | Fallback only. Without either key, magic links print to the function log. |
+| `AUTH_EMAIL_FROM` | **required if any send key is set** | same | `Stead <noreply@openstead.app>` or `Stead <hello@openstead.app>`. Empty or `onboarding@resend.dev` → refuse to send (Gmail). |
 | `STRIPE_SECRET_KEY` | yes (live or test) | test | `sk_live_` only on Production |
 | `STRIPE_WEBHOOK_SECRET` | yes | per-endpoint | Each destination has its own `whsec_` |
 | `VITE_STRIPE_PUBLISHABLE_KEY` | yes | test | Baked in at **build** time |
@@ -88,6 +89,8 @@ Required for the app to boot and serve members:
 | `RATE_LIMIT_DISABLED` | no | no | `1` turns the limiter off. Leave unset in production. |
 
 `DATABASE_URL_OWNER` is for migrations and seed, not the running function. Keep it out of the Production function env if you can run migrations from CI or a laptop; if it must live on Vercel, never copy it into `DATABASE_URL`.
+
+Ops must verify **openstead.app** in Postmark, then set Vercel Production `POSTMARK_SERVER_TOKEN` and `AUTH_EMAIL_FROM` (`Stead <noreply@openstead.app>` or `Stead <hello@openstead.app>`). Until both are set, magic links do not send. Do not add a Resend domain for Stead.
 
 Vite inlines `VITE_*` at build time. Changing the publishable key requires a rebuild.
 
