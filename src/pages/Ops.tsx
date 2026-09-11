@@ -1,16 +1,38 @@
-import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Shell } from "../components/Shell";
 import { SignInPrompt } from "../components/SignInPrompt";
-import { StatusBanner } from "../components/StatusBanner";
+import {
+  Button,
+  ButtonLink,
+  Card,
+  DataList,
+  DataRow,
+  EmptyState,
+  PageHeader,
+  Skeleton,
+  StatusMessage,
+  StatusPill,
+} from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { api, ApiError } from "../lib/api";
 import { formatUsd } from "../lib/money";
 
 function when(iso: string | null): string {
-  return iso ? new Date(iso).toLocaleString() : "never";
+  return iso ? new Date(iso).toLocaleString() : "Never";
 }
 
+/**
+ * Operations.
+ *
+ * Read-only by design: nothing here changes state, because every state change
+ * in this system goes through an enumerated `SECURITY DEFINER` function with
+ * its own gate. An ops screen that could move money would be a second path
+ * around those gates.
+ *
+ * The 403 is a first-class state, not an error. An account without the ops
+ * flag is not broken — it simply isn't an ops account, and saying so beats a
+ * red failure box.
+ */
 export function OpsPage() {
   const { user, status } = useAuth();
 
@@ -23,115 +45,169 @@ export function OpsPage() {
 
   const forbidden = ops.error instanceof ApiError && ops.error.status === 403;
 
-  return (
-    <Shell>
-      <div className="flex flex-1 flex-col gap-4 pb-6 pt-6">
-        <div className="flex items-baseline justify-between">
-          <h1 className="m-0 font-display text-2xl font-semibold">Ops</h1>
-          <Link to="/" className="text-sm font-bold text-spruce no-underline">
-            Home
-          </Link>
-        </div>
-        <p className="m-0 text-[13px] leading-relaxed text-ink/60">
-          Disputes, stale heartbeats, frozen payouts. Utilitarian on purpose — there is no
-          designed admin screen.
-        </p>
-
-        {status !== "signed_in" ? (
+  if (status !== "signed_in") {
+    return (
+      <Shell width="narrow" title="Operations">
+        <div className="py-8">
           <SignInPrompt
             title="Sign in to open operations"
-            description="This view is limited to authorized operations accounts."
+            description="This view is limited to accounts flagged for operations."
           />
-        ) : null}
-        {forbidden ? (
-          <StatusBanner tone="claim" title="This page is for ops" detail="Your account is not flagged." />
-        ) : null}
-        {ops.isError && !forbidden ? (
-          <StatusBanner tone="claim" title="Could not load ops" />
-        ) : null}
-        {ops.isLoading ? <StatusBanner title="Loading ops…" /> : null}
+        </div>
+      </Shell>
+    );
+  }
 
-        {ops.data ? (
+  if (forbidden) {
+    return (
+      <Shell width="narrow" title="Operations">
+        <div className="flex flex-1 flex-col gap-6 py-12">
+          <PageHeader
+            title="This page is for operations accounts."
+            description="Your account isn't flagged for it. Nothing is wrong with your account."
+          />
+          <ButtonLink to="/" className="self-start">
+            Back to Stead
+          </ButtonLink>
+        </div>
+      </Shell>
+    );
+  }
+
+  const data = ops.data;
+
+  return (
+    <Shell title="Operations">
+      <div className="flex flex-1 flex-col gap-8 py-6 sm:py-8">
+        <PageHeader
+          title="Operations"
+          description="Card disputes, scheduled-job health and frozen payouts. Read-only: every state change goes through its own gated function, not through this page."
+        />
+
+        {ops.isPending ? (
+          <div className="flex flex-col gap-4" aria-busy="true">
+            <p role="status" className="sr-only">
+              Loading operations
+            </p>
+            <Skeleton className="h-32 w-full" />
+            <Skeleton className="h-32 w-full" />
+          </div>
+        ) : ops.isError ? (
+          <StatusMessage
+            tone="danger"
+            title="We couldn't load operations."
+            action={
+              <Button variant="secondary" size="sm" onClick={() => void ops.refetch()}>
+                Try again
+              </Button>
+            }
+          />
+        ) : data ? (
           <>
-            <section className="flex flex-col gap-2">
-              <h2 className="m-0 font-display text-lg font-semibold">Disputes</h2>
-              {ops.data.disputes.length === 0 ? (
-                <StatusBanner title="No chargebacks on record" />
+            {/* --- disputes ----------------------------------------- */}
+            <section aria-labelledby="disputes-heading" className="flex flex-col gap-4">
+              <h2 id="disputes-heading" className="m-0 text-card-title">
+                Card disputes
+              </h2>
+              <p className="m-0 max-w-reading text-sm text-ink-secondary">
+                An open dispute freezes the booking's payout and blocks every claim transition on it
+                until the bank closes its case.
+              </p>
+              {data.disputes.length === 0 ? (
+                <EmptyState title="No chargebacks on record." />
               ) : (
-                ops.data.disputes.map((row) => (
-                  <div
-                    key={row.id}
-                    className={`flex flex-col gap-1 rounded-card border px-4 py-3 ${
-                      row.closedAt ? "border-linen-tint" : "border-claim/40 bg-claim/[0.04]"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="money text-sm font-bold">{formatUsd(row.amountCents)}</span>
-                      <span className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-ink/50">
-                        {row.status}
-                      </span>
-                    </div>
-                    <span className="text-xs text-ink/55">
-                      {row.id}
-                      {row.bookingId ? ` · booking ${row.bookingId.slice(0, 8)}` : ""}
-                    </span>
-                    <span className="text-xs text-ink/55">
-                      Opened {when(row.createdAt)}
-                      {row.closedAt ? ` · closed ${when(row.closedAt)}` : " · open"}
-                    </span>
-                  </div>
-                ))
+                <ul className="m-0 flex list-none flex-col gap-3 p-0">
+                  {data.disputes.map((row) => (
+                    <li key={row.id}>
+                      <Card padding="sm">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <p className="money m-0 font-semibold">{formatUsd(row.amountCents)}</p>
+                          <StatusPill tone={row.closedAt ? "neutral" : "danger"}>
+                            {row.closedAt ? `Closed · ${row.status}` : `Open · ${row.status}`}
+                          </StatusPill>
+                        </div>
+                        <div className="mt-3">
+                          <DataList>
+                            <DataRow label="Dispute" value={row.id} />
+                            <DataRow label="Booking" value={row.bookingId ?? "Not matched to a booking"} />
+                            <DataRow label="Opened" value={when(row.createdAt)} />
+                            <DataRow label="Closed" value={row.closedAt ? when(row.closedAt) : "Still open"} />
+                          </DataList>
+                        </div>
+                      </Card>
+                    </li>
+                  ))}
+                </ul>
               )}
             </section>
 
-            <section className="flex flex-col gap-2">
-              <h2 className="m-0 font-display text-lg font-semibold">Heartbeats</h2>
-              {ops.data.heartbeats.length === 0 ? (
-                <StatusBanner title="No heartbeats yet" detail="Jobs write a row the first time they run." />
+            {/* --- heartbeats --------------------------------------- */}
+            <section aria-labelledby="jobs-heading" className="flex flex-col gap-4">
+              <h2 id="jobs-heading" className="m-0 text-card-title">
+                Scheduled jobs
+              </h2>
+              <p className="m-0 max-w-reading text-sm text-ink-secondary">
+                Each job writes a heartbeat when it runs. Stale means it hasn't reported recently —
+                which for expire-pending means abandoned checkouts are still holding dates.
+              </p>
+              {data.heartbeats.length === 0 ? (
+                <EmptyState title="No job has reported yet.">
+                  <p>A job writes its first row the first time it runs.</p>
+                </EmptyState>
               ) : (
-                ops.data.heartbeats.map((row) => (
-                  <div
-                    key={row.job}
-                    className={`flex flex-col gap-1 rounded-card border px-4 py-3 ${
-                      row.errored || row.stale ? "border-claim/40 bg-claim/[0.04]" : "border-linen-tint"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-sm font-bold">{row.job}</span>
-                      <span className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-ink/50">
-                        {row.errored ? "Errored" : row.stale ? "Stale" : "Ok"}
-                      </span>
-                    </div>
-                    <span className="text-xs text-ink/55">Last ok {when(row.lastOk)}</span>
-                    {row.lastError ? (
-                      <span className="text-xs text-claim">{row.lastError}</span>
-                    ) : null}
-                  </div>
-                ))
+                <ul className="m-0 flex list-none flex-col gap-3 p-0">
+                  {data.heartbeats.map((row) => (
+                    <li key={row.job}>
+                      <Card padding="sm">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <p className="m-0 font-semibold">{row.job}</p>
+                          <StatusPill tone={row.errored || row.stale ? "danger" : "brand"}>
+                            {row.errored ? "Errored" : row.stale ? "Stale" : "Healthy"}
+                          </StatusPill>
+                        </div>
+                        <div className="mt-3">
+                          <DataList>
+                            <DataRow label="Last success" value={when(row.lastOk)} />
+                            {row.lastError ? <DataRow label="Last error" value={row.lastError} /> : null}
+                          </DataList>
+                        </div>
+                      </Card>
+                    </li>
+                  ))}
+                </ul>
               )}
             </section>
 
-            <section className="flex flex-col gap-2">
-              <h2 className="m-0 font-display text-lg font-semibold">Frozen payouts</h2>
-              {ops.data.frozenPayouts.length === 0 ? (
-                <StatusBanner title="Nothing frozen" />
+            {/* --- frozen payouts ----------------------------------- */}
+            <section aria-labelledby="frozen-heading" className="flex flex-col gap-4">
+              <h2 id="frozen-heading" className="m-0 text-card-title">
+                Frozen payouts
+              </h2>
+              <p className="m-0 max-w-reading text-sm text-ink-secondary">
+                A payout freezes when a dispute opens on its booking and unfreezes when that dispute
+                closes in the platform's favour. Both transitions are the webhook's, not this page's.
+              </p>
+              {data.frozenPayouts.length === 0 ? (
+                <EmptyState title="Nothing frozen." />
               ) : (
-                ops.data.frozenPayouts.map((row) => (
-                  <div
-                    key={row.id}
-                    className="flex items-center justify-between rounded-card border border-claim/40 bg-claim/[0.04] px-4 py-3"
-                  >
-                    <div className="flex flex-col gap-0.5">
-                      <span className="money text-sm font-bold">{formatUsd(row.amountCents)}</span>
-                      <span className="text-xs text-ink/55">
-                        Booking {row.bookingId.slice(0, 8)} · {when(row.paidAt)}
-                      </span>
-                    </div>
-                    <span className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-claim">
-                      Frozen
-                    </span>
-                  </div>
-                ))
+                <ul className="m-0 flex list-none flex-col gap-3 p-0">
+                  {data.frozenPayouts.map((row) => (
+                    <li key={row.id}>
+                      <Card padding="sm">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <p className="money m-0 font-semibold">{formatUsd(row.amountCents)}</p>
+                          <StatusPill tone="danger">Frozen</StatusPill>
+                        </div>
+                        <div className="mt-3">
+                          <DataList>
+                            <DataRow label="Booking" value={row.bookingId} />
+                            <DataRow label="Paid at" value={when(row.paidAt)} />
+                          </DataList>
+                        </div>
+                      </Card>
+                    </li>
+                  ))}
+                </ul>
               )}
             </section>
           </>

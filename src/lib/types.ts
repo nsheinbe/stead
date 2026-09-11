@@ -393,6 +393,12 @@ export type ClaimDetail = ClaimSummary & {
   resolutionNote: string | null;
   evidence: ClaimEvidenceItem[];
   viewerRole: "host" | "guest" | "arbiter";
+  /**
+   * An open card dispute on the booking. Every claim transition is frozen
+   * while this is true — the SECURITY DEFINER functions refuse — so the page
+   * explains it instead of offering an action that would silently fail.
+   */
+  chargebackOpen: boolean;
   canRespond: boolean;
   canResolve: boolean;
   canFileEvidence: boolean;

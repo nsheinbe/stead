@@ -244,6 +244,35 @@ its owning ticket replaces the screen, so nothing is half-edited.
   failed send keeps every character, and the browser test forces a 503 to prove
   it.
 
+## 6f. SAFE-01 notes
+
+- **Arbiters could not open the claims they are meant to resolve.** `0007` gave
+  them read access to `claims` and `escrow_deposits` but not to `bookings` or
+  `listings`, and `getClaimForViewer` joins both — so it returned null for the
+  one role with `canResolve`. `drizzle/0013_arbiter_claim_visibility.sql` adds
+  two narrow SELECT policies: an arbiter reads a booking only when a claim
+  exists on it, and a listing only when one of its bookings has a claim.
+- The helpers behind those policies are `SECURITY DEFINER` deliberately. A
+  policy on `bookings` selecting from `claims` would recurse, because the
+  `claims` policy already selects from `bookings`; Postgres raises "infinite
+  recursion detected in policy for relation".
+- **This phase now has a migration.** `0013` is written but has NOT been
+  applied to Neon — the journal there is hybrid and applying it is the
+  operator's call. Until it is applied, arbitration on the deployed app stays
+  broken in exactly the way it already is; nothing else regresses.
+- The cross-role isolation matrix in `tests/rls.test.ts` asserted
+  `arbiter → bookings = 0`. Its fixture has a claim, so `0013` changes that to
+  1 by design. The assertion was updated and two probes added alongside it: an
+  arbiter reading a claim-free booking is still 0, and an arbiter has no write
+  path to a booking or a listing.
+- **An open card dispute freezes every claim transition**, and the page now
+  says so. `respond_claim`, `resolve_claim` and `file_claim` all refuse
+  silently while `app.booking_has_open_dispute` is true; `ClaimDetail` carries
+  `chargebackOpen` and folds it into `canRespond`/`canResolve`, so the page
+  never offers an action the server will reject.
+- Every irreversible action on a claim is now confirmed with its exact amount
+  and who receives it before it is sent. None of them fire on a first click.
+
 ## 7. Runtime unknowns (not verifiable from source)
 
 - Deployed configuration on Vercel + Neon: fee basis points, cron scheduling for

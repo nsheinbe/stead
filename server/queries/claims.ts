@@ -151,6 +151,20 @@ export async function getClaimForViewer(
   const isArbiter = row.is_arbiter === true;
   const live = state === "open" || state === "guest_disputed" || state === "arbitration";
 
+  /**
+   * An open card dispute on the booking freezes every claim transition:
+   * `app.respond_claim` and `app.resolve_claim` return false rather than
+   * moving the claim, and `app.file_claim` returns NULL. Without this the page
+   * renders Accept and Dispute, the member clicks one, and the silent refusal
+   * surfaces as a generic error with no explanation. The gate is the same
+   * function those transitions consult, so what the page shows and what the
+   * server will do cannot drift.
+   */
+  const disputeRows = (await tx.execute(sql`
+    SELECT app.booking_has_open_dispute(${row.booking_id}::uuid) AS frozen
+  `)) as unknown as { frozen: boolean }[];
+  const chargebackOpen = disputeRows[0]?.frozen === true;
+
   return {
     id: row.id,
     bookingId: row.booking_id,
@@ -167,8 +181,11 @@ export async function getClaimForViewer(
     checkOut: row.check_out,
     evidence: evidenceRows.map(mapEvidence),
     viewerRole: isArbiter ? "arbiter" : isHost ? "host" : isGuest ? "guest" : "arbiter",
-    canRespond: isGuest && state === "open",
-    canResolve: isArbiter && (state === "guest_disputed" || state === "arbitration"),
+    chargebackOpen,
+    // A frozen booking is not a permission question, but it has the same
+    // effect, so it is folded in here rather than left for the page to guess.
+    canRespond: isGuest && state === "open" && !chargebackOpen,
+    canResolve: isArbiter && (state === "guest_disputed" || state === "arbitration") && !chargebackOpen,
     canFileEvidence: (isHost || isGuest) && live,
   };
 }

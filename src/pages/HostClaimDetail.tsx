@@ -1,24 +1,91 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { HostSubnav } from "../components/HostSubnav";
 import { Shell } from "../components/Shell";
 import { SignInPrompt } from "../components/SignInPrompt";
-import { StatusBanner } from "../components/StatusBanner";
+import {
+  Button,
+  ButtonLink,
+  Card,
+  DataList,
+  DataRow,
+  Dialog,
+  EmptyState,
+  PageHeader,
+  Skeleton,
+  StatusMessage,
+  StatusPill,
+  Surface,
+  Textarea,
+  TextInput,
+} from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { api, ApiError } from "../lib/api";
 import { dollarsToCents } from "../lib/cents";
 import { prettyRange } from "../lib/dates";
 import { formatUsd } from "../lib/money";
-import { CLAIM_STATE_LABEL } from "../lib/types";
+import { CLAIM_STATE_LABEL, type ClaimDetail } from "../lib/types";
+
+/**
+ * A decision that moves money, held until it is confirmed.
+ *
+ * Every action on this page is irreversible and charges or releases a real
+ * amount, so none of them happen on a first click. The confirmation names the
+ * exact figure and who receives it — the number is the thing being agreed to,
+ * not a detail of it.
+ */
+type PendingAction =
+  | { kind: "accept"; amountCents: number }
+  | { kind: "dispute" }
+  | { kind: "resolve-host"; amountCents: number }
+  | { kind: "resolve-guest" }
+  | { kind: "resolve-split"; amountCents: number };
+
+function confirmCopy(action: PendingAction, claim: ClaimDetail): { title: string; body: string; cta: string } {
+  switch (action.kind) {
+    case "accept":
+      return {
+        title: `Accept this claim for ${formatUsd(action.amountCents)}?`,
+        body: `${formatUsd(action.amountCents)} will be charged to the card you have on file for this stay and paid to the host. This cannot be undone, and the claim closes.`,
+        cta: `Accept and pay ${formatUsd(action.amountCents)}`,
+      };
+    case "dispute":
+      return {
+        title: "Dispute this claim?",
+        body: `Nothing is charged now. The claim goes to an independent arbiter, who decides how much of the ${formatUsd(claim.amountCents)} the host receives. You cannot withdraw a dispute.`,
+        cta: "Send to arbitration",
+      };
+    case "resolve-host":
+      return {
+        title: `Resolve in the host's favour for ${formatUsd(action.amountCents)}?`,
+        body: `The full claim of ${formatUsd(action.amountCents)} will be charged to the guest's card on file and paid to the host. This closes the claim and cannot be undone.`,
+        cta: `Charge ${formatUsd(action.amountCents)} to the guest`,
+      };
+    case "resolve-guest":
+      return {
+        title: "Resolve in the guest's favour?",
+        body: "Nothing is charged. The deposit is released in full and the claim closes. This cannot be undone.",
+        cta: "Release the deposit",
+      };
+    case "resolve-split":
+      return {
+        title: `Resolve this claim at ${formatUsd(action.amountCents)}?`,
+        body: `${formatUsd(action.amountCents)} of the ${formatUsd(claim.amountCents)} claimed will be charged to the guest's card on file and paid to the host. The rest is released. This closes the claim and cannot be undone.`,
+        cta: `Charge ${formatUsd(action.amountCents)} and close`,
+      };
+  }
+}
 
 export function HostClaimDetailPage() {
   const { claimId } = useParams<{ claimId: string }>();
-  const { user, loading, status } = useAuth();
+  const { user, status } = useAuth();
   const queryClient = useQueryClient();
   const [note, setNote] = useState("");
   const [splitDollars, setSplitDollars] = useState("");
+  const [splitError, setSplitError] = useState<string | null>(null);
   const [evidenceNote, setEvidenceNote] = useState("");
+  const [pending, setPending] = useState<PendingAction | null>(null);
 
   const claim = useQuery({
     queryKey: ["claim", claimId],
@@ -28,6 +95,7 @@ export function HostClaimDetailPage() {
   });
 
   const invalidate = async () => {
+    setPending(null);
     await queryClient.invalidateQueries({ queryKey: ["claim", claimId] });
     await queryClient.invalidateQueries({ queryKey: ["claims"] });
   };
@@ -57,197 +125,365 @@ export function HostClaimDetailPage() {
 
   const data = claim.data;
   const notFound = claim.error instanceof ApiError && claim.error.status === 404;
-  const splitCents = dollarsToCents(splitDollars);
 
-  return (
-    <Shell width="narrow">
-      <div className="flex flex-1 flex-col gap-3.5 pb-6 pt-6">
-        <HostSubnav />
-        <div className="flex items-center justify-between">
-          <h1 className="m-0 font-display text-2xl font-semibold">Claim</h1>
-          {data ? (
-            <span
-              className={`rounded-full px-3 py-1.5 text-xs font-bold ${
-                data.state === "guest_disputed" || data.state === "arbitration"
-                  ? "bg-claim/10 text-claim"
-                  : "bg-linen"
-              }`}
-            >
-              {CLAIM_STATE_LABEL[data.state]}
-            </span>
-          ) : null}
-        </div>
-
-        {loading || claim.isLoading ? <StatusBanner title="Loading this claim…" /> : null}
-        {user && notFound ? <StatusBanner title="Claim not found" /> : null}
-        {status !== "signed_in" ? (
+  if (status !== "signed_in") {
+    return (
+      <Shell width="narrow" workspace="hosting" title="Claim">
+        <div className="py-8">
           <SignInPrompt
             title="Sign in to review this claim"
-            description="Only the parties on this stay and an authorized arbiter can open it."
+            description="Only the two people on this stay and an authorized arbiter can open it."
           />
+        </div>
+      </Shell>
+    );
+  }
+
+  if (claim.isPending) {
+    return (
+      <Shell width="narrow" workspace="hosting" title="Claim">
+        <div className="flex flex-1 flex-col gap-4 py-8" aria-busy="true">
+          <p role="status" className="sr-only">
+            Loading this claim
+          </p>
+          <Skeleton className="h-9 w-1/2" />
+          <Skeleton className="h-40 w-full" />
+        </div>
+      </Shell>
+    );
+  }
+
+  if (notFound || !data) {
+    return (
+      <Shell width="narrow" workspace="hosting" title="Claim">
+        <div className="flex flex-1 flex-col gap-6 py-12">
+          <PageHeader
+            title="We couldn't find this claim."
+            description="It may not be yours to see, or the link may be out of date."
+          />
+          <ButtonLink to="/host/claims" className="self-start">
+            All claims
+          </ButtonLink>
+        </div>
+      </Shell>
+    );
+  }
+
+  const closed = data.resolvedAt !== null;
+  const splitCents = dollarsToCents(splitDollars);
+
+  function runPending() {
+    if (!pending) return;
+    switch (pending.kind) {
+      case "accept":
+        return respond.mutate(true);
+      case "dispute":
+        return respond.mutate(false);
+      case "resolve-host":
+        return resolve.mutate({ outcome: "host" });
+      case "resolve-guest":
+        return resolve.mutate({ outcome: "guest" });
+      case "resolve-split":
+        return resolve.mutate({ outcome: "split", amountCents: pending.amountCents });
+    }
+  }
+
+  const acting = respond.isPending || resolve.isPending;
+  const actionError = respond.error ?? resolve.error;
+
+  return (
+    <Shell width="narrow" workspace="hosting" title="Claim" backTo="/host/claims" backLabel="All claims">
+      <div className="flex flex-1 flex-col gap-6 py-6 sm:py-8">
+        <HostSubnav />
+
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <PageHeader
+            title={`Claim on ${data.listingTitle}`}
+            description={prettyRange(data.checkIn, data.checkOut)}
+          />
+          <StatusPill tone={data.state === "open" || data.state === "guest_disputed" ? "danger" : "neutral"}>
+            {CLAIM_STATE_LABEL[data.state]}
+          </StatusPill>
+        </div>
+
+        {/* An open card dispute freezes every transition below. Saying so is
+            the difference between an explained wait and a silent failure. */}
+        {data.chargebackOpen ? (
+          <StatusMessage tone="warning" title="This booking has an open card dispute.">
+            <p>
+              While the cardholder's bank is reviewing that dispute, nothing on this claim can move — not
+              accepting it, not disputing it, not resolving it. The claim reopens for action once the bank
+              closes its case.
+            </p>
+          </StatusMessage>
         ) : null}
 
-        {data ? (
-          <>
-            <div className="flex flex-col gap-1 rounded-card border border-linen-tint px-4 py-3.5">
-              <span className="text-sm font-bold">{data.listingTitle}</span>
-              <span className="text-xs text-ink/55">
-                {prettyRange(data.checkIn, data.checkOut)}
-              </span>
-              <span className="money mt-2 text-lg font-bold">{formatUsd(data.amountCents)}</span>
-              <p className="m-0 mt-2 text-[13px] leading-relaxed text-ink/75">{data.description}</p>
-              {data.resolutionNote ? (
-                <p className="mb-0 mt-2 text-[12.5px] text-ink/60">{data.resolutionNote}</p>
-              ) : null}
-              {data.resolutionAmountCents != null ? (
-                <p className="money mb-0 mt-1 text-sm font-semibold">
-                  Resolved at {formatUsd(data.resolutionAmountCents)}
-                </p>
-              ) : null}
+        <Card>
+          <DataList>
+            <DataRow label="Amount claimed" value={formatUsd(data.amountCents)} />
+            {/* `app.file_claim` is host-only, so the filer is always the host. */}
+            <DataRow label="Filed by" value="The host of this home" />
+            <DataRow label="You are" value={data.viewerRole === "arbiter" ? "the arbiter" : `the ${data.viewerRole}`} />
+            {data.resolutionAmountCents != null ? (
+              <DataRow label="Resolved at" value={formatUsd(data.resolutionAmountCents)} />
+            ) : null}
+          </DataList>
+          <div className="mt-4 border-t border-divider pt-4">
+            <h2 className="m-0 text-base font-semibold">What the host says happened</h2>
+            <p className="mb-0 mt-2 max-w-reading whitespace-pre-line text-ink-secondary">
+              {data.description}
+            </p>
+          </div>
+          {data.resolutionNote ? (
+            <div className="mt-4 border-t border-divider pt-4">
+              <h2 className="m-0 text-base font-semibold">The arbiter's note</h2>
+              <p className="mb-0 mt-2 max-w-reading whitespace-pre-line text-ink-secondary">
+                {data.resolutionNote}
+              </p>
             </div>
+          ) : null}
+        </Card>
 
-            <div className="flex flex-col gap-2">
-              <span className="text-[11.5px] font-bold tracking-[0.14em] text-ink/50">EVIDENCE</span>
-              {data.evidence.length === 0 ? (
-                <StatusBanner title="No photos yet" detail="Parties can attach images while the claim is live." />
-              ) : null}
-              {data.evidence.map((item) => (
-                <div key={item.id} className="overflow-hidden rounded-[12px] border border-linen-tint">
-                  <img src={item.storagePath} alt="" className="max-h-64 w-full object-cover" />
-                  {item.note ? <p className="m-0 px-3 py-2 text-xs text-ink/60">{item.note}</p> : null}
-                </div>
+        {/* --- evidence --------------------------------------------- */}
+        <section aria-labelledby="evidence-heading" className="flex flex-col gap-4">
+          <h2 id="evidence-heading" className="m-0 text-card-title">
+            Evidence
+          </h2>
+
+          {data.evidence.length === 0 ? (
+            <EmptyState title="No photos have been attached.">
+              <p>Either side can attach images while the claim is live.</p>
+            </EmptyState>
+          ) : (
+            <ul className="m-0 grid list-none gap-4 p-0 sm:grid-cols-2">
+              {data.evidence.map((item, index) => (
+                <li key={item.id}>
+                  <Card padding="sm">
+                    <img
+                      src={item.storagePath}
+                      alt={`Evidence photo ${index + 1}`}
+                      loading="lazy"
+                      className="w-full rounded-card object-cover"
+                    />
+                    {item.note ? (
+                      <p className="mb-0 mt-3 text-sm text-ink-secondary">{item.note}</p>
+                    ) : null}
+                  </Card>
+                </li>
               ))}
-              {data.canFileEvidence ? (
-                <label className="flex flex-col gap-2 text-xs font-bold text-ink/60">
-                  Add a photo
+            </ul>
+          )}
+
+          {data.canFileEvidence ? (
+            <Card padding="sm">
+              <h3 className="m-0 text-base font-semibold">Add a photo</h3>
+              <p className="m-0 mt-2 text-sm text-ink-secondary">
+                Both sides and the arbiter can see anything you attach here.
+              </p>
+              <div className="mt-4 flex flex-col gap-5">
+                <TextInput
+                  id="evidence-note"
+                  label="Note"
+                  optional
+                  hint="What this photo shows."
+                  value={evidenceNote}
+                  onChange={(e) => setEvidenceNote(e.target.value)}
+                />
+                <div className="flex flex-col gap-2">
+                  <label htmlFor="evidence-file" className="text-sm font-semibold text-ink">
+                    Photo
+                  </label>
                   <input
-                    type="text"
-                    value={evidenceNote}
-                    onChange={(e) => setEvidenceNote(e.target.value)}
-                    placeholder="Optional note"
-                    className="rounded-lg border border-linen-tint px-3 py-2 text-sm font-normal text-ink"
-                  />
-                  <input
+                    id="evidence-file"
                     type="file"
                     accept="image/jpeg,image/png,image/webp,image/avif"
+                    disabled={upload.isPending}
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) upload.mutate(file);
                     }}
+                    className="text-sm"
                   />
-                </label>
-              ) : null}
-              {upload.isError ? (
-                <StatusBanner
-                  tone="claim"
-                  title="Could not attach that photo"
-                  detail={upload.error instanceof ApiError ? upload.error.message : undefined}
-                />
-              ) : null}
-            </div>
-
-            {data.canRespond ? (
-              <div className="flex flex-col gap-2 rounded-card border-[1.5px] border-dashed border-claim/40 bg-claim/[0.04] p-[18px]">
-                <p className="m-0 text-sm">
-                  Accept {formatUsd(data.amountCents)} from your deposit, or dispute it for independent
-                  arbitration.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => respond.mutate(true)}
-                    disabled={respond.isPending}
-                    className="rounded-full bg-spruce px-4 py-2 text-sm font-bold text-paper disabled:opacity-60"
-                  >
-                    Accept claim
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => respond.mutate(false)}
-                    disabled={respond.isPending}
-                    className="rounded-full border border-claim/40 px-4 py-2 text-sm font-bold text-claim disabled:opacity-60"
-                  >
-                    Dispute
-                  </button>
                 </div>
-                {respond.isError ? (
-                  <StatusBanner
-                    tone="claim"
-                    title="Could not record that"
-                    detail={respond.error instanceof ApiError ? respond.error.message : undefined}
+                {upload.isPending ? <StatusMessage tone="info" title="Uploading your photo…" /> : null}
+                {upload.isError ? (
+                  <StatusMessage
+                    tone="danger"
+                    title={
+                      upload.error instanceof ApiError
+                        ? upload.error.message
+                        : "We couldn't attach that photo. Please try again."
+                    }
                   />
                 ) : null}
               </div>
-            ) : null}
+            </Card>
+          ) : null}
+        </section>
 
-            {data.canResolve ? (
-              <div className="flex flex-col gap-3 rounded-card border-[1.5px] border-dashed border-claim/50 p-[18px]">
-                <span className="text-sm font-bold">Independent arbitration</span>
-                <label className="flex flex-col gap-1 text-xs font-bold text-ink/60">
-                  NOTE
-                  <textarea
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    rows={3}
-                    className="rounded-lg border border-linen-tint px-3 py-2 text-sm font-normal text-ink"
-                  />
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => resolve.mutate({ outcome: "host" })}
-                    disabled={resolve.isPending}
-                    className="rounded-full bg-spruce px-4 py-2 text-sm font-bold text-paper disabled:opacity-60"
-                  >
-                    Host in full
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => resolve.mutate({ outcome: "guest" })}
-                    disabled={resolve.isPending}
-                    className="rounded-full border border-linen-tint px-4 py-2 text-sm font-bold text-ink/70 disabled:opacity-60"
-                  >
-                    Guest — release
-                  </button>
-                </div>
-                <div className="flex flex-wrap items-end gap-2">
-                  <label className="flex flex-col gap-1 text-xs font-bold text-ink/60">
-                    SPLIT AMOUNT
-                    <input
-                      inputMode="decimal"
-                      value={splitDollars}
-                      onChange={(e) => setSplitDollars(e.target.value)}
-                      placeholder="120.00"
-                      className="w-32 rounded-lg border border-linen-tint px-3 py-2 text-sm font-normal text-ink"
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    disabled={resolve.isPending || splitCents == null || splitCents < 1}
-                    onClick={() => {
-                      if (splitCents == null) return;
-                      resolve.mutate({ outcome: "split", amountCents: splitCents });
-                    }}
-                    className="rounded-full bg-claim px-4 py-2 text-sm font-bold text-paper disabled:opacity-60"
-                  >
-                    Resolve split
-                  </button>
-                </div>
-                {resolve.isError ? (
-                  <StatusBanner
-                    tone="claim"
-                    title="Could not resolve"
-                    detail={resolve.error instanceof ApiError ? resolve.error.message : undefined}
-                  />
-                ) : null}
+        {/* --- the guest's decision --------------------------------- */}
+        {data.canRespond ? (
+          <section aria-labelledby="respond-heading" className="flex flex-col gap-4">
+            <h2 id="respond-heading" className="m-0 text-card-title">
+              Your decision
+            </h2>
+            <Card>
+              <p className="m-0 max-w-reading text-ink-secondary">
+                Accepting charges {formatUsd(data.amountCents)} to the card on file for this stay and pays
+                it to the host. Disputing charges nothing now and sends the claim to an independent
+                arbiter. Either way the claim closes to you afterwards.
+              </p>
+              <div className="mt-5 flex flex-wrap gap-3">
+                <Button
+                  onClick={() => setPending({ kind: "accept", amountCents: data.amountCents })}
+                >
+                  Accept {formatUsd(data.amountCents)}
+                </Button>
+                <Button variant="danger" onClick={() => setPending({ kind: "dispute" })}>
+                  Dispute this claim
+                </Button>
               </div>
-            ) : null}
-
-            <Link to={`/trips/${data.bookingId}`} className="text-sm font-bold no-underline">
-              Open the stay →
-            </Link>
-          </>
+            </Card>
+          </section>
         ) : null}
+
+        {/* --- the arbiter's decision ------------------------------- */}
+        {data.canResolve ? (
+          <section aria-labelledby="resolve-heading" className="flex flex-col gap-4">
+            <h2 id="resolve-heading" className="m-0 text-card-title">
+              Arbitration
+            </h2>
+            <Card>
+              <p className="m-0 max-w-reading text-ink-secondary">
+                {formatUsd(data.amountCents)} is claimed. Whatever you decide is charged to the guest's
+                card on file and paid to the host; the remainder is released. A resolution closes the
+                claim and cannot be reversed here.
+              </p>
+
+              <div className="mt-5 flex flex-col gap-5">
+                <Textarea
+                  id="arbiter-note"
+                  label="Your note"
+                  optional
+                  hint="Both sides see this on the claim."
+                  rows={4}
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                />
+
+                <div className="flex flex-wrap gap-3">
+                  <Button
+                    onClick={() => setPending({ kind: "resolve-host", amountCents: data.amountCents })}
+                  >
+                    Award the host {formatUsd(data.amountCents)}
+                  </Button>
+                  <Button variant="secondary" onClick={() => setPending({ kind: "resolve-guest" })}>
+                    Award the guest — release in full
+                  </Button>
+                </div>
+
+                <div className="border-t border-divider pt-5">
+                  <TextInput
+                    id="split-amount"
+                    label="Or split it"
+                    hint={`In US dollars, up to the ${formatUsd(data.amountCents)} claimed.`}
+                    inputMode="decimal"
+                    className="money"
+                    value={splitDollars}
+                    error={splitError}
+                    onChange={(e) => {
+                      setSplitDollars(e.target.value);
+                      setSplitError(null);
+                    }}
+                  />
+                  <div className="mt-4">
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        if (splitCents == null || splitCents < 1) {
+                          setSplitError("Enter an amount in dollars, such as 120 or 120.50.");
+                          return;
+                        }
+                        if (splitCents > data.amountCents) {
+                          setSplitError(
+                            `A split cannot exceed the ${formatUsd(data.amountCents)} claimed.`,
+                          );
+                          return;
+                        }
+                        setSplitError(null);
+                        setPending({ kind: "resolve-split", amountCents: splitCents });
+                      }}
+                    >
+                      Review this split
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </section>
+        ) : null}
+
+        {/* Why an action is absent, when absence would otherwise read as a bug. */}
+        {closed ? (
+          <StatusMessage tone="info" live={false} title="This claim is closed.">
+            <p>Nothing further can be done here. The outcome above is what the server recorded.</p>
+          </StatusMessage>
+        ) : !data.canRespond && !data.canResolve && !data.chargebackOpen ? (
+          <Surface padding="sm">
+            <p className="m-0 text-sm text-ink-secondary">
+              {data.viewerRole === "host"
+                ? "You filed this claim. The next move is the guest's — they can accept it or dispute it."
+                : data.viewerRole === "guest"
+                  ? "You've already responded. The claim is with an arbiter now."
+                  : "There's nothing for you to decide on this claim at its current state."}
+            </p>
+          </Surface>
+        ) : null}
+
+        {actionError ? (
+          <StatusMessage
+            tone="danger"
+            title={
+              actionError instanceof ApiError
+                ? actionError.message
+                : "We couldn't record that. Nothing has changed."
+            }
+          >
+            <p>No money moved. You can try again.</p>
+          </StatusMessage>
+        ) : null}
+
+        <div>
+          <ButtonLink to={`/trips/${data.bookingId}`} variant="secondary">
+            Open the stay
+          </ButtonLink>
+        </div>
+
+        <Dialog
+          open={pending !== null}
+          onClose={() => setPending(null)}
+          title={pending ? confirmCopy(pending, data).title : ""}
+          size="sm"
+        >
+          {pending ? (
+            <>
+              <p className="m-0 text-ink-secondary">{confirmCopy(pending, data).body}</p>
+              <div className="mt-5 flex flex-wrap gap-3">
+                <Button
+                  variant="danger"
+                  busy={acting}
+                  busyLabel="Recording your decision…"
+                  onClick={runPending}
+                >
+                  {confirmCopy(pending, data).cta}
+                </Button>
+                <Button variant="secondary" disabled={acting} onClick={() => setPending(null)}>
+                  Go back
+                </Button>
+              </div>
+            </>
+          ) : null}
+        </Dialog>
       </div>
     </Shell>
   );

@@ -912,9 +912,12 @@ describeDb("cross-role isolation matrix", () => {
     expect(await count(guestA, bookingSql)).toBe(1);
     expect(await count(hostId, bookingSql)).toBe(1);
     expect(await count(guestB, bookingSql)).toBe(0);
-    expect(await count(arbiter, bookingSql)).toBe(0);
     expect(await count(ops, bookingSql)).toBe(0);
     expect(await count(null, bookingSql)).toBe(0);
+    // This fixture has a claim on it, and 0013 lets an arbiter read a booking
+    // for exactly that reason: they cannot resolve a claim whose dates they
+    // cannot see. The claim-free case is asserted below, and it is still 0.
+    expect(await count(arbiter, bookingSql)).toBe(1);
 
     const escrowSql = `SELECT id FROM public.escrow_deposits WHERE booking_id = '${bookingId}'`;
     expect(await count(guestA, escrowSql)).toBe(1);
@@ -954,6 +957,126 @@ describeDb("cross-role isolation matrix", () => {
     expect(await count(guestB, messageSql)).toBe(0);
     expect(await count(arbiter, messageSql)).toBe(0);
     expect(await count(ops, messageSql)).toBe(0);
+  });
+
+  /**
+   * 0013 widened `bookings` and `listings` for arbiters. These probes hold the
+   * widening to exactly what it was for: a booking an arbiter can read must
+   * have a claim on it, and read is all they get. Issued as raw SQL over the
+   * app_user connection, so it is Postgres refusing and not the query layer.
+   */
+  it("lets an arbiter read a booking only because a claim exists on it", async () => {
+    const arbiter = id();
+    const hostId = id();
+    const guestId = id();
+    const listingId = id();
+    const claimed = id();
+    const clean = id();
+
+    await insertMember(arbiter, `arb-${arbiter}@stead.example`, "Arbiter");
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    await insertMember(guestId, `guest-${guestId}@stead.example`, "Guest");
+    await asOwner((db) =>
+      db.execute(sql`UPDATE public.profiles SET is_arbiter = true WHERE id = ${arbiter}::uuid`),
+    );
+    // Paused, so no arbiter can reach it through the public listing policy.
+    await insertListing({ id: listingId, hostId, title: "Arbiter probe", status: "paused" });
+    await insertBooking({
+      id: claimed,
+      listingId,
+      guestId,
+      checkIn: "2033-01-01",
+      checkOut: "2033-01-31",
+      status: "completed",
+    });
+    await insertBooking({
+      id: clean,
+      listingId,
+      guestId,
+      checkIn: "2034-01-01",
+      checkOut: "2034-01-31",
+      status: "completed",
+    });
+    await asOwner((db) =>
+      db.execute(sql`
+        INSERT INTO public.claims (booking_id, filed_by, amount_cents, description, state)
+        VALUES (${claimed}::uuid, ${hostId}::uuid, 10000, 'Probe claim', 'open')
+      `),
+    );
+
+    const readable = async (viewer: string, bookingId: string) => {
+      const rows = (await rawAsMember(
+        viewer,
+        (tx) => tx`SELECT id FROM public.bookings WHERE id = ${bookingId}::uuid`,
+      )) as { id: string }[];
+      return rows.length;
+    };
+
+    // The claim is the whole permission. Without one, the arbiter sees nothing.
+    expect(await readable(arbiter, claimed)).toBe(1);
+    expect(await readable(arbiter, clean)).toBe(0);
+
+    // The paused listing comes with it, and only that one.
+    const listings = (await rawAsMember(
+      arbiter,
+      (tx) => tx`SELECT id FROM public.listings WHERE id = ${listingId}::uuid`,
+    )) as { id: string }[];
+    expect(listings).toHaveLength(1);
+  });
+
+  it("gives an arbiter no way to write a booking or a listing", async () => {
+    const arbiter = id();
+    const hostId = id();
+    const guestId = id();
+    const listingId = id();
+    const bookingId = id();
+
+    await insertMember(arbiter, `arb-${arbiter}@stead.example`, "Arbiter");
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    await insertMember(guestId, `guest-${guestId}@stead.example`, "Guest");
+    await asOwner((db) =>
+      db.execute(sql`UPDATE public.profiles SET is_arbiter = true WHERE id = ${arbiter}::uuid`),
+    );
+    await insertListing({ id: listingId, hostId, title: "Arbiter write probe" });
+    await insertBooking({
+      id: bookingId,
+      listingId,
+      guestId,
+      checkIn: "2035-01-01",
+      checkOut: "2035-01-31",
+      status: "completed",
+    });
+    await asOwner((db) =>
+      db.execute(sql`
+        INSERT INTO public.claims (booking_id, filed_by, amount_cents, description, state)
+        VALUES (${bookingId}::uuid, ${hostId}::uuid, 10000, 'Write probe', 'open')
+      `),
+    );
+
+    // Reading it changes nothing about writing it. `app_user` has no UPDATE
+    // grant on bookings at all, and 0013 added no policy for one.
+    const renamed = await rawAsMember(
+      arbiter,
+      (tx) => tx`UPDATE public.listings SET title = 'Seized' WHERE id = ${listingId}::uuid RETURNING id`,
+    ).then(
+      (rows) => (rows as unknown as { id: string }[]).length,
+      () => "refused" as const,
+    );
+    expect(renamed === 0 || renamed === "refused").toBe(true);
+
+    const deleted = await rawAsMember(
+      arbiter,
+      (tx) => tx`DELETE FROM public.bookings WHERE id = ${bookingId}::uuid RETURNING id`,
+    ).then(
+      (rows) => (rows as unknown as { id: string }[]).length,
+      () => "refused" as const,
+    );
+    expect(deleted === 0 || deleted === "refused").toBe(true);
+
+    const [row] = (await asOwner((db) =>
+      db.execute(sql`SELECT title FROM public.listings WHERE id = ${listingId}::uuid`),
+    )) as unknown as { title: string }[];
+    expect(row?.title).toBe("Arbiter write probe");
   });
 
   it("does not let ops or the arbiter grant themselves the other flag", async () => {
