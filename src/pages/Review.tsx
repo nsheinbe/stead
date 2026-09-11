@@ -69,8 +69,8 @@ export function ReviewPage() {
   }
 
   return (
-    <Shell>
-      <div className="flex flex-1 flex-col gap-3.5 px-[18px] pb-6 pt-16 md:pt-4">
+    <Shell width="narrow">
+      <div className="flex flex-1 flex-col gap-3.5 pb-6 pt-6">
         {loading || form.isLoading ? <StatusBanner title="Opening the review…" /> : null}
         {!user && !loading ? <StatusBanner title="Sign in to write this review" /> : null}
         {user && notFound ? (

@@ -56,7 +56,7 @@ export function ListingDetailPage() {
     : [];
 
   return (
-    <Shell hideNav>
+    <Shell focused width="narrow">
       {listingQuery.isLoading ? (
         <div className="p-6">
           <StatusBanner title="Loading the home…" />
@@ -84,7 +84,7 @@ export function ListingDetailPage() {
             <Link
               to="/explore"
               aria-label="Back to explore"
-              className="absolute left-3.5 top-16 flex h-10 w-10 items-center justify-center rounded-full bg-paper/92 no-underline shadow-[0_2px_8px_rgba(23,32,27,.18)]"
+              className="absolute left-3.5 top-3.5 flex h-10 w-10 items-center justify-center rounded-full bg-paper/92 no-underline shadow-[0_2px_8px_rgba(23,32,27,.18)]"
             >
               <BackChevron />
             </Link>
@@ -109,7 +109,7 @@ export function ListingDetailPage() {
             ) : null}
           </div>
 
-          <div className="flex flex-1 flex-col gap-3.5 px-[18px] py-[18px]">
+          <div className="flex flex-1 flex-col gap-3.5 py-[18px]">
             <div className="flex flex-col gap-1.5">
               <h1 className="m-0 font-display text-2xl font-semibold leading-tight">{listing.title}</h1>
               <p className="m-0 text-[13.5px] text-ink/55">{amenityBits.join(" · ")}</p>

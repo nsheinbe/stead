@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { HostSubnav } from "../components/HostSubnav";
 import { Shell } from "../components/Shell";
 import { StatusBanner } from "../components/StatusBanner";
@@ -39,7 +39,8 @@ export function HostListingsPage() {
   const { user, loading } = useAuth();
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<ListingInput>(EMPTY);
-  const [creating, setCreating] = useState(false);
+  const [params] = useSearchParams();
+  const [creating, setCreating] = useState(params.get("create") === "1");
 
   const listings = useQuery({
     queryKey: ["host-listings", user?.id],
@@ -78,8 +79,8 @@ export function HostListingsPage() {
   });
 
   return (
-    <Shell>
-      <div className="flex flex-1 flex-col gap-3.5 px-[18px] pb-4 pt-16 md:pt-4">
+    <Shell width="narrow">
+      <div className="flex flex-1 flex-col gap-3.5 pb-6 pt-6">
         <HostSubnav />
         <div className="flex items-center justify-between">
           <h1 className="m-0 font-display text-2xl font-semibold">Your homes</h1>

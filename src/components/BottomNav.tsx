@@ -2,12 +2,17 @@ import { useQuery } from "@tanstack/react-query";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { api } from "../lib/api";
-import { BagIcon, HostIcon, InboxIcon, SearchIcon, ShieldIcon } from "./Icons";
+import { loginHref } from "../lib/continuation";
+import { BagIcon, HomeIcon, InboxIcon, SearchIcon, UserIcon } from "./Icons";
 
+/**
+ * Mobile-only member navigation: Explore, Stays, Messages, Profile, Homes.
+ * Labels are always visible; the unread badge has a spoken equivalent. Hidden
+ * on focused flows (sign-in, checkout, editing, a conversation) so it cannot
+ * compete with the step's action.
+ */
 export function BottomNav() {
   const { user } = useAuth();
-  const passportTo = user ? `/passport/${user.id}` : "/login";
-  const inboxTo = user ? "/messages" : "/login?next=/messages";
   const unread = useQuery({
     queryKey: ["unread", user?.id],
     enabled: Boolean(user),
@@ -17,17 +22,22 @@ export function BottomNav() {
   const unreadCount = unread.data?.unread ?? 0;
 
   const items = [
-    { to: "/explore", label: "Explore", icon: SearchIcon, live: true, badge: 0 },
-    { to: "/trips", label: "Trips", icon: BagIcon, live: true, badge: 0 },
-    { to: passportTo, label: "Passport", icon: ShieldIcon, live: true, badge: 0 },
-    { to: inboxTo, label: "Inbox", icon: InboxIcon, live: true, badge: unreadCount },
-    { to: "/host/listings", label: "Host", icon: HostIcon, live: true, badge: 0 },
+    { to: "/explore", label: "Explore", icon: SearchIcon, badge: 0 },
+    { to: "/trips", label: "Stays", icon: BagIcon, badge: 0 },
+    { to: "/messages", label: "Messages", icon: InboxIcon, badge: unreadCount },
+    {
+      to: user ? `/passport/${user.id}` : loginHref({ source: "mobile_nav" }),
+      label: "Profile",
+      icon: UserIcon,
+      badge: 0,
+    },
+    { to: "/host/listings", label: "Homes", icon: HomeIcon, badge: 0 },
   ] as const;
 
   return (
     <nav
-      aria-label="Primary"
-      className="sticky bottom-0 z-20 flex border-t border-[#EDE6D6] bg-paper px-2 pb-6 pt-2.5"
+      aria-label="Member navigation"
+      className="pb-safe sticky bottom-0 z-20 flex border-t border-divider bg-canvas/95 px-1 pt-1.5 backdrop-blur lg:hidden"
     >
       {items.map((item) => {
         const Icon = item.icon;
@@ -36,8 +46,8 @@ export function BottomNav() {
             key={item.label}
             to={item.to}
             className={({ isActive }) =>
-              `relative flex flex-1 flex-col items-center gap-1 text-[10.5px] no-underline ${
-                isActive ? "font-bold text-spruce" : "font-semibold text-ink/45"
+              `relative flex min-h-[52px] flex-1 flex-col items-center justify-center gap-0.5 rounded-control text-[0.6875rem] font-semibold no-underline ${
+                isActive ? "bg-surface-accent text-brand" : "text-ink-secondary hover:text-ink"
               }`
             }
           >
@@ -46,13 +56,19 @@ export function BottomNav() {
               {item.badge > 0 ? (
                 <span
                   data-testid="nav-unread"
-                  className="absolute -right-2 -top-1 min-w-[16px] rounded-full bg-spruce px-1 text-center text-[9px] font-bold leading-[16px] text-paper"
+                  aria-hidden
+                  className="money absolute -right-2.5 -top-1 min-w-[18px] rounded-full bg-brand px-1 text-center text-[0.625rem] font-bold leading-[18px] text-white"
                 >
                   {item.badge > 9 ? "9+" : item.badge}
                 </span>
               ) : null}
             </span>
             {item.label}
+            {item.badge > 0 ? (
+              <span className="sr-only">
+                , {item.badge} unread {item.badge === 1 ? "message" : "messages"}
+              </span>
+            ) : null}
           </NavLink>
         );
       })}

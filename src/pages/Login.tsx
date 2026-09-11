@@ -31,7 +31,7 @@ export function LoginPage() {
   }
 
   return (
-    <Shell hideNav>
+    <Shell focused width="narrow">
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-[18px] py-16">
         <div className="flex items-center gap-2.5">
           <BrandMark />

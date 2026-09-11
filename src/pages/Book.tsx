@@ -119,8 +119,8 @@ export function BookPage() {
   const today = isoToday();
 
   return (
-    <Shell hideNav>
-      <div className="flex flex-1 flex-col px-[18px] pb-7 pt-16 md:pt-6">
+    <Shell focused width="narrow">
+      <div className="flex flex-1 flex-col pb-7 pt-6">
         <div className="mb-3.5 flex items-center gap-3">
           <button
             type="button"

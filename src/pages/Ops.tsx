@@ -24,7 +24,7 @@ export function OpsPage() {
 
   return (
     <Shell>
-      <div className="flex flex-1 flex-col gap-4 px-[18px] pb-6 pt-16 md:pt-6">
+      <div className="flex flex-1 flex-col gap-4 pb-6 pt-6">
         <div className="flex items-baseline justify-between">
           <h1 className="m-0 font-display text-2xl font-semibold">Ops</h1>
           <Link to="/" className="text-sm font-bold text-spruce no-underline">

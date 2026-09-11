@@ -22,8 +22,8 @@ export function HostClaimsPage() {
   });
 
   return (
-    <Shell>
-      <div className="flex flex-1 flex-col gap-3.5 px-[18px] pb-4 pt-16 md:pt-4">
+    <Shell width="narrow">
+      <div className="flex flex-1 flex-col gap-3.5 pb-6 pt-6">
         <HostSubnav />
         <h1 className="m-0 font-display text-2xl font-semibold">Claims</h1>
 

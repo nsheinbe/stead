@@ -16,8 +16,8 @@ export function MessagesPage() {
   });
 
   return (
-    <Shell>
-      <div className="flex flex-1 flex-col gap-3.5 px-[18px] pb-4 pt-16 md:pt-4">
+    <Shell width="narrow">
+      <div className="flex flex-1 flex-col gap-3.5 pb-6 pt-6">
         <h1 className="m-0 font-display text-2xl font-semibold">Inbox</h1>
 
         {loading ? <StatusBanner title="Checking your session…" /> : null}
@@ -115,8 +115,8 @@ export function MessageThreadPage() {
   const notFound = thread.error instanceof ApiError && thread.error.status === 404;
 
   return (
-    <Shell hideNav>
-      <div className="flex flex-1 flex-col px-[18px] pb-7 pt-16 md:pt-6">
+    <Shell focused width="narrow">
+      <div className="flex flex-1 flex-col pb-7 pt-6">
         <div className="mb-3.5 flex items-center gap-3">
           <button
             type="button"
@@ -211,7 +211,7 @@ export function ListingMessageRedirect() {
   }, [loading, user, listingId, navigate]);
 
   return (
-    <Shell hideNav>
+    <Shell focused width="narrow">
       <div className="p-6">
         <StatusBanner title="Opening the thread…" />
       </div>

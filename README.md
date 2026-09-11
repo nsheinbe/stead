@@ -51,7 +51,8 @@ State transitions are closed to `app_user` entirely. It has no `UPDATE` grant on
 
 | Path | Screen |
 | --- | --- |
-| `/` | Landing — nine sections from `/design`, live fee slider (integer cents, 30-night floor) |
+| `/` | Landing — live fee slider (integer cents, 30-night floor). Being rebuilt under the 2026-09 redesign (see `docs/redesign/`) |
+| `/for-homeowners` | Homeowner acquisition page: how listing works, guest fee from config, entry to `/host/start` |
 | `/explore` | Member homes, filterable by city, type, guests, nightly rate, instant book |
 | `/listing/:id` | Listing detail + fee arithmetic |
 | `/book/:listingId` | Book · 3 steps (dates, deposit explainer, pay) |
@@ -60,9 +61,11 @@ State transitions are closed to `app_user` entirely. It has no `UPDATE` grant on
 | `/review/:bookingId` | Double-blind review after checkout |
 | `/passport/:userId` | Trust Passport; own page can start Stripe Identity |
 | `/ops` | Minimal ops view — disputes, stale heartbeats, frozen payouts. Gated by `is_ops`. |
+| `/host/start` | Canonical entry to listing creation; signed-out visitors get a contextual sign-in that returns here |
 | `/host/listings` · `/host/payouts` · `/host/claims` | Host surface |
 | `/host/claims/:id` | Claim detail, evidence, arbiter resolution |
 | `/login` | Magic-link email. Google OAuth is deferred. |
+| anything else | Deliberate not-found view with a way back |
 
 The landing fee slider uses `quoteStay` for Stead's column so it cannot disagree with checkout. Nights start at 30. Compare-against-a-typical-platform math is display-only and never snaps onto a booking.
 

@@ -79,12 +79,12 @@ export function HostListingEditPage() {
     onSuccess: invalidate,
   });
 
-  if (loading) return <Shell><div className="p-[18px] pt-16 md:pt-4"><StatusBanner title="Checking your session…" /></div></Shell>;
-  if (!user) return <Shell><div className="p-[18px] pt-16 md:pt-4"><StatusBanner title="Sign in to edit your homes" /></div></Shell>;
+  if (loading) return <Shell width="narrow"><div className="py-6"><StatusBanner title="Checking your session…" /></div></Shell>;
+  if (!user) return <Shell width="narrow"><div className="py-6"><StatusBanner title="Sign in to edit your homes" /></div></Shell>;
 
   return (
-    <Shell>
-      <div className="flex flex-1 flex-col gap-3.5 px-[18px] pb-4 pt-16 md:pt-4">
+    <Shell width="narrow">
+      <div className="flex flex-1 flex-col gap-3.5 pb-6 pt-6">
         <HostSubnav />
         <Link to="/host/listings" className="text-xs font-bold text-ink/55">
           ← Your homes

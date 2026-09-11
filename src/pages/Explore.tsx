@@ -27,7 +27,7 @@ export function ExplorePage() {
 
   return (
     <Shell>
-      <div className="flex flex-1 flex-col gap-4 px-[18px] pb-4 pt-16 md:pt-4">
+      <div className="flex flex-1 flex-col gap-4 pb-6 pt-6">
         <div className="flex items-center gap-3 rounded-full bg-linen px-[18px] py-[13px]">
           <SearchIcon className="h-[19px] w-[19px] text-spruce" />
           <div className="flex flex-col">
