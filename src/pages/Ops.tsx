@@ -178,6 +178,42 @@ export function OpsPage() {
               )}
             </section>
 
+            {/* --- conversion totals -------------------------------- */}
+            <section aria-labelledby="conversions-heading" className="flex flex-col gap-4">
+              <h2 id="conversions-heading" className="m-0 text-card-title">
+                Conversion totals
+              </h2>
+              <p className="m-0 max-w-reading text-sm text-ink-secondary">
+                Counts of durable outcomes the server recorded next to the transition that caused
+                them. Lifetime facts are unique per member, so a retry or a replayed webhook cannot
+                inflate them. These are counts, never rows — who activated is not shown here.
+              </p>
+              {data.conversions.length === 0 ? (
+                <EmptyState title="No conversions recorded yet.">
+                  <p>A fact appears the first time a member confirms a stay or readies a home.</p>
+                </EmptyState>
+              ) : (
+                <ul className="m-0 flex list-none flex-col gap-3 p-0">
+                  {data.conversions.map((row) => (
+                    <li key={row.outcome}>
+                      <Card padding="sm">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <p className="m-0 font-semibold">{row.outcome.replaceAll("_", " ")}</p>
+                          <p className="money m-0 text-lg font-semibold">{row.total}</p>
+                        </div>
+                        <div className="mt-3">
+                          <DataList>
+                            <DataRow label="First" value={when(row.firstAt)} />
+                            <DataRow label="Most recent" value={when(row.lastAt)} />
+                          </DataList>
+                        </div>
+                      </Card>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
             {/* --- frozen payouts ----------------------------------- */}
             <section aria-labelledby="frozen-heading" className="flex flex-col gap-4">
               <h2 id="frozen-heading" className="m-0 text-card-title">

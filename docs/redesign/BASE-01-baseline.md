@@ -273,6 +273,34 @@ its owning ticket replaces the screen, so nothing is half-edited.
 - Every irreversible action on a claim is now confirmed with its exact amount
   and who receives it before it is sent. None of them fire on a first click.
 
+## 6g. MEAS-01 notes
+
+- **Facts are written by triggers on the transitions, not by application code
+  after them.** `stripe_events` claims an event id first, so an analytics write
+  made after the confirming transaction is lost forever on a retry — the event
+  is already claimed and will not be reprocessed. A trigger commits with the
+  transition or not at all, and does not care which code path caused it.
+- Every trigger **fails open**. A missing fact is recoverable by
+  reconciliation; a refused payment is not. `tests/conversion-facts.test.ts`
+  proves it by replacing the recorder with one that raises and checking the
+  booking still commits.
+- Lifetime dedupe is a partial unique index, not application logic, so a
+  replayed webhook, a retried request and two concurrent confirmations produce
+  one row. The concurrency case is asserted with three parallel calls.
+- `app_user` has **SELECT only** on `conversion_facts`, scoped to its own rows,
+  and no EXECUTE on the recorder. A member cannot insert, update, delete,
+  forge one against someone else, or call the writer.
+- Ops gets `app.conversion_totals()` — counts, never rows. A member without the
+  ops flag gets nothing back at all.
+- **Not done in this slice, and deliberately so:** `signup_verified` needs a
+  trigger on the Auth.js identity tables, and the measurement spec says to
+  validate the installed version's verification ordering first rather than
+  guess. The outcome is in the enum and the table is ready for it. The delivery
+  outbox and external sink are also out — a disabled sink must never discard a
+  durable fact, and the facts stand on their own without one.
+- **A second migration.** `0014_conversion_facts.sql` joins 0013 as written but
+  not applied to Neon.
+
 ## 7. Runtime unknowns (not verifiable from source)
 
 - Deployed configuration on Vercel + Neon: fee basis points, cron scheduling for

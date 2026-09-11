@@ -208,10 +208,19 @@ export type OpsFrozenPayout = {
   stripeTransferId: string | null;
 };
 
+/** Aggregate conversion counts. Never rows — ops sees how many, not who. */
+export type OpsConversionTotal = {
+  outcome: string;
+  total: number;
+  firstAt: string | null;
+  lastAt: string | null;
+};
+
 export type OpsSnapshot = {
   disputes: OpsDispute[];
   heartbeats: OpsHeartbeat[];
   frozenPayouts: OpsFrozenPayout[];
+  conversions: OpsConversionTotal[];
 };
 
 export type CreateBookingRequest = {
