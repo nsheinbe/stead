@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { HostSubnav } from "../components/HostSubnav";
 import { Shell } from "../components/Shell";
+import { SignInPrompt } from "../components/SignInPrompt";
 import { StatusBanner } from "../components/StatusBanner";
 import { useAuth } from "../hooks/useAuth";
 import { api, ApiError } from "../lib/api";
@@ -13,7 +14,7 @@ import { CLAIM_STATE_LABEL } from "../lib/types";
 
 export function HostClaimDetailPage() {
   const { claimId } = useParams<{ claimId: string }>();
-  const { user, loading } = useAuth();
+  const { user, loading, status } = useAuth();
   const queryClient = useQueryClient();
   const [note, setNote] = useState("");
   const [splitDollars, setSplitDollars] = useState("");
@@ -79,7 +80,12 @@ export function HostClaimDetailPage() {
 
         {loading || claim.isLoading ? <StatusBanner title="Loading this claim…" /> : null}
         {user && notFound ? <StatusBanner title="Claim not found" /> : null}
-        {!user && !loading ? <StatusBanner title="Sign in to see this claim" /> : null}
+        {status !== "signed_in" ? (
+          <SignInPrompt
+            title="Sign in to review this claim"
+            description="Only the parties on this stay and an authorized arbiter can open it."
+          />
+        ) : null}
 
         {data ? (
           <>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { Shell } from "../components/Shell";
+import { SignInPrompt } from "../components/SignInPrompt";
 import { StatusBanner } from "../components/StatusBanner";
 import { useAuth } from "../hooks/useAuth";
 import { api, ApiError } from "../lib/api";
@@ -36,7 +37,7 @@ function StarButton({
 
 export function ReviewPage() {
   const { bookingId } = useParams<{ bookingId: string }>();
-  const { user, loading } = useAuth();
+  const { user, loading, status } = useAuth();
   const queryClient = useQueryClient();
   const [rating, setRating] = useState(5);
   const [tags, setTags] = useState<string[]>([]);
@@ -72,7 +73,12 @@ export function ReviewPage() {
     <Shell width="narrow">
       <div className="flex flex-1 flex-col gap-3.5 pb-6 pt-6">
         {loading || form.isLoading ? <StatusBanner title="Opening the review…" /> : null}
-        {!user && !loading ? <StatusBanner title="Sign in to write this review" /> : null}
+        {status !== "signed_in" ? (
+          <SignInPrompt
+            title="Sign in to write this review"
+            description="Reviews are only for stays you were on. We'll bring you back to this one."
+          />
+        ) : null}
         {user && notFound ? (
           <StatusBanner title="No stay here" detail="Reviews are only for stays you were on." />
         ) : null}

@@ -2,6 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { HostSubnav } from "../components/HostSubnav";
 import { Shell } from "../components/Shell";
+import { SignInPrompt } from "../components/SignInPrompt";
 import { StatusBanner } from "../components/StatusBanner";
 import { useAuth } from "../hooks/useAuth";
 import { api } from "../lib/api";
@@ -16,7 +17,7 @@ const PAYOUT_LABEL: Record<HostPayout["state"], string> = {
 };
 
 export function HostPayoutsPage() {
-  const { user, loading } = useAuth();
+  const { user, status: sessionStatus } = useAuth();
   const [params] = useSearchParams();
   const returning = params.get("done") === "1";
   const refresh = params.get("refresh") === "1";
@@ -56,10 +57,12 @@ export function HostPayoutsPage() {
         <HostSubnav />
         <h1 className="m-0 font-display text-2xl font-semibold">Payouts</h1>
 
-        {loading ? (
-          <StatusBanner title="Checking your session…" />
-        ) : !user ? (
-          <StatusBanner title="Sign in to set up payouts" />
+        {sessionStatus !== "signed_in" ? (
+          <SignInPrompt
+            title="Sign in to set up payouts"
+            description="Payout setup must be complete before guests can pay for a stay."
+            intent="homeowner"
+          />
         ) : (
           <>
             {refresh && !ready && (
