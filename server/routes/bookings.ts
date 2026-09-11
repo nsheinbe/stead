@@ -46,7 +46,7 @@ import {
 } from "../queries/bookings";
 import { CancelError, cancelBooking, getCancelableBooking, previewCancellation } from "../queries/cancellations";
 import { getConfigMap, intFromConfig } from "../queries/listings";
-import type { CreateBookingResponse } from "../../src/lib/types";
+import type { CreateBookingResponse, StayQuoteResponse } from "../../src/lib/types";
 
 
 const createBookingSchema = z.object({
@@ -184,6 +184,76 @@ tripsRoutes.post("/:id/cancel", rateLimit(RATE_LIMITS.cancel), async (c) => {
 
 export const bookingsRoutes = new Hono<AppEnv>();
 
+/**
+ * Read-only price preview. Same pricing function as create-booking, so the
+ * browser never has to compute a total it might disagree with, but it
+ * reserves nothing: no booking row, no Stripe intent, no client secret, and
+ * no availability lock. Creation revalidates everything independently and its
+ * quote is the one that governs the charge.
+ *
+ * Public on purpose — browsing and pricing come before sign-in — and rate
+ * limited because it reads a listing per call.
+ */
+bookingsRoutes.post("/quote", rateLimit(RATE_LIMITS.quotes), async (c) => {
+  const parsed = createBookingSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) {
+    throw new HTTPException(400, {
+      message: "listingId, checkIn, checkOut, and guests are required",
+    });
+  }
+  const { listingId, checkIn, checkOut, guests } = parsed.data;
+
+  let nights: number;
+  try {
+    nights = nightsBetween(checkIn, checkOut);
+  } catch (err) {
+    throw new HTTPException(400, {
+      message: err instanceof MoneyError ? err.message : "Invalid stay dates",
+    });
+  }
+
+  const context = await tenantQuery(c, async (tx) => ({
+    listing: await getBookableListing(tx, listingId),
+    config: await getConfigMap(tx),
+  }));
+  const { listing } = context;
+  if (!listing || listing.status !== "active") {
+    throw new HTTPException(404, { message: "Listing not found" });
+  }
+  if (guests > listing.maxGuests) {
+    throw new HTTPException(400, { message: `This home sleeps ${listing.maxGuests}` });
+  }
+
+  const networkFeeBps = intFromConfig(context.config.network_fee_bps, 200);
+  const depositAuthMaxNights = intFromConfig(context.config.deposit_auth_max_nights, 4);
+
+  let quote;
+  try {
+    quote = quoteStay({
+      nightlyRateCents: listing.nightlyRateCents,
+      nights,
+      networkFeeBps,
+      depositCents: listing.depositCents,
+    });
+  } catch (err) {
+    throw new HTTPException(400, {
+      message: err instanceof MoneyError ? err.message : "Invalid quote",
+    });
+  }
+
+  const body: StayQuoteResponse = {
+    quote,
+    networkFeeBps,
+    depositMethod: depositMethod(nights, depositAuthMaxNights),
+    cancellationPolicy: listing.cancellationPolicy,
+    timezone: listing.timezone,
+    maxGuests: listing.maxGuests,
+    // A preview, not a hold: the dates are checked when the booking is made.
+    reserved: false,
+  };
+  return c.json(body);
+});
+
 bookingsRoutes.post("/", rateLimit(RATE_LIMITS.bookings), async (c) => {
   const guest = sessionUser(c);
 
@@ -315,6 +385,7 @@ bookingsRoutes.post("/", rateLimit(RATE_LIMITS.bookings), async (c) => {
           nightlyRateCents: quote.nightly_rate_cents,
           staySubtotalCents: quote.stay_subtotal_cents,
           networkFeeCents: quote.network_fee_cents,
+          networkFeeBps,
           guestTotalCents: quote.guest_total_cents,
           depositCents: quote.deposit_cents,
           cancellationPolicy: listing.cancellationPolicy,
@@ -345,11 +416,13 @@ bookingsRoutes.post("/", rateLimit(RATE_LIMITS.bookings), async (c) => {
   const body: CreateBookingResponse = {
     bookingId: created.bookingId,
     quote,
+    networkFeeBps,
     paymentClientSecret,
     setupClientSecret,
     depositMethod: method,
     mockPayment,
     timezone: listing.timezone,
+    cancellationPolicy: listing.cancellationPolicy,
   };
   return c.json(body);
 });

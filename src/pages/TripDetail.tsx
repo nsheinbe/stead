@@ -3,8 +3,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { CancellationPolicyCard } from "../components/CancellationPolicyCard";
 import { EscrowTimeline } from "../components/EscrowTimeline";
+import { PriceBreakdown } from "../components/PriceBreakdown";
+import { depositHeading } from "../lib/fees";
+import { Surface } from "../components/ui";
 import { InboxIcon } from "../components/Icons";
 import { Shell } from "../components/Shell";
+import { SignInPrompt } from "../components/SignInPrompt";
 import { StatusBanner } from "../components/StatusBanner";
 import { useAuth } from "../hooks/useAuth";
 import { prettyRange } from "../lib/dates";
@@ -15,7 +19,7 @@ import { CLAIM_STATE_LABEL } from "../lib/types";
 
 export function TripDetailPage() {
   const { bookingId } = useParams<{ bookingId: string }>();
-  const { user, loading } = useAuth();
+  const { user, loading, status } = useAuth();
   const queryClient = useQueryClient();
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
@@ -71,8 +75,8 @@ export function TripDetailPage() {
   const notFound = trip.error instanceof ApiError && trip.error.status === 404;
 
   return (
-    <Shell>
-      <div className="flex flex-1 flex-col gap-3.5 px-[18px] pb-4 pt-16 md:pt-4">
+    <Shell width="narrow">
+      <div className="flex flex-1 flex-col gap-3.5 pb-6 pt-6">
         <div className="flex items-center justify-between">
           <h1 className="m-0 font-display text-2xl font-semibold">Your stay</h1>
           {booking ? (
@@ -85,11 +89,17 @@ export function TripDetailPage() {
         {loading || trip.isLoading ? <StatusBanner title="Loading this stay…" /> : null}
         {user && notFound ? (
           <StatusBanner
-            title="Trip not found"
-            detail="Guest A cannot read guest B's booking — that is the rule."
+            title="We couldn't find this stay"
+            detail="It may no longer be available, or this link may not be yours."
           />
         ) : null}
-        {!user && !loading ? <StatusBanner title="Sign in to see this trip" /> : null}
+        {status !== "signed_in" ? (
+          <SignInPrompt
+            title="Sign in to see this stay"
+            description="Only the guest on this stay and the home's host can open it."
+            intent="renter"
+          />
+        ) : null}
 
         {booking && listing ? (
           <>
@@ -109,31 +119,41 @@ export function TripDetailPage() {
             <div className="flex flex-col gap-2 rounded-card bg-linen p-[18px]">
               <span className="text-[11.5px] font-bold tracking-[0.14em] text-ink/50">ACCESS</span>
               <p className="m-0 text-[12.5px] leading-relaxed text-ink/60">
-                Check-in {booking.checkIn} at listing-local time ({listing.timezone}). The host shares the door
-                details before you arrive — Slice 1 does not invent a code.
+                Check-in {booking.checkIn}, in the home's time zone ({listing.timezone}). Message your host for
+                arrival details.
               </p>
             </div>
 
-            <div className="flex flex-col gap-3 rounded-[14px] border-[1.5px] border-dashed border-brass/75 bg-brass/[0.06] px-4 py-3.5">
-              <div className="flex items-center justify-between">
-                <div className="flex flex-col gap-0.5">
-                  <span className="money text-sm font-bold">
-                    {formatUsd(escrow?.amountCents ?? booking.depositCents)} · in escrow
-                  </span>
-                </div>
+            <Surface padding="sm" data-testid="deposit-status">
+              <div className="flex items-baseline justify-between gap-4">
+                <h2 className="m-0 text-base font-semibold">Deposit status</h2>
+                <span className="money font-semibold">
+                  {formatUsd(escrow?.amountCents ?? booking.depositCents)}
+                </span>
               </div>
-              <EscrowTimeline escrow={escrow ?? null} timezone={listing.timezone} />
-            </div>
+              <div className="mt-3">
+                {escrow ? (
+                  <EscrowTimeline escrow={escrow} timezone={listing.timezone} />
+                ) : (
+                  <p className="m-0 text-sm text-ink-secondary">No deposit update is available yet.</p>
+                )}
+              </div>
+            </Surface>
 
-            <div className="flex flex-col gap-2 rounded-[14px] border border-linen-tint px-4 py-3.5 text-sm">
-              <div className="money flex justify-between">
-                <span className="text-ink/70">Stay + 2% network fee</span>
-                <span className="font-semibold">{formatUsd(booking.guestTotalCents)}</span>
-              </div>
-              <div className="money flex justify-between">
-                <span className="text-ink/70">Deposit (apart)</span>
-                <span className="font-semibold">{formatUsd(booking.depositCents)}</span>
-              </div>
+            <div className="flex flex-col gap-2 rounded-[14px] border border-linen-tint px-4 py-3.5">
+              <h2 className="m-0 text-base font-semibold">Your price</h2>
+              <PriceBreakdown
+                nightlyRateCents={booking.nightlyRateCents}
+                nights={booking.nights}
+                staySubtotalCents={booking.staySubtotalCents}
+                networkFeeCents={booking.networkFeeCents}
+                guestTotalCents={booking.guestTotalCents}
+                networkFeeBps={booking.networkFeeBps}
+                authoritative
+              />
+              <p className="m-0 text-sm text-ink-secondary">
+                The {depositHeading().toLowerCase()} above is separate from this charge.
+              </p>
             </div>
 
             <div className="flex gap-2.5">

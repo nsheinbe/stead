@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Shell } from "../components/Shell";
+import { SignInPrompt } from "../components/SignInPrompt";
 import { StatusBanner } from "../components/StatusBanner";
 import { useAuth } from "../hooks/useAuth";
 import { prettyRange } from "../lib/dates";
@@ -19,7 +20,7 @@ const STATUS_LABEL: Record<BookingStatus, string> = {
 };
 
 export function TripsPage() {
-  const { user, loading } = useAuth();
+  const { user, status } = useAuth();
 
   const trips = useQuery({
     queryKey: ["trips", user?.id],
@@ -28,18 +29,17 @@ export function TripsPage() {
   });
 
   return (
-    <Shell>
-      <div className="flex flex-1 flex-col gap-3.5 px-[18px] pb-4 pt-16 md:pt-4">
+    <Shell width="narrow">
+      <div className="flex flex-1 flex-col gap-3.5 pb-6 pt-6">
         <div className="flex items-center justify-between">
           <h1 className="m-0 font-display text-2xl font-semibold">Your stays</h1>
         </div>
 
-        {loading ? (
-          <StatusBanner title="Checking your session…" />
-        ) : !user ? (
-          <StatusBanner
-            title="Sign in to see your trips"
-            detail="Magic link only for now — Google sign-in is waiting on an OAuth client."
+        {status !== "signed_in" ? (
+          <SignInPrompt
+            title="Sign in to see your stays"
+            description="Your stays, their dates and their status live in your account. We'll bring you straight back here."
+            intent="renter"
           />
         ) : null}
 

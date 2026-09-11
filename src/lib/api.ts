@@ -28,6 +28,7 @@ import type {
   UnreadCount,
   IdentitySessionResponse,
   OpsSnapshot,
+  StayQuoteResponse,
 } from "./types";
 import { listingFiltersToSearch, type ListingFilters } from "./filters";
 
@@ -246,6 +247,14 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
+  /** Price preview only. Reserves nothing; creation is the authority. */
+  quoteStay: (body: CreateBookingRequest) =>
+    request<StayQuoteResponse>("/api/bookings/quote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+
   createBooking: (body: CreateBookingRequest) =>
     request<CreateBookingResponse>("/api/bookings", {
       method: "POST",
@@ -253,7 +262,11 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
-  /** Auth.js magic link. Returns once the email is on its way. */
+  /**
+   * Auth.js magic link. Resolves once the provider accepted the send; that is
+   * not delivery, not a sign-in, and never a reservation. `callbackUrl` is an
+   * application path the server re-validates before it redirects anyone.
+   */
   async sendSignInLink(email: string, callbackUrl: string): Promise<void> {
     const body = new URLSearchParams({ csrfToken: await csrfToken(), email, callbackUrl });
     const response = await fetch("/api/auth/signin/resend", {
@@ -266,11 +279,11 @@ export const api = {
       body,
     });
     if (!response.ok) {
-      throw new ApiError(response.status, "Could not send the sign-in link. Try again shortly.");
+      throw new ApiError(response.status, "We couldn't send the link. Check your email address and try again.");
     }
     const result = (await response.json().catch(() => null)) as { url?: string } | null;
     if (result?.url && new URL(result.url, window.location.origin).searchParams.get("error")) {
-      throw new ApiError(400, "Could not send the sign-in link. Check the address and try again.");
+      throw new ApiError(400, "We couldn't send the link. Check your email address and try again.");
     }
   },
 

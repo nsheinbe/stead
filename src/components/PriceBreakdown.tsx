@@ -1,57 +1,79 @@
+import { DataList, DataRow, Surface } from "./ui";
+import { depositExplainer, depositHeading, feeRowLabel } from "../lib/fees";
 import { formatUsd } from "../lib/money";
+import type { DepositMethod } from "../lib/types";
 
+/**
+ * The stay's money, as rows. The fee label is derived from the basis points
+ * that produced these cents — live config for an estimate, the booking's own
+ * snapshot for a receipt — so the percentage and the amount can never
+ * disagree.
+ *
+ * `total` names what the number is: an estimate before the server has quoted,
+ * the stay charge once it has. The deposit is never added into it.
+ */
 export function PriceBreakdown({
   nightlyRateCents,
   nights,
   staySubtotalCents,
   networkFeeCents,
   guestTotalCents,
-  hostLine = false,
+  networkFeeBps,
+  authoritative = false,
 }: {
   nightlyRateCents: number;
   nights: number;
   staySubtotalCents: number;
   networkFeeCents: number;
   guestTotalCents: number;
-  hostLine?: boolean;
+  networkFeeBps?: number | null;
+  /** True once these numbers came from the server's quote for this stay. */
+  authoritative?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-2.5 rounded-[14px] border border-linen-tint px-4 py-3.5">
-      <div className="money flex justify-between text-sm">
-        <span className="text-ink/70">
-          {formatUsd(nightlyRateCents)} × {nights} {nights === 1 ? "night" : "nights"}
-        </span>
-        <span className="font-semibold">{formatUsd(staySubtotalCents)}</span>
-      </div>
-      <div className="money flex justify-between text-sm">
-        <span className="text-ink/70">Network fee — flat 2%</span>
-        <span className="font-semibold">{formatUsd(networkFeeCents)}</span>
-      </div>
-      <div className="h-px bg-[#EDE5D3]" />
-      <div className="money flex justify-between text-[15.5px] font-bold">
-        <span>{hostLine ? `Guest pays · host gets ${formatUsd(staySubtotalCents)}` : "Total — that's it"}</span>
-        <span>{formatUsd(guestTotalCents)}</span>
-      </div>
-    </div>
+    <DataList>
+      <DataRow
+        label={`${nights} ${nights === 1 ? "night" : "nights"} × ${formatUsd(nightlyRateCents)}`}
+        value={formatUsd(staySubtotalCents)}
+      />
+      <DataRow label={feeRowLabel(networkFeeBps)} value={formatUsd(networkFeeCents)} />
+      <DataRow
+        label={authoritative ? "Stay charge" : "Estimated stay total"}
+        value={formatUsd(guestTotalCents)}
+        total
+        testId="stay-total"
+      />
+    </DataList>
   );
 }
 
-export function DepositChip({
+/**
+ * The deposit, kept visibly apart from the stay charge. Its wording follows
+ * the method the server chose, so a card-on-file arrangement is never
+ * described as money held.
+ */
+export function DepositNote({
   amountCents,
-  detail = "Held in neutral escrow — never in the host's account.",
+  method,
+  claimWindowHours,
 }: {
   amountCents: number;
-  detail?: string;
+  method: DepositMethod;
+  claimWindowHours?: number | null;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-[14px] border-[1.5px] border-dashed border-brass/75 bg-brass/[0.06] px-4 py-3.5">
-      <div className="flex flex-1 flex-col gap-1">
-        <span className="money text-sm font-bold">Incidentals deposit · {formatUsd(amountCents)}</span>
-        <span className="text-xs leading-snug text-ink/60">{detail}</span>
+    <Surface padding="sm" data-testid="deposit-note">
+      <div className="flex items-baseline justify-between gap-4">
+        <h3 className="m-0 text-base font-semibold">{depositHeading()}</h3>
+        <span className="money font-semibold">{formatUsd(amountCents)}</span>
       </div>
-      <span className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-bold text-brass-deep">
-        RETURNS TO YOU
-      </span>
-    </div>
+      <p className="m-0 mt-2 text-sm text-ink-secondary">{depositExplainer(method, amountCents)}</p>
+      {typeof claimWindowHours === "number" ? (
+        <p className="m-0 mt-1 text-sm text-ink-secondary">
+          After checkout your host has {claimWindowHours} hours to raise a claim against it. You can respond to a
+          claim before anything is charged.
+        </p>
+      ) : null}
+    </Surface>
   );
 }

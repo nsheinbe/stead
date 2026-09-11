@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Shell } from "../components/Shell";
+import { SignInPrompt } from "../components/SignInPrompt";
 import { StatusBanner } from "../components/StatusBanner";
 import { useAuth } from "../hooks/useAuth";
 import { api, ApiError } from "../lib/api";
@@ -11,7 +12,7 @@ function when(iso: string | null): string {
 }
 
 export function OpsPage() {
-  const { user, loading } = useAuth();
+  const { user, status } = useAuth();
 
   const ops = useQuery({
     queryKey: ["ops"],
@@ -24,7 +25,7 @@ export function OpsPage() {
 
   return (
     <Shell>
-      <div className="flex flex-1 flex-col gap-4 px-[18px] pb-6 pt-16 md:pt-6">
+      <div className="flex flex-1 flex-col gap-4 pb-6 pt-6">
         <div className="flex items-baseline justify-between">
           <h1 className="m-0 font-display text-2xl font-semibold">Ops</h1>
           <Link to="/" className="text-sm font-bold text-spruce no-underline">
@@ -36,8 +37,12 @@ export function OpsPage() {
           designed admin screen.
         </p>
 
-        {loading ? <StatusBanner title="Checking your session…" /> : null}
-        {!loading && !user ? <StatusBanner title="Sign in to continue" /> : null}
+        {status !== "signed_in" ? (
+          <SignInPrompt
+            title="Sign in to open operations"
+            description="This view is limited to authorized operations accounts."
+          />
+        ) : null}
         {forbidden ? (
           <StatusBanner tone="claim" title="This page is for ops" detail="Your account is not flagged." />
         ) : null}

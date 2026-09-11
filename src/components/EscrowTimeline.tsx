@@ -1,107 +1,131 @@
-import type { EscrowDetail, EscrowState } from "../lib/types";
-
-const STEPS = ["Held", "Stay", "48 h window", "Returned"] as const;
+import type { DepositMethod, EscrowDetail, EscrowState } from "../lib/types";
 
 /**
- * Where each escrow state sits on the bar. -1 lights nothing: a scheduled
- * deposit has not been held yet, and showing "Held" would be a lie about the
- * member's money.
+ * The deposit's actual history, from escrow_audit.
+ *
+ * Every step shown is one the server recorded, with the timestamp it
+ * recorded. Nothing is projected forward: a scheduled deposit shows one
+ * pending line, not a completed one, and no countdown is invented from a
+ * database row. Rendered as an ordered list so the sequence is programmatic,
+ * with the state in text rather than colour alone.
  */
-const STEP_FOR_STATE: Record<EscrowState, number> = {
-  scheduled: -1,
-  held: 1,
-  claim_window: 2,
-  // A claim keeps the deposit at the window stage until it resolves.
-  claimed: 2,
-  disputed: 2,
-  arbitrated: 2,
-  released: 3,
+const STATE_LABEL: Record<EscrowState, string> = {
+  scheduled: "Scheduled",
+  held: "Held",
+  claim_window: "Claim window open",
+  claimed: "Claim filed",
+  disputed: "Claim disputed",
+  arbitrated: "Arbitration resolved",
+  released: "Released",
 };
 
 function formatInZone(iso: string, timezone: string): string {
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone,
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(iso));
+  try {
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZoneName: "short",
+    }).format(new Date(iso));
+  } catch {
+    return new Date(iso).toISOString();
+  }
 }
 
-/** What the deposit is doing right now, said plainly. */
-function caption(escrow: EscrowDetail | null, timezone: string): string {
-  if (!escrow || escrow.state === "scheduled") {
-    return "Scheduled — held at listing-local check-in. Nobody can spend it meanwhile.";
-  }
+/** What the deposit is doing right now, said without overclaiming. */
+function caption(escrow: EscrowDetail, timezone: string): string {
   switch (escrow.state) {
+    case "scheduled":
+      return escrow.method === "auth_hold"
+        ? "Nothing has been authorized yet. This happens near check-in."
+        : "Nothing has been charged. Your card stays on file for the deposit arrangement.";
     case "held":
       return escrow.heldAt
-        ? `Held since ${formatInZone(escrow.heldAt, timezone)}. Your card has not been charged.`
-        : "Held. Your card has not been charged.";
+        ? `Recorded as held on ${formatInZone(escrow.heldAt, timezone)}.`
+        : "Recorded as held.";
     case "claim_window":
       return escrow.windowClosesAt
-        ? `The claim window closes ${formatInZone(escrow.windowClosesAt, timezone)}. It returns on its own if no claim is filed.`
-        : "The claim window is open. It returns on its own if no claim is filed.";
+        ? `Your host can raise a claim until ${formatInZone(escrow.windowClosesAt, timezone)}.`
+        : "The claim window is open.";
     case "claimed":
-      return "Your host has filed a claim. You can accept it or send it to independent arbitration.";
+      return "Your host has raised a claim. You can accept it or record a dispute.";
     case "disputed":
-      return "You disputed the claim. It is with independent arbitration.";
+      return "You recorded a dispute. The claim is with arbitration.";
     case "arbitrated":
-      return "Independent arbitration has resolved this claim.";
+      return "Arbitration has resolved this claim.";
     case "released":
       return escrow.releasedAt
-        ? `Returned ${formatInZone(escrow.releasedAt, timezone)}. Nothing was ever taken from your card.`
-        : "Returned. Nothing was ever taken from your card.";
+        ? `Released on ${formatInZone(escrow.releasedAt, timezone)}.`
+        : "Released.";
     default:
       return "";
   }
 }
 
-/**
- * Both props are optional so the pre-booking preview can render the same bar
- * with nothing lit. The timezone only matters once there are real timestamps
- * to format, which is exactly when an escrow exists.
- */
 export function EscrowTimeline({
-  escrow = null,
+  escrow,
   timezone = "UTC",
 }: {
-  escrow?: EscrowDetail | null;
+  escrow: EscrowDetail;
   timezone?: string;
 }) {
-  const activeIndex = escrow ? STEP_FOR_STATE[escrow.state] : -1;
-  const pct =
-    activeIndex <= 0 ? "8%" : `${Math.min(100, (activeIndex / (STEPS.length - 1)) * 100)}%`;
+  const steps = escrow.timeline;
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="relative mt-1">
-        <div className="absolute left-[7px] right-[7px] top-1.5 h-0.5 rounded-full bg-[#E4D9C0]" />
-        <div
-          className="absolute left-[7px] top-1.5 h-0.5 rounded-full bg-brass"
-          style={{ width: pct }}
-        />
-        <div className="relative grid grid-cols-4">
-          {STEPS.map((label, i) => {
-            const on = i <= activeIndex;
-            return (
-              <div key={label} className="flex flex-col items-start gap-1">
-                <span
-                  className={`box-border h-3.5 w-3.5 rounded-full border-2 ${
-                    on ? "border-brass bg-brass" : "border-[#D8CBAC] bg-paper"
-                  }`}
-                />
-                <span
-                  className={`text-[10px] ${on ? "font-bold text-ink" : "font-semibold text-ink/50"}`}
-                >
-                  {label}
-                </span>
+    <div className="flex flex-col gap-3">
+      {steps.length === 0 ? (
+        <p className="m-0 text-sm text-ink-secondary">No deposit update is available yet.</p>
+      ) : (
+        <ol className="m-0 flex list-none flex-col gap-3 p-0">
+          {steps.map((step, index) => (
+            <li key={`${step.toState}-${step.at}`} className="flex gap-3">
+              <span
+                aria-hidden
+                className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${
+                  index === steps.length - 1 ? "bg-brand" : "bg-control"
+                }`}
+              />
+              <div className="min-w-0">
+                <p className="m-0 text-sm font-semibold">{STATE_LABEL[step.toState]}</p>
+                <p className="m-0 text-sm text-ink-secondary">{formatInZone(step.at, timezone)}</p>
               </div>
-            );
-          })}
-        </div>
-      </div>
-      <p className="m-0 text-xs text-ink/60">{caption(escrow, timezone)}</p>
+            </li>
+          ))}
+        </ol>
+      )}
+      <p className="m-0 text-sm text-ink-secondary">{caption(escrow, timezone)}</p>
     </div>
+  );
+}
+
+/**
+ * Pre-booking explanation of what will happen, stated as a sequence rather
+ * than a progress bar — nothing has happened yet, so nothing is lit.
+ */
+export function DepositSequence({ method }: { method: DepositMethod }) {
+  const steps =
+    method === "auth_hold"
+      ? [
+          "Near check-in, your card is authorized for the deposit amount.",
+          "After checkout, your host has a limited window to raise a claim.",
+          "With no claim, the authorization is released.",
+        ]
+      : [
+          "Nothing is collected for the deposit when you pay for your stay.",
+          "After checkout, your host has a limited window to raise a claim.",
+          "If you accept a claim, the agreed amount can be charged to the card on file.",
+        ];
+  return (
+    <ol className="m-0 flex list-none flex-col gap-2 p-0 text-sm text-ink-secondary">
+      {steps.map((step, index) => (
+        <li key={step} className="flex gap-2.5">
+          <span className="money shrink-0 font-semibold text-ink">{index + 1}.</span>
+          <span>{step}</span>
+        </li>
+      ))}
+    </ol>
   );
 }

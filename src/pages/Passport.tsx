@@ -67,8 +67,8 @@ export function PassportPage() {
   const latest = data?.reviews[0];
 
   return (
-    <Shell>
-      <div className="flex flex-1 flex-col gap-3.5 bg-spruce px-[18px] pb-6 pt-16 text-paper md:rounded-card md:pt-6">
+    <Shell width="narrow">
+      <div className="flex flex-1 flex-col gap-3.5 bg-spruce px-[18px] pb-6 pt-6 text-paper md:rounded-card">
         <div className="flex items-center justify-between">
           <h1 className="m-0 font-display text-2xl font-semibold">Trust Passport</h1>
           {isOwn ? (

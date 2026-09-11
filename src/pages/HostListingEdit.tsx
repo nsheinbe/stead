@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { HostSubnav } from "../components/HostSubnav";
 import { Shell } from "../components/Shell";
+import { SignInPrompt } from "../components/SignInPrompt";
 import { StatusBanner } from "../components/StatusBanner";
 import { useAuth } from "../hooks/useAuth";
 import { api, ApiError } from "../lib/api";
@@ -27,7 +28,7 @@ function toEditable(listing: HostListing): Editable {
 
 export function HostListingEditPage() {
   const { listingId } = useParams<{ listingId: string }>();
-  const { user, loading } = useAuth();
+  const { user, status } = useAuth();
   const queryClient = useQueryClient();
   const fileInput = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<Editable | null>(null);
@@ -79,12 +80,23 @@ export function HostListingEditPage() {
     onSuccess: invalidate,
   });
 
-  if (loading) return <Shell><div className="p-[18px] pt-16 md:pt-4"><StatusBanner title="Checking your session…" /></div></Shell>;
-  if (!user) return <Shell><div className="p-[18px] pt-16 md:pt-4"><StatusBanner title="Sign in to edit your homes" /></div></Shell>;
+  if (status !== "signed_in") {
+    return (
+      <Shell width="narrow" workspace="hosting">
+        <div className="py-8">
+          <SignInPrompt
+            title="Sign in to edit this home"
+            description="Only the homeowner can open this listing. We'll bring you back here."
+            intent="homeowner"
+          />
+        </div>
+      </Shell>
+    );
+  }
 
   return (
-    <Shell>
-      <div className="flex flex-1 flex-col gap-3.5 px-[18px] pb-4 pt-16 md:pt-4">
+    <Shell width="narrow">
+      <div className="flex flex-1 flex-col gap-3.5 pb-6 pt-6">
         <HostSubnav />
         <Link to="/host/listings" className="text-xs font-bold text-ink/55">
           ← Your homes

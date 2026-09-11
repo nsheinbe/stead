@@ -189,12 +189,13 @@ export async function insertBooking(row: BookingRow): Promise<string> {
     const result = (await db.execute<{ id: string }>(sql`
       INSERT INTO public.bookings (
         id, listing_id, guest_id, check_in, check_out, guests, nights,
-        nightly_rate_cents, stay_subtotal_cents, network_fee_cents, guest_total_cents,
+        nightly_rate_cents, stay_subtotal_cents, network_fee_cents, network_fee_bps,
+        guest_total_cents,
         deposit_cents, cancellation_policy, status, created_at, stripe_payment_intent_id
       ) VALUES (
         COALESCE(${row.id ?? null}::uuid, gen_random_uuid()),
         ${row.listingId}::uuid, ${row.guestId}::uuid, ${row.checkIn}::date, ${row.checkOut}::date,
-        2, ${nights}, 20000, ${subtotal}, ${fee}, ${subtotal + fee}, 30000,
+        2, ${nights}, 20000, ${subtotal}, ${fee}, 200, ${subtotal + fee}, 30000,
         ${row.cancellationPolicy ?? "moderate"}::public.cancellation_policy,
         ${row.status ?? "pending_payment"}::public.booking_status,
         COALESCE(${row.createdAt ?? null}::timestamptz, now()),

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { HostSubnav } from "../components/HostSubnav";
 import { Shell } from "../components/Shell";
+import { SignInPrompt } from "../components/SignInPrompt";
 import { StatusBanner } from "../components/StatusBanner";
 import { useAuth } from "../hooks/useAuth";
 import { api, ApiError } from "../lib/api";
@@ -13,7 +14,7 @@ import { CLAIM_STATE_LABEL } from "../lib/types";
 
 export function HostClaimDetailPage() {
   const { claimId } = useParams<{ claimId: string }>();
-  const { user, loading } = useAuth();
+  const { user, loading, status } = useAuth();
   const queryClient = useQueryClient();
   const [note, setNote] = useState("");
   const [splitDollars, setSplitDollars] = useState("");
@@ -59,8 +60,8 @@ export function HostClaimDetailPage() {
   const splitCents = dollarsToCents(splitDollars);
 
   return (
-    <Shell>
-      <div className="flex flex-1 flex-col gap-3.5 px-[18px] pb-4 pt-16 md:pt-4">
+    <Shell width="narrow">
+      <div className="flex flex-1 flex-col gap-3.5 pb-6 pt-6">
         <HostSubnav />
         <div className="flex items-center justify-between">
           <h1 className="m-0 font-display text-2xl font-semibold">Claim</h1>
@@ -79,7 +80,12 @@ export function HostClaimDetailPage() {
 
         {loading || claim.isLoading ? <StatusBanner title="Loading this claim…" /> : null}
         {user && notFound ? <StatusBanner title="Claim not found" /> : null}
-        {!user && !loading ? <StatusBanner title="Sign in to see this claim" /> : null}
+        {status !== "signed_in" ? (
+          <SignInPrompt
+            title="Sign in to review this claim"
+            description="Only the parties on this stay and an authorized arbiter can open it."
+          />
+        ) : null}
 
         {data ? (
           <>

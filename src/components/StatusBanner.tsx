@@ -1,3 +1,10 @@
+import { StatusMessage } from "./ui/Status";
+
+/**
+ * Transitional wrapper over StatusMessage for screens that have not been
+ * migrated yet. `linen` → info, `claim` → danger. New code should use
+ * StatusMessage directly; each screen ticket removes its StatusBanner uses.
+ */
 export function StatusBanner({
   title,
   detail,
@@ -8,14 +15,8 @@ export function StatusBanner({
   tone?: "linen" | "claim";
 }) {
   return (
-    <div
-      role={tone === "claim" ? "alert" : "status"}
-      className={`rounded-card px-4 py-4 ${
-        tone === "claim" ? "bg-claim/10 text-claim" : "bg-linen text-ink"
-      }`}
-    >
-      <p className="m-0 text-sm font-bold">{title}</p>
-      {detail ? <p className="mb-0 mt-1 text-sm text-ink/60">{detail}</p> : null}
-    </div>
+    <StatusMessage tone={tone === "claim" ? "danger" : "info"} title={title}>
+      {detail ? <p>{detail}</p> : null}
+    </StatusMessage>
   );
 }

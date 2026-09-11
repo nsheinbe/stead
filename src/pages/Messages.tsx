@@ -3,12 +3,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { BackChevron } from "../components/Icons";
 import { Shell } from "../components/Shell";
+import { SignInPrompt } from "../components/SignInPrompt";
 import { StatusBanner } from "../components/StatusBanner";
+import { StatusMessage } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { api, ApiError } from "../lib/api";
 
 export function MessagesPage() {
-  const { user, loading } = useAuth();
+  const { user, status } = useAuth();
   const threads = useQuery({
     queryKey: ["message-threads", user?.id],
     enabled: Boolean(user),
@@ -16,13 +18,15 @@ export function MessagesPage() {
   });
 
   return (
-    <Shell>
-      <div className="flex flex-1 flex-col gap-3.5 px-[18px] pb-4 pt-16 md:pt-4">
+    <Shell width="narrow">
+      <div className="flex flex-1 flex-col gap-3.5 pb-6 pt-6">
         <h1 className="m-0 font-display text-2xl font-semibold">Inbox</h1>
 
-        {loading ? <StatusBanner title="Checking your session…" /> : null}
-        {!user && !loading ? (
-          <StatusBanner title="Sign in to read your messages" detail="Guests can write before they book." />
+        {status !== "signed_in" ? (
+          <SignInPrompt
+            title="Sign in to read your messages"
+            description="Conversations with hosts and guests are private to the two of you."
+          />
         ) : null}
         {user && threads.isLoading ? <StatusBanner title="Loading threads…" /> : null}
         {threads.isError ? (
@@ -76,7 +80,7 @@ export function MessagesPage() {
 
 export function MessageThreadPage() {
   const { listingId, guestId } = useParams<{ listingId: string; guestId: string }>();
-  const { user, loading } = useAuth();
+  const { user, status } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState("");
@@ -115,8 +119,8 @@ export function MessageThreadPage() {
   const notFound = thread.error instanceof ApiError && thread.error.status === 404;
 
   return (
-    <Shell hideNav>
-      <div className="flex flex-1 flex-col px-[18px] pb-7 pt-16 md:pt-6">
+    <Shell focused width="narrow">
+      <div className="flex flex-1 flex-col pb-7 pt-6">
         <div className="mb-3.5 flex items-center gap-3">
           <button
             type="button"
@@ -134,8 +138,15 @@ export function MessageThreadPage() {
           </div>
         </div>
 
-        {loading || thread.isLoading ? <StatusBanner title="Loading this thread…" /> : null}
-        {!user && !loading ? <StatusBanner title="Sign in to read this thread" /> : null}
+        {status === "signed_in" && thread.isLoading ? (
+          <StatusBanner title="Loading this thread…" />
+        ) : null}
+        {status !== "signed_in" ? (
+          <SignInPrompt
+            title="Sign in to open this conversation"
+            description="We'll bring you back to this conversation."
+          />
+        ) : null}
         {user && notFound ? <StatusBanner title="Thread not found" /> : null}
 
         <div className="flex flex-1 flex-col gap-2.5">
@@ -198,22 +209,38 @@ export function MessageThreadPage() {
 /** Guest shortcut: /messages/:listingId opens their thread on that listing. */
 export function ListingMessageRedirect() {
   const { listingId } = useParams<{ listingId: string }>();
-  const { user, loading } = useAuth();
+  const { user, status } = useAuth();
   const navigate = useNavigate();
+  const validId = Boolean(listingId && /^[A-Za-z0-9-]{1,64}$/.test(listingId));
 
   useEffect(() => {
-    if (loading) return;
-    if (!user) {
-      navigate(`/login?next=/messages/${listingId}`, { replace: true });
-      return;
-    }
-    if (listingId) navigate(`/messages/${listingId}/${user.id}`, { replace: true });
-  }, [loading, user, listingId, navigate]);
+    if (status !== "signed_in" || !user || !validId) return;
+    navigate(`/messages/${listingId}/${user.id}`, { replace: true });
+  }, [status, user, listingId, validId, navigate]);
 
   return (
-    <Shell hideNav>
-      <div className="p-6">
-        <StatusBanner title="Opening the thread…" />
+    <Shell focused width="narrow" backTo="/messages" backLabel="Inbox">
+      <div className="flex flex-1 flex-col gap-6 py-8">
+        {!validId ? (
+          <StatusMessage tone="warning" title="We couldn't find that conversation.">
+            <p>The link may be out of date.</p>
+          </StatusMessage>
+        ) : status === "signed_in" ? (
+          <p role="status" className="m-0 text-ink-secondary">
+            Opening your conversation…
+          </p>
+        ) : (
+          <SignInPrompt
+            title="Sign in to message this host"
+            description="We'll bring you back to this conversation. Nothing is sent until you write a message."
+            source="listing_message"
+          />
+        )}
+        {!validId || status === "signed_out" ? (
+          <Link to="/explore" className="text-sm font-semibold">
+            Find a home
+          </Link>
+        ) : null}
       </div>
     </Shell>
   );

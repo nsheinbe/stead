@@ -1,10 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { BrandMark } from "../components/BrandMark";
 import { FeeCompare } from "../components/FeeCompare";
-import { SkipLink } from "../components/SkipLink";
+import { Shell } from "../components/Shell";
 import { TrustPassportCard } from "../components/TrustPassportCard";
-import { useAuth } from "../hooks/useAuth";
 import { formatUsd } from "../lib/money";
 import type { Passport } from "../lib/types";
 
@@ -159,46 +157,11 @@ function Stars({ count }: { count: number }) {
 }
 
 export function LandingPage() {
-  const { user } = useAuth();
   const [escrow, setEscrow] = useState(0);
   const hostExample = 18000 * 30;
 
   return (
-    <div className="min-h-screen bg-paper text-ink">
-      <SkipLink />
-      <header className="flex items-center justify-between border-b border-[#EEE7D8] bg-paper px-5 py-4 md:h-[82px] md:px-16">
-        <Link to="/" className="flex items-center gap-2.5 no-underline">
-          <BrandMark />
-          <span className="font-display text-[27px] font-bold tracking-tight text-ink">Stead</span>
-        </Link>
-        <nav className="hidden gap-[38px] text-[15.5px] font-semibold text-ink/70 lg:flex" aria-label="Landing">
-          <a href="#math" className="no-underline hover:text-brass">
-            The math
-          </a>
-          <a href="#deposits" className="no-underline hover:text-brass">
-            Deposits
-          </a>
-          <a href="#passport" className="no-underline hover:text-brass">
-            Trust Passport
-          </a>
-          <a href="#hosts" className="no-underline hover:text-brass">
-            For hosts
-          </a>
-        </nav>
-        <div className="flex items-center gap-4 md:gap-[22px]">
-          <Link to={user ? "/trips" : "/login"} className="text-[15.5px] font-semibold text-ink/70 no-underline hover:text-brass">
-            {user ? "Trips" : "Sign in"}
-          </Link>
-          <Link
-            to="/explore"
-            className="inline-flex items-center rounded-[10px] bg-spruce px-[22px] py-3 text-[15.5px] font-semibold text-paper no-underline hover:bg-spruce-deep hover:text-paper"
-          >
-            Find a stay
-          </Link>
-        </div>
-      </header>
-
-      <main id="main">
+    <Shell width="full">
         <section className="relative min-h-[520px] md:h-[740px]" aria-labelledby="hero-heading">
           <img src={HERO_IMG} alt="A lived-in home in morning light" className="absolute inset-0 h-full w-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-ink/75 via-ink/40 to-transparent" />
@@ -539,53 +502,6 @@ export function LandingPage() {
             ))}
           </div>
         </section>
-      </main>
-
-      <footer className="flex flex-col gap-14 bg-spruce px-5 pb-12 pt-16 text-paper md:px-16 md:pt-[100px]">
-        <div className="flex flex-col items-center gap-7 text-center">
-          <h2 className="m-0 max-w-[900px] font-display text-[36px] font-semibold tracking-tight md:text-[52px]">
-            Their home. Your trust. Nobody's middleman.
-          </h2>
-          <div className="flex flex-wrap justify-center gap-3.5">
-            <Link
-              to="/explore"
-              className="inline-flex items-center rounded-xl bg-paper px-[30px] py-4 text-[16.5px] font-bold text-ink no-underline hover:bg-linen hover:text-ink"
-            >
-              Find a stay
-            </Link>
-            <Link
-              to="/host/listings"
-              className="inline-flex items-center rounded-xl border-[1.5px] border-paper/55 px-[30px] py-4 text-[16.5px] font-semibold text-paper no-underline hover:bg-paper/10 hover:text-paper"
-            >
-              List your place
-            </Link>
-          </div>
-        </div>
-        <div className="flex flex-col items-start justify-between gap-6 border-t border-paper/18 pt-7 md:flex-row md:items-center">
-          <Link to="/" className="flex items-center gap-2 no-underline">
-            <BrandMark tone="paper" className="h-5 w-5" />
-            <span className="font-display text-xl font-bold text-paper">Stead</span>
-          </Link>
-          <nav className="flex flex-wrap gap-7 text-[14.5px] font-medium text-paper/60" aria-label="Footer">
-            <a href="#owned" className="text-paper/60 no-underline hover:text-brass-light">
-              Member rules
-            </a>
-            <a href="#math" className="text-paper/60 no-underline hover:text-brass-light">
-              Fee schedule
-            </a>
-            <a href="#faq" className="text-paper/60 no-underline hover:text-brass-light">
-              Arbitration
-            </a>
-            <a href="#owned" className="text-paper/60 no-underline hover:text-brass-light">
-              Membership
-            </a>
-            <a href="#faq" className="text-paper/60 no-underline hover:text-brass-light">
-              Contact
-            </a>
-          </nav>
-          <p className="m-0 text-sm text-paper/80">© 2026 — member-owned. The fee is 2%. That's the whole trick.</p>
-        </div>
-      </footer>
-    </div>
+    </Shell>
   );
 }

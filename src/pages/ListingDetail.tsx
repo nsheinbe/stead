@@ -2,12 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { CancellationPolicyCard } from "../components/CancellationPolicyCard";
-import { DepositChip, PriceBreakdown } from "../components/PriceBreakdown";
+import { DepositNote, PriceBreakdown } from "../components/PriceBreakdown";
+import { depositMethodForNights } from "../lib/deposit";
 import { BackChevron, BoltIcon, InboxIcon } from "../components/Icons";
 import { Shell } from "../components/Shell";
 import { StatusBanner } from "../components/StatusBanner";
 import { useAuth } from "../hooks/useAuth";
 import { api, ApiError } from "../lib/api";
+import { loginHref } from "../lib/continuation";
 import { formatUsd, MIN_STAY_NIGHTS, quoteStay } from "../lib/money";
 import { POLICY_LABEL } from "../lib/types";
 
@@ -56,7 +58,7 @@ export function ListingDetailPage() {
     : [];
 
   return (
-    <Shell hideNav>
+    <Shell focused width="narrow">
       {listingQuery.isLoading ? (
         <div className="p-6">
           <StatusBanner title="Loading the home…" />
@@ -84,7 +86,7 @@ export function ListingDetailPage() {
             <Link
               to="/explore"
               aria-label="Back to explore"
-              className="absolute left-3.5 top-16 flex h-10 w-10 items-center justify-center rounded-full bg-paper/92 no-underline shadow-[0_2px_8px_rgba(23,32,27,.18)]"
+              className="absolute left-3.5 top-3.5 flex h-10 w-10 items-center justify-center rounded-full bg-paper/92 no-underline shadow-[0_2px_8px_rgba(23,32,27,.18)]"
             >
               <BackChevron />
             </Link>
@@ -109,7 +111,7 @@ export function ListingDetailPage() {
             ) : null}
           </div>
 
-          <div className="flex flex-1 flex-col gap-3.5 px-[18px] py-[18px]">
+          <div className="flex flex-1 flex-col gap-3.5 py-[18px]">
             <div className="flex flex-col gap-1.5">
               <h1 className="m-0 font-display text-2xl font-semibold leading-tight">{listing.title}</h1>
               <p className="m-0 text-[13.5px] text-ink/55">{amenityBits.join(" · ")}</p>
@@ -147,7 +149,7 @@ export function ListingDetailPage() {
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <span className="text-[14.5px] font-bold">Hosted by a member</span>
                   <span className="text-xs text-ink/55">
-                    {listing.timezone} · hosts list here because they keep more at 2%
+                    Times for this home use {listing.timezone}.
                   </span>
                 </div>
               </div>
@@ -155,18 +157,31 @@ export function ListingDetailPage() {
 
             <p className="m-0 text-sm leading-relaxed text-ink/75">{listing.description}</p>
 
-            <PriceBreakdown
-              nightlyRateCents={quote.nightly_rate_cents}
-              nights={quote.nights}
-              staySubtotalCents={quote.stay_subtotal_cents}
-              networkFeeCents={quote.network_fee_cents}
-              guestTotalCents={quote.guest_total_cents}
+            <div className="flex flex-col gap-2">
+              <p className="m-0 text-sm font-semibold">
+                {formatUsd(quote.guest_total_cents)} estimated stay total · {PREVIEW_NIGHTS} nights
+              </p>
+              <PriceBreakdown
+                nightlyRateCents={quote.nightly_rate_cents}
+                nights={quote.nights}
+                staySubtotalCents={quote.stay_subtotal_cents}
+                networkFeeCents={quote.network_fee_cents}
+                guestTotalCents={quote.guest_total_cents}
+                networkFeeBps={configQuery.data?.networkFeeBps ?? null}
+              />
+              <p className="m-0 text-sm text-ink-secondary">
+                An estimate for {PREVIEW_NIGHTS} nights. Choose your dates for the exact price.
+              </p>
+            </div>
+            <DepositNote
+              amountCents={listing.depositCents}
+              method={depositMethodForNights(PREVIEW_NIGHTS)}
+              claimWindowHours={configQuery.data?.claimWindowHours ?? null}
             />
-            <DepositChip amountCents={listing.depositCents} />
             <CancellationPolicyCard policy={listing.cancellationPolicy} />
             {host && host.id !== user?.id ? (
               <Link
-                to={user ? `/messages/${listing.id}` : `/login?next=/messages/${listing.id}`}
+                to={user ? `/messages/${listing.id}` : loginHref({ next: `/messages/${listing.id}`, source: "listing_message" })}
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-spruce py-3.5 text-[14.5px] font-bold text-paper no-underline hover:bg-spruce-deep hover:text-paper"
               >
                 <InboxIcon className="h-4 w-4" />
@@ -177,16 +192,16 @@ export function ListingDetailPage() {
 
           <div className="flex items-center justify-between gap-4 border-t border-[#EDE6D6] bg-paper px-[18px] pb-7 pt-3.5">
             <div className="flex flex-col">
-              <span className="money text-base font-bold">{formatUsd(quote.guest_total_cents)} total</span>
+              <span className="money text-base font-bold">{formatUsd(quote.guest_total_cents)}</span>
               <span className="text-[11.5px] text-ink/55">
-                {PREVIEW_NIGHTS}-night stay · shown as arithmetic
+                Estimated total · {PREVIEW_NIGHTS} nights
               </span>
             </div>
             <Link
               to={`/book/${listing.id}`}
               className="inline-flex items-center rounded-xl bg-spruce px-6 py-[15px] text-[15px] font-bold text-paper no-underline hover:bg-spruce-deep hover:text-paper"
             >
-              {listing.instantBook ? "Book this stay" : "Request to book"}
+              Choose dates
             </Link>
           </div>
         </div>

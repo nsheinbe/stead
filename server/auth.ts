@@ -22,6 +22,7 @@ import { accounts, sessions, users, verificationTokens } from "./db/schema";
 import { EmailFromError, authEmailFromForConfig, authEmailFromForSend } from "./lib/emailFrom";
 import { signInEmail } from "./lib/email";
 import { deliverViaProvider, selectEmailProvider } from "./lib/emailProvider";
+import { DEFAULT_CONTINUATION, normalizeContinuation } from "../src/lib/continuation";
 
 export type SessionUser = {
   id: string;
@@ -64,6 +65,31 @@ export async function sendVerificationRequest(params: {
   });
 }
 
+/**
+ * Where Auth.js sends the browser after a sign-in link is used (or after
+ * sign-out). The callbackUrl arrives from the browser and, for the email
+ * flow, from a link in someone's inbox, so it is normalised through the same
+ * allowlist the client uses: same origin only, a known application path,
+ * only that route's query keys, never /login or /api. Anything else lands on
+ * the default destination instead of wherever the URL pointed.
+ */
+export function resolveCallbackUrl(url: string, baseUrl: string): string {
+  let origin: string;
+  try {
+    origin = new URL(baseUrl).origin;
+  } catch {
+    return DEFAULT_CONTINUATION;
+  }
+  let target: URL;
+  try {
+    target = new URL(url, origin);
+  } catch {
+    return `${origin}${DEFAULT_CONTINUATION}`;
+  }
+  if (target.origin !== origin) return `${origin}${DEFAULT_CONTINUATION}`;
+  return `${origin}${normalizeContinuation(`${target.pathname}${target.search}`)}`;
+}
+
 let cached: AuthConfig | undefined;
 
 export function authConfig(): AuthConfig {
@@ -92,6 +118,9 @@ export function authConfig(): AuthConfig {
       }),
     ],
     callbacks: {
+      redirect({ url, baseUrl }) {
+        return resolveCallbackUrl(url, baseUrl);
+      },
       jwt({ token, user }) {
         if (user?.id) token.sub = user.id;
         return token;

@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { HostSubnav } from "../components/HostSubnav";
 import { Shell } from "../components/Shell";
+import { SignInPrompt } from "../components/SignInPrompt";
 import { StatusBanner } from "../components/StatusBanner";
 import { useAuth } from "../hooks/useAuth";
 import { api } from "../lib/api";
@@ -14,7 +15,7 @@ function toneFor(state: ClaimState): "linen" | "claim" {
 }
 
 export function HostClaimsPage() {
-  const { user, loading } = useAuth();
+  const { user, status } = useAuth();
   const claims = useQuery({
     queryKey: ["claims", user?.id],
     enabled: Boolean(user),
@@ -22,13 +23,17 @@ export function HostClaimsPage() {
   });
 
   return (
-    <Shell>
-      <div className="flex flex-1 flex-col gap-3.5 px-[18px] pb-4 pt-16 md:pt-4">
+    <Shell width="narrow">
+      <div className="flex flex-1 flex-col gap-3.5 pb-6 pt-6">
         <HostSubnav />
         <h1 className="m-0 font-display text-2xl font-semibold">Claims</h1>
 
-        {loading ? <StatusBanner title="Checking your session…" /> : null}
-        {!user && !loading ? <StatusBanner title="Sign in to see claims" /> : null}
+        {status !== "signed_in" ? (
+          <SignInPrompt
+            title="Sign in to see your claims"
+            description="Claims are visible to the parties on the stay they belong to."
+          />
+        ) : null}
         {claims.isLoading && user ? <StatusBanner title="Loading claims…" /> : null}
         {claims.isError ? (
           <StatusBanner tone="claim" title="Could not load claims" />

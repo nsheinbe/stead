@@ -1,0 +1,26 @@
+:root {
+  --canvas: #FFFFFF;
+  --surface: #F5F7F6;
+  --surface-accent: #E9F1EC;
+  --ink: #17201B;
+  --ink-secondary: #53625A;
+  --brand: #1E4034;
+  --brand-hover: #16332A;
+  --border: #DCE2DE;
+  --border-control: #88968F;
+  --focus: #276A52;
+  --danger: #A73528;
+  --danger-surface: #FAEBE8;
+  --warning: #78520B;
+  --warning-surface: #FFF1DD;
+  --font-ui: "Hanken Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --font-money: "Hanken Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --radius-control: 8px;
+  --radius-card: 12px;
+  --radius-surface: 16px;
+  --control-height: 48px;
+  --content-max: 1256px;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+  --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px;
+  --space-12: 48px; --space-16: 64px; --space-20: 80px; --space-24: 96px;
+}
