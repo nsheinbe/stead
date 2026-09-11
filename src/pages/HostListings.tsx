@@ -1,12 +1,15 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { HostSubnav } from "../components/HostSubnav";
 import { Shell } from "../components/Shell";
+import { SignInPrompt } from "../components/SignInPrompt";
 import { StatusBanner } from "../components/StatusBanner";
 import { useAuth } from "../hooks/useAuth";
 import { api, ApiError } from "../lib/api";
+import { clearHostPrecreateDraft, readHostPrecreateDraft, saveHostPrecreateDraft } from "../lib/drafts";
 import { formatUsd } from "../lib/money";
+import { StatusMessage } from "../components/ui";
 import type { HostListing, ListingInput, ListingStatus } from "../lib/types";
 
 const STATUS_LABEL: Record<ListingStatus, string> = {
@@ -36,11 +39,59 @@ const EMPTY: ListingInput = {
 };
 
 export function HostListingsPage() {
-  const { user, loading } = useAuth();
+  const { user, status } = useAuth();
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<ListingInput>(EMPTY);
   const [params] = useSearchParams();
   const [creating, setCreating] = useState(params.get("create") === "1");
+  const [precreateNotice, setPrecreateNotice] = useState<"restored" | "unavailable" | null>(null);
+  const restoredPrecreate = useRef(false);
+
+  /**
+   * Bring back the essentials this device remembered from before sign-in.
+   * Only the non-sensitive ones are kept (INT-03): a title, the kind of home,
+   * city, country, time zone and capacity. Rate, deposit, address and
+   * description are never written to anonymous storage, so they start empty.
+   */
+  useEffect(() => {
+    if (restoredPrecreate.current || status !== "signed_in") return;
+    restoredPrecreate.current = true;
+    const result = readHostPrecreateDraft(user?.id ?? null);
+    if (result.status === "unavailable") {
+      setPrecreateNotice("unavailable");
+      return;
+    }
+    if (result.status !== "restored") return;
+    const fields = result.draft.fields;
+    if (Object.keys(fields).length === 0) return;
+    setDraft((current) => ({ ...current, ...fields }));
+    setCreating(true);
+    setPrecreateNotice("restored");
+  }, [status, user?.id]);
+
+  /** Keep the essentials on this device while the member is filling them in. */
+  function rememberPrecreate(next: ListingInput) {
+    const saved = saveHostPrecreateDraft(
+      {
+        title: next.title || undefined,
+        type: next.type,
+        city: next.city || undefined,
+        country: next.country || undefined,
+        timezone: next.timezone || undefined,
+        maxGuests: next.maxGuests,
+      },
+      user?.id ?? null,
+    );
+    if (!saved.ok) setPrecreateNotice("unavailable");
+  }
+
+  function updateDraft(patch: Partial<ListingInput>) {
+    setDraft((current) => {
+      const next = { ...current, ...patch };
+      rememberPrecreate(next);
+      return next;
+    });
+  }
 
   const listings = useQuery({
     queryKey: ["host-listings", user?.id],
@@ -61,6 +112,8 @@ export function HostListingsPage() {
   const create = useMutation({
     mutationFn: (input: ListingInput) => api.createListing(input),
     onSuccess: async () => {
+      clearHostPrecreateDraft();
+      setPrecreateNotice(null);
       setDraft({ ...EMPTY, timezone: localTimeZone() });
       setCreating(false);
       await invalidate();
@@ -95,10 +148,14 @@ export function HostListingsPage() {
           )}
         </div>
 
-        {loading ? (
-          <StatusBanner title="Checking your session…" />
-        ) : !user ? (
-          <StatusBanner title="Sign in to manage your homes" />
+        {status !== "signed_in" ? (
+          <SignInPrompt
+            title="Sign in to manage your homes"
+            description="Create an account or sign in to save your home as a draft. You choose when to publish it."
+            intent="homeowner"
+            source="homeowner_hero"
+            action="Continue with your email"
+          />
         ) : (
           <>
             {connect.data && !payoutsReady && (
@@ -116,6 +173,32 @@ export function HostListingsPage() {
                 </Link>
               </div>
             )}
+            {creating && precreateNotice === "restored" ? (
+              <StatusMessage
+                tone="success"
+                title="We brought back what you'd started."
+                action={
+                  <button
+                    type="button"
+                    onClick={() => {
+                      clearHostPrecreateDraft();
+                      setPrecreateNotice(null);
+                      setDraft({ ...EMPTY, timezone: localTimeZone() });
+                    }}
+                    className="text-sm font-semibold underline"
+                  >
+                    Start over
+                  </button>
+                }
+              >
+                <p>Check the details below. Your home isn't saved to your account until you save it.</p>
+              </StatusMessage>
+            ) : null}
+            {creating && precreateNotice === "unavailable" ? (
+              <StatusMessage tone="warning" title="Your entries couldn't be saved on this device.">
+                <p>You can still fill in the form and save. Leaving the page may mean starting again.</p>
+              </StatusMessage>
+            ) : null}
             {creating && (
               <form
                 className="flex flex-col gap-3 rounded-card border border-linen-tint p-[18px]"
@@ -130,7 +213,7 @@ export function HostListingsPage() {
                     required
                     minLength={3}
                     value={draft.title}
-                    onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+                    onChange={(e) => updateDraft({ title: e.target.value })}
                     className="rounded-lg border border-linen-tint px-3 py-2 text-sm font-normal text-ink"
                   />
                 </label>
@@ -140,7 +223,7 @@ export function HostListingsPage() {
                     <input
                       required
                       value={draft.city}
-                      onChange={(e) => setDraft({ ...draft, city: e.target.value })}
+                      onChange={(e) => updateDraft({ city: e.target.value })}
                       className="rounded-lg border border-linen-tint px-3 py-2 text-sm font-normal text-ink"
                     />
                   </label>
@@ -150,7 +233,7 @@ export function HostListingsPage() {
                       required
                       maxLength={2}
                       value={draft.country}
-                      onChange={(e) => setDraft({ ...draft, country: e.target.value.toUpperCase() })}
+                      onChange={(e) => updateDraft({ country: e.target.value.toUpperCase() })}
                       className="rounded-lg border border-linen-tint px-3 py-2 text-sm font-normal uppercase text-ink"
                     />
                   </label>
@@ -160,7 +243,7 @@ export function HostListingsPage() {
                   <input
                     required
                     value={draft.timezone}
-                    onChange={(e) => setDraft({ ...draft, timezone: e.target.value })}
+                    onChange={(e) => updateDraft({ timezone: e.target.value })}
                     className="rounded-lg border border-linen-tint px-3 py-2 text-sm font-normal text-ink"
                   />
                   <span className="text-[11px] font-normal text-ink/50">
@@ -175,7 +258,7 @@ export function HostListingsPage() {
                       min={1}
                       value={draft.nightlyRateCents / 100}
                       onChange={(e) =>
-                        setDraft({ ...draft, nightlyRateCents: Math.round(Number(e.target.value) * 100) })
+                        setDraft((c) => ({ ...c, nightlyRateCents: Math.round(Number(e.target.value) * 100) }))
                       }
                       className="money rounded-lg border border-linen-tint px-3 py-2 text-sm font-normal text-ink"
                     />
@@ -187,7 +270,7 @@ export function HostListingsPage() {
                       min={0}
                       value={draft.depositCents / 100}
                       onChange={(e) =>
-                        setDraft({ ...draft, depositCents: Math.round(Number(e.target.value) * 100) })
+                        setDraft((c) => ({ ...c, depositCents: Math.round(Number(e.target.value) * 100) }))
                       }
                       className="money rounded-lg border border-linen-tint px-3 py-2 text-sm font-normal text-ink"
                     />
@@ -198,7 +281,7 @@ export function HostListingsPage() {
                       type="number"
                       min={1}
                       value={draft.maxGuests}
-                      onChange={(e) => setDraft({ ...draft, maxGuests: Number(e.target.value) })}
+                      onChange={(e) => updateDraft({ maxGuests: Number(e.target.value) })}
                       className="rounded-lg border border-linen-tint px-3 py-2 text-sm font-normal text-ink"
                     />
                   </label>
