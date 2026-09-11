@@ -6,7 +6,7 @@
  * that a signed-in guest can cancel from /trips/:id.
  */
 import { expect, test, type Page } from "@playwright/test";
-import { confirmBooking, ensureDb, isoDay, seedBookableParty } from "./helpers/party";
+import { confirmBooking, ensureDb, isoDay, seedBookableParty, seedHost } from "./helpers/party";
 import { SESSION_COOKIE } from "../tests/helpers/session";
 
 async function signIn(page: Page, token: string) {
@@ -299,5 +299,93 @@ test.describe("signed-in cancel from the trip page", () => {
     await page.getByRole("button", { name: "Cancel this stay" }).click();
     await page.getByRole("button", { name: "Confirm cancel" }).click();
     await expect(page.getByText(/canceled by guest/i)).toBeVisible({ timeout: 15_000 });
+  });
+});
+
+test.describe("listing creation (HOST-02)", () => {
+  test("the wizard creates exactly one draft, then publishes it", async ({ page, request }) => {
+    await ensureDb();
+    const owner = await seedHost();
+    await signIn(page, owner.token);
+
+    const name = `Wizard cottage ${Date.now()}`;
+    await page.goto("/host/start");
+    await expect(page.getByRole("heading", { level: 1, name: "Start your listing" })).toBeVisible();
+
+    // Basics. The floor is stated, and nothing is saved yet.
+    await expect(page.getByText(/Nothing is saved to your account until/i)).toBeVisible();
+    await page.getByLabel("Name of the home").fill(name);
+    await page.getByLabel("City").fill("Hudson");
+    await page.getByLabel("Sleeps").fill("3");
+    await page.getByRole("button", { name: "Continue" }).click();
+
+    // The optional group can be skipped outright.
+    await expect(page.getByRole("heading", { name: "Home details" })).toBeVisible();
+    await page.getByRole("button", { name: "Skip this" }).click();
+
+    // Price and terms is where the draft is created.
+    await expect(page.getByRole("heading", { name: "Price and terms" })).toBeVisible();
+    await page.getByLabel("Nightly rate").fill("175.50");
+    await page.getByLabel("Deposit").fill("250");
+    await page.getByRole("button", { name: "Save draft and add photos" }).click();
+
+    await expect(page).toHaveURL(/\/host\/listings\/[0-9a-f-]+\?setup=photos/, { timeout: 15_000 });
+    await expect(page.getByText("No photos yet.")).toBeVisible();
+
+    await page.getByRole("button", { name: "Continue to review" }).click();
+    await expect(page).toHaveURL(/setup=review/);
+    await expect(page.getByRole("heading", { name: "Review" })).toBeVisible();
+    // The review reads the saved listing, so the money is the server's.
+    await expect(page.getByText("$175.50")).toBeVisible();
+    await expect(page.getByText("$250")).toBeVisible();
+    // Published and payout-ready are stated as different things.
+    await expect(page.getByText(/Payouts are separate from publishing/i)).toBeVisible();
+
+    await page.getByRole("button", { name: "Publish this home" }).click();
+    await expect(page.getByText("Your home is published.")).toBeVisible({ timeout: 15_000 });
+
+    // Exactly one listing exists, and its money is what was typed.
+    const mine = await request.get("/api/listings/mine", {
+      headers: { cookie: `${owner.cookie}` },
+    });
+    expect(mine.status()).toBe(200);
+    const rows = (await mine.json()) as { title: string; nightlyRateCents: number; status: string }[];
+    const created = rows.filter((row) => row.title === name);
+    expect(created).toHaveLength(1);
+    expect(created[0]?.nightlyRateCents).toBe(17_550);
+    expect(created[0]?.status).toBe("active");
+  });
+
+  test("the wizard refuses to go on without the fields the server requires", async ({ page }) => {
+    await ensureDb();
+    const owner = await seedHost();
+    await signIn(page, owner.token);
+
+    await page.goto("/host/start");
+    await page.getByRole("button", { name: "Continue" }).click();
+
+    // Still on Basics, with the problems named rather than a 400 from the API.
+    await expect(page.getByRole("alert")).toContainText("Check the highlighted fields");
+    await expect(page.getByRole("heading", { name: "Basics" })).toBeVisible();
+
+    await page.getByLabel("Name of the home").fill("A home with a bad zone");
+    await page.getByLabel("City").fill("Hudson");
+    await page.getByLabel("Time zone").fill("Mars/Olympus");
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page.getByRole("alert")).toContainText(/IANA time zone/);
+  });
+
+  test("the homes dashboard sends creation to the wizard and confirms deletion", async ({ page }) => {
+    await ensureDb();
+    const owner = await seedHost();
+    await signIn(page, owner.token);
+
+    await page.goto("/host/listings");
+    await expect(page.getByRole("heading", { level: 1, name: "Your homes" })).toBeVisible();
+    await expect(page.getByText("You haven't added a home yet.")).toBeVisible();
+
+    // One canonical creation path: no inline form on this page any more.
+    await page.getByRole("link", { name: "Add a home" }).first().click();
+    await expect(page).toHaveURL(/\/host\/start$/);
   });
 });

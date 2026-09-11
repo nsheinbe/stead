@@ -14,10 +14,16 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { app } from "../server/app";
 import { diffListingInput, listingFormFromDetail, listingFormToInput } from "../src/lib/listingForm";
 import type { ListingDetail, ListingInput } from "../src/lib/types";
-import { closeTestDb, getHarness, id, insertMember, ownerDatabaseUrl } from "./helpers/db";
+import { closeTestDb, getHarness, id, insertBooking, insertMember, ownerDatabaseUrl } from "./helpers/db";
 import { mintSessionCookie } from "./helpers/session";
 
 const describeDb = ownerDatabaseUrl() || process.env.CI ? describe : describe.skip;
+
+function isoDay(offset: number): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + offset);
+  return d.toISOString().slice(0, 10);
+}
 
 /** Every editable field carrying a value we can recognise on the way back. */
 const FULL_LISTING: ListingInput = {
@@ -249,6 +255,59 @@ describeDb("the listing editor's contract", () => {
     expect(after.title).toBe(FULL_LISTING.title);
     expect(after.nightlyRateCents).toBe(FULL_LISTING.nightlyRateCents);
     expect(after.maxGuests).toBe(FULL_LISTING.maxGuests);
+  });
+
+  it("publishes and unpublishes through status alone", async () => {
+    const owner = await aHost("owner");
+    const listingId = await createFullListing(owner.cookie);
+    const stranger = await aHost("stranger");
+
+    // A draft is invisible to everyone else...
+    expect((await readAs(listingId, stranger.cookie)).status).toBe(404);
+
+    const publish = await app.request(
+      `/api/listings/${listingId}`,
+      json({ status: "active" }, owner.cookie, "PATCH"),
+    );
+    expect(publish.status, await publish.clone().text()).toBe(200);
+
+    // ...and publishing is exactly what makes it public. Nothing else moved.
+    const seen = (await (await readAs(listingId, stranger.cookie)).json()) as ListingDetail;
+    expect(seen.status).toBe("active");
+    expect(seen.nightlyRateCents).toBe(FULL_LISTING.nightlyRateCents);
+    expect(seen.description).toBe(FULL_LISTING.description);
+
+    const pause = await app.request(
+      `/api/listings/${listingId}`,
+      json({ status: "paused" }, owner.cookie, "PATCH"),
+    );
+    expect(pause.status).toBe(200);
+    expect((await readAs(listingId, stranger.cookie)).status).toBe(404);
+    // The owner still sees their own paused home.
+    expect((await readAs(listingId, owner.cookie)).status).toBe(200);
+  });
+
+  it("refuses to delete a home that has stays against it", async () => {
+    const owner = await aHost("owner");
+    const guestId = id();
+    await insertMember(guestId, `guest-${guestId}@stead.example`, "Guest");
+    const listingId = await createFullListing(owner.cookie);
+    await insertBooking({
+      listingId,
+      guestId,
+      checkIn: isoDay(40),
+      checkOut: isoDay(70),
+      status: "confirmed",
+    });
+
+    // The dashboard's delete dialog promises this, so it is asserted: a stay
+    // someone paid for does not vanish because a host tidied up.
+    const res = await app.request(`/api/listings/${listingId}`, {
+      method: "DELETE",
+      headers: { cookie: owner.cookie },
+    });
+    expect(res.status).toBe(409);
+    expect((await readAs(listingId, owner.cookie)).status).toBe(200);
   });
 
   it("keeps the dashboard summary separate from the editor's detail", async () => {

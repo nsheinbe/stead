@@ -11,6 +11,8 @@ import { describe, expect, it } from "vitest";
 import {
   centsToDollarsInput,
   diffListingInput,
+  emptyListingForm,
+  errorsForStep,
   isValidTimeZone,
   listingFormFromDetail,
   listingFormToInput,
@@ -213,6 +215,70 @@ describe("validation mirrors the server's bounds", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(Object.keys(result.errors).sort()).toEqual(["city", "country", "title"]);
+    }
+  });
+});
+
+describe("the creation wizard's groups (HOST-02)", () => {
+  it("invents nothing a host has to decide", () => {
+    const blank = emptyListingForm("America/New_York");
+    // No made-up name, and no default price standing in for one the host has
+    // not chosen. `POST /api/listings` will refuse this, which is correct.
+    expect(blank.title).toBe("");
+    expect(blank.nightlyRate).toBe("");
+    expect(blank.deposit).toBe("");
+    expect(listingFormToInput(blank).ok).toBe(false);
+  });
+
+  it("suggests the browser's zone but only when it is a real one", () => {
+    expect(emptyListingForm("Europe/London").timezone).toBe("Europe/London");
+    expect(emptyListingForm("Mars/Olympus").timezone).toBe("UTC");
+    expect(emptyListingForm("").timezone).toBe("UTC");
+  });
+
+  it("shows a host only the errors for the group they are on", () => {
+    const blank = emptyListingForm("UTC");
+
+    // Basics is incomplete and the price is empty, but only Basics is on screen.
+    const basics = errorsForStep(blank, "basics");
+    expect(Object.keys(basics)).toEqual(["title", "city"]);
+    expect(basics).not.toHaveProperty("nightlyRate");
+
+    // The optional group never blocks anyone.
+    expect(errorsForStep(blank, "details")).toEqual({});
+
+    // Price does not complain about the name the host already fixed upstream.
+    const price = errorsForStep(blank, "price");
+    expect(Object.keys(price).sort()).toEqual(["deposit", "nightlyRate"]);
+    expect(price).not.toHaveProperty("title");
+  });
+
+  it("passes a group once its own fields are good", () => {
+    const values: ListingFormValues = {
+      ...emptyListingForm("UTC"),
+      title: "The Gatehouse",
+      city: "Hudson",
+    };
+    expect(errorsForStep(values, "basics")).toEqual({});
+    // The listing as a whole is still incomplete — the price group has yet to
+    // be filled in, which is exactly why the draft is not created until then.
+    expect(listingFormToInput(values).ok).toBe(false);
+  });
+
+  it("is complete once every group has been filled in", () => {
+    const values: ListingFormValues = {
+      ...emptyListingForm("UTC"),
+      title: "The Gatehouse",
+      city: "Hudson",
+      nightlyRate: "200",
+      deposit: "300",
+    };
+    expect(errorsForStep(values, "price")).toEqual({});
+    const result = listingFormToInput(values);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.input.nightlyRateCents).toBe(20_000);
+      expect(result.input.depositCents).toBe(30_000);
     }
   });
 });

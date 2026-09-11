@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { HostSubnav } from "../components/HostSubnav";
 import { ListingPhoto } from "../components/ListingPhoto";
 import { Shell } from "../components/Shell";
@@ -10,12 +10,16 @@ import {
   ButtonLink,
   Card,
   Checkbox,
+  DataList,
+  DataRow,
   ErrorSummary,
   PageHeader,
+  Progress,
   Select,
   Skeleton,
   StatusMessage,
   StatusPill,
+  Surface,
   Textarea,
   TextInput,
   type FieldErrorItem,
@@ -31,7 +35,9 @@ import {
   type ListingFormField,
   type ListingFormValues,
 } from "../lib/listingForm";
+import { formatUsd, MIN_STAY_NIGHTS } from "../lib/money";
 import { POLICY_LABEL, TYPE_LABEL, type ListingDetail, type ListingInput } from "../lib/types";
+import { LISTING_WIZARD_STEPS } from "./HostStart";
 
 /** DOM ids, so the error summary can move focus to the field it names. */
 const FIELD_ID: Record<ListingFormField, string> = {
@@ -87,9 +93,16 @@ const STATUS_LABEL: Record<ListingDetail["status"], string> = {
  */
 export function HostListingEditPage() {
   const { listingId } = useParams<{ listingId: string }>();
+  const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
   const { user, status } = useAuth();
   const queryClient = useQueryClient();
   const fileInput = useRef<HTMLInputElement>(null);
+
+  // The last two groups of the creation wizard continue here, against a
+  // listing that now exists. Outside setup this is just the editor.
+  const setup = params.get("setup");
+  const setupStep = setup === "photos" ? 4 : setup === "review" ? 5 : null;
 
   const [form, setForm] = useState<ListingFormValues | null>(null);
   const [baseline, setBaseline] = useState<ListingInput | null>(null);
@@ -133,6 +146,11 @@ export function HostListingEditPage() {
       setSaved(true);
       await invalidate();
     },
+  });
+
+  const publish = useMutation({
+    mutationFn: (next: ListingDetail["status"]) => api.updateListing(listingId as string, { status: next }),
+    onSuccess: invalidate,
   });
 
   const upload = useMutation({
@@ -208,6 +226,10 @@ export function HostListingEditPage() {
       <div className="flex flex-1 flex-col gap-6 py-6 sm:py-8">
         <HostSubnav />
 
+        {setupStep ? (
+          <Progress steps={LISTING_WIZARD_STEPS} current={setupStep} label="Listing setup" />
+        ) : null}
+
         {listingQuery.isPending ? (
           <div className="flex flex-col gap-4" aria-busy="true">
             <p role="status" className="sr-only">
@@ -266,6 +288,7 @@ export function HostListingEditPage() {
               </div>
             </div>
 
+            {setupStep ? null : (
             <form
               className="flex flex-col gap-6"
               noValidate
@@ -514,7 +537,9 @@ export function HostListingEditPage() {
                 </p>
               </div>
             </form>
+            )}
 
+            {setupStep === 5 ? null : (
             <section aria-labelledby="photos-heading" className="flex flex-col gap-4">
               <h2 id="photos-heading" className="m-0 text-card-title">
                 Photos
@@ -567,10 +592,135 @@ export function HostListingEditPage() {
               {removePhoto.isError ? (
                 <StatusMessage tone="danger" title="We couldn't remove that photo. Please try again." />
               ) : null}
+
+              {setupStep === 4 ? (
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button onClick={() => setParams({ setup: "review" }, { replace: true })}>
+                    Continue to review
+                  </Button>
+                  <Button
+                    variant="quiet"
+                    onClick={() => setParams({ setup: "review" }, { replace: true })}
+                  >
+                    Add photos later
+                  </Button>
+                </div>
+              ) : null}
             </section>
+            )}
+
+            {setupStep === 5 ? (
+              <ReviewStep
+                listing={listing}
+                publishing={publish.isPending}
+                failed={publish.isError}
+                onEdit={() => setParams({}, { replace: true })}
+                onPublish={() => publish.mutate("active")}
+                onFinishLater={() => navigate("/host/listings")}
+              />
+            ) : null}
           </>
         ) : null}
       </div>
     </Shell>
+  );
+}
+
+/**
+ * The last group of the creation wizard.
+ *
+ * It reads the saved listing, not an unsaved local preview — so what a host
+ * approves here is what the server holds. Publishing sets `status` to active
+ * and nothing else: it makes the home bookable, which is not the same as being
+ * able to be paid. That distinction is stated rather than smoothed over,
+ * because a stay cannot charge without a Stripe payout account.
+ */
+function ReviewStep({
+  listing,
+  publishing,
+  failed,
+  onEdit,
+  onPublish,
+  onFinishLater,
+}: {
+  listing: ListingDetail;
+  publishing: boolean;
+  failed: boolean;
+  onEdit: () => void;
+  onPublish: () => void;
+  onFinishLater: () => void;
+}) {
+  const place = [listing.city, listing.region, listing.country].filter(Boolean).join(", ");
+  const live = listing.status === "active";
+
+  return (
+    <section aria-labelledby="review-heading" className="flex flex-col gap-4">
+      <h2 id="review-heading" className="m-0 text-card-title">
+        Review
+      </h2>
+
+      {live ? (
+        <StatusMessage tone="success" title="Your home is published.">
+          <p>Guests can find it and request stays of {MIN_STAY_NIGHTS} nights or more.</p>
+        </StatusMessage>
+      ) : null}
+
+      <Card>
+        <DataList>
+          <DataRow label="Name" value={listing.title || "Untitled home"} />
+          <DataRow label="Type" value={TYPE_LABEL[listing.type]} />
+          <DataRow label="Where" value={place} />
+          <DataRow label="Time zone" value={listing.timezone} />
+          <DataRow label="Sleeps" value={String(listing.maxGuests)} />
+          <DataRow label="Nightly rate" value={formatUsd(listing.nightlyRateCents)} />
+          <DataRow label="Deposit" value={formatUsd(listing.depositCents)} />
+          <DataRow label="Cancellation" value={POLICY_LABEL[listing.cancellationPolicy]} />
+          <DataRow label="Photos" value={String(listing.photos.length)} />
+        </DataList>
+        <div className="mt-4">
+          <Button variant="secondary" size="sm" onClick={onEdit}>
+            Edit these details
+          </Button>
+        </div>
+      </Card>
+
+      {listing.photos.length === 0 ? (
+        <StatusMessage tone="warning" live={false} title="This home has no photos.">
+          <p>You can publish without them, but a home with no photos is a hard sell.</p>
+        </StatusMessage>
+      ) : null}
+
+      <Surface>
+        <h3 className="m-0 text-base font-semibold">Payouts are separate from publishing</h3>
+        <p className="mb-0 mt-2 text-sm text-ink-secondary">
+          Publishing makes this home visible. A guest still cannot pay for a stay until Stripe has your
+          payout account, and we never charge a guest into an account that isn't ready.
+        </p>
+        <div className="mt-4">
+          <ButtonLink to="/host/payouts" variant="secondary" size="sm">
+            Set up payouts
+          </ButtonLink>
+        </div>
+      </Surface>
+
+      {failed ? (
+        <StatusMessage tone="danger" title="We couldn't publish this home.">
+          <p>Nothing changed. Please try again.</p>
+        </StatusMessage>
+      ) : null}
+
+      <div className="flex flex-wrap items-center gap-3">
+        {live ? (
+          <ButtonLink to={`/listing/${listing.id}`}>View your home</ButtonLink>
+        ) : (
+          <Button busy={publishing} busyLabel="Publishing your home…" onClick={onPublish}>
+            Publish this home
+          </Button>
+        )}
+        <Button variant="secondary" onClick={onFinishLater}>
+          {live ? "Your homes" : "Keep it a draft"}
+        </Button>
+      </div>
+    </section>
   );
 }

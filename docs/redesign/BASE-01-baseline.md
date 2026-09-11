@@ -172,9 +172,9 @@ its owning ticket replaces the screen, so nothing is half-edited.
 | F04/F06 deposit in card total, hardcoded "flat 2%" | done (PAY-01) |
 | F05 connected-account SetupIntent unused by the browser | open — PAY-02, held |
 | F07 editor hydrated from the dashboard summary | done (HOST-01) |
-| F08 published vs payout-ready | open — HOST-02/03 |
+| F08 published vs payout-ready | stated in the UI (HOST-02); readiness detail open — HOST-03 |
 | Landing body copy ("member-owned", "instant payout", "permanent") | done (ACQ-01) |
-| Host money inputs bypass `src/lib/cents.ts` | editor done (HOST-01); `HostListings.tsx` create form open — HOST-02 |
+| Host money inputs bypass `src/lib/cents.ts` | done (HOST-01 editor, HOST-02 wizard; the inline create form is gone) |
 | Picsum photo fallback | done (ACQ-01 `ListingPhoto`, RENT-01) |
 | `Explore` seed-command empty state | fixed in passing (one member-visible string) |
 
@@ -190,6 +190,14 @@ its owning ticket replaces the screen, so nothing is half-edited.
   writes only the keys it receives.
 - `lat`/`lng` remain out of `ListingInput` and `ListingDetail`. Nothing in the
   editor needs them and the handoff says not to add a map for this redesign.
+- **Creation now has one path.** The inline create form on `/host/listings` is
+  gone; `/host/start` is the only place a listing is created, because
+  `POST /api/listings` needs a complete listing and a wizard is the honest way
+  to collect one. The wizard creates the draft once, at the end of "Price and
+  terms", and steps four and five continue in the editor against that real id.
+- No partial-draft table was added. Before the first save the only thing kept
+  on the device is the INT-03 non-sensitive set (name, type, city, country,
+  time zone, capacity); rate, deposit, address and description are not.
 
 ## 7. Runtime unknowns (not verifiable from source)
 

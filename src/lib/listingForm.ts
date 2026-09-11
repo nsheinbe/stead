@@ -281,3 +281,76 @@ export const LISTING_FIELD_ORDER: ListingFormField[] = [
   "cancellationPolicy",
   "instantBook",
 ];
+
+/**
+ * A blank form for a home that does not exist yet.
+ *
+ * Nothing here is invented to satisfy validation: the rate, deposit and name
+ * start empty and the host has to supply them. The one suggested value is the
+ * time zone, taken from the browser and shown for confirmation, because the
+ * home's clock is a fact about the home and the browser only knows about the
+ * person filling in the form.
+ */
+export function emptyListingForm(suggestedTimeZone: string): ListingFormValues {
+  return {
+    title: "",
+    description: "",
+    type: "entire_home",
+    addressLine: "",
+    city: "",
+    region: "",
+    country: "US",
+    timezone: isValidTimeZone(suggestedTimeZone) ? suggestedTimeZone : "UTC",
+    nightlyRate: "",
+    deposit: "",
+    maxGuests: "2",
+    bedrooms: "",
+    beds: "",
+    wifi: false,
+    kitchen: false,
+    fireplace: false,
+    courtyard: false,
+    instantBook: false,
+    cancellationPolicy: "moderate",
+  };
+}
+
+/** The browser's own zone, as a starting suggestion only. */
+export function browserTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
+/**
+ * The wizard's groups.
+ *
+ * `POST /api/listings` is not a partial-draft endpoint — it requires a
+ * complete, valid listing. So the wizard collects the fields the server needs
+ * across the first and third groups and creates the draft once, at the end of
+ * "Price and terms". The optional group in between can be skipped outright.
+ */
+export const LISTING_STEP_FIELDS = {
+  basics: ["title", "type", "city", "region", "country", "timezone", "maxGuests"],
+  details: ["description", "addressLine", "bedrooms", "beds"],
+  price: ["nightlyRate", "deposit", "cancellationPolicy"],
+} as const satisfies Record<string, readonly ListingFormField[]>;
+
+export type ListingStepName = keyof typeof LISTING_STEP_FIELDS;
+
+/**
+ * Validate one group. The whole form is checked, then narrowed to the fields
+ * on screen — a host is not shown an error about a field two steps ahead.
+ */
+export function errorsForStep(values: ListingFormValues, step: ListingStepName): ListingFormErrors {
+  const result = listingFormToInput(values);
+  if (result.ok) return {};
+  const fields = LISTING_STEP_FIELDS[step] as readonly ListingFormField[];
+  const narrowed: ListingFormErrors = {};
+  for (const field of fields) {
+    if (result.errors[field]) narrowed[field] = result.errors[field];
+  }
+  return narrowed;
+}

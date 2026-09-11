@@ -44,6 +44,19 @@ export async function seedBookableParty(title = "E2E cottage") {
   return { hostId, guestId, listingId, cookie, token, title };
 }
 
+/** A signed-in homeowner with no listings, for the creation wizard. */
+export async function seedHost(label = "E2E Owner") {
+  const hostId = id();
+  const email = `owner-${hostId}@stead.example`;
+  await insertMember(hostId, email, label, true);
+  return {
+    hostId,
+    email,
+    token: await mintSessionValue({ id: hostId, email, name: label }),
+    cookie: await mintSessionCookie({ id: hostId, email, name: label }),
+  };
+}
+
 /** Stamp a real test-mode Connect acct_ on the host. Owner write — members cannot. */
 export async function attachTestConnectAccount(hostId: string, accountId: string): Promise<void> {
   if (!/^acct_[A-Za-z0-9_]+$/.test(accountId)) {
