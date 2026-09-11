@@ -77,6 +77,7 @@ describeDb("bookings exclusion constraint", () => {
       nightlyRateCents: 20000,
       staySubtotalCents: 600000,
       networkFeeCents: 12000,
+      networkFeeBps: 200,
       guestTotalCents: 612000,
       depositCents: 30000,
       cancellationPolicy: "moderate" as const,

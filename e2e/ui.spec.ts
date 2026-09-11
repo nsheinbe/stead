@@ -118,6 +118,125 @@ test.describe("shared shell", () => {
   });
 });
 
+test.describe("contextual sign-in (INT-02)", () => {
+  test("a protected deep link returns to that exact page", async ({ page }) => {
+    await page.goto("/messages");
+    const prompt = page.getByRole("link", { name: "Continue with your email" });
+    await expect(prompt).toHaveAttribute("href", "/login?next=%2Fmessages&source=protected_deep_link");
+    await prompt.click();
+    await expect(page).toHaveURL(/\/login\?/);
+    await expect(page.getByRole("heading", { level: 1, name: "Welcome to Stead" })).toBeVisible();
+    await expect(page.getByLabel("Email address")).toBeVisible();
+  });
+
+  test("the default destination is not carried redundantly", async ({ page }) => {
+    // /trips is already where a generic sign-in lands, so the link stays clean.
+    await page.goto("/trips");
+    await expect(page.getByRole("link", { name: "Continue with your email" })).toHaveAttribute(
+      "href",
+      "/login?intent=renter&source=protected_deep_link",
+    );
+  });
+
+  test("a homeowner deep link keeps homeowner context", async ({ page }) => {
+    await page.goto("/host/payouts");
+    await expect(page.getByRole("link", { name: "Continue with your email" })).toHaveAttribute(
+      "href",
+      "/login?next=%2Fhost%2Fpayouts&intent=homeowner&source=protected_deep_link",
+    );
+    await page.goto("/host/listings");
+    await page.getByRole("link", { name: "Continue with your email" }).click();
+    await expect(page.getByRole("heading", { level: 1, name: "Start your listing" })).toBeVisible();
+    await expect(page.getByText("Your home starts as a draft.")).toBeVisible();
+  });
+
+  test("the sign-in form validates before it claims to send", async ({ page }) => {
+    await page.goto("/login");
+    await page.getByLabel("Email address").fill("not-an-email");
+    await page.getByRole("button", { name: "Send sign-in link" }).click();
+    await expect(page.getByText("Enter a valid email address.")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Check your email" })).toBeHidden();
+  });
+
+  test("an expired link explains itself and keeps the destination", async ({ page }) => {
+    await page.goto("/login?error=Verification&next=%2Fhost%2Fstart&intent=homeowner");
+    await expect(page.getByText(/This link has expired or is no longer valid/)).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Start your listing" })).toBeVisible();
+  });
+
+  test("a listing's message link carries the conversation through sign-in", async ({ page }) => {
+    await ensureDb();
+    const { listingId } = await seedBookableParty("Message link cottage");
+    await page.goto(`/listing/${listingId}`);
+    const message = page.getByRole("link", { name: /^Message / });
+    await expect(message).toHaveAttribute(
+      "href",
+      `/login?next=%2Fmessages%2F${listingId}&source=listing_message`,
+    );
+  });
+});
+
+test.describe("honest money (PAY-01)", () => {
+  test("a listing shows an estimate with the configured fee, deposit separate", async ({ page }) => {
+    await ensureDb();
+    const { listingId } = await seedBookableParty("Money copy cottage");
+    await page.goto(`/listing/${listingId}`);
+
+    // $200 x 30 nights = $6,000, plus a 2% guest network fee = $6,120.
+    await expect(page.getByTestId("stay-total")).toHaveText("$6,120");
+    await expect(page.getByText("Guest network fee (2%)")).toBeVisible();
+    await expect(page.getByText("Estimated stay total", { exact: true })).toBeVisible();
+
+    const deposit = page.getByTestId("deposit-note");
+    await expect(deposit.getByRole("heading", { name: "Deposit arrangement" })).toBeVisible();
+    await expect(deposit).toContainText("separate from your stay charge");
+    await expect(deposit).not.toContainText(/held in|neutral escrow|returned automatically/i);
+
+    await expect(page.getByRole("link", { name: "Choose dates" })).toBeVisible();
+    await expect(page.getByText(/Request to book/i)).toHaveCount(0);
+  });
+
+  test("the payable amount never includes the deposit", async ({ page, request }) => {
+    await ensureDb();
+    const { listingId, cookie, token } = await seedBookableParty("Payable cottage");
+    const created = await request.post("/api/bookings", {
+      headers: { cookie, "content-type": "application/json" },
+      data: { listingId, checkIn: isoDay(120), checkOut: isoDay(150), guests: 2 },
+    });
+    expect(created.status(), await created.text()).toBe(200);
+    const body = (await created.json()) as {
+      quote: { guest_total_cents: number; deposit_cents: number };
+      networkFeeBps: number;
+    };
+    // The server's own numbers: the deposit is excluded from the charge.
+    expect(body.quote.guest_total_cents).toBe(612_000);
+    expect(body.quote.deposit_cents).toBeGreaterThan(0);
+    expect(body.networkFeeBps).toBe(200);
+
+    await signIn(page, token);
+    await page.goto(`/trips`);
+    await page.getByRole("link", { name: /Payable cottage/ }).first().click();
+    await expect(page.getByTestId("deposit-status")).toBeVisible();
+    await expect(page.getByTestId("stay-total")).toHaveText("$6,120");
+    await expect(page.getByText("Stay charge")).toBeVisible();
+    await expect(page.getByText(/Card total today/i)).toHaveCount(0);
+  });
+
+  test("the quote endpoint prices without reserving", async ({ request }) => {
+    await ensureDb();
+    const { listingId } = await seedBookableParty("Quote endpoint cottage");
+    const res = await request.post("/api/bookings/quote", {
+      headers: { "content-type": "application/json" },
+      data: { listingId, checkIn: isoDay(200), checkOut: isoDay(230), guests: 2 },
+    });
+    expect(res.status(), await res.text()).toBe(200);
+    const body = (await res.json()) as { reserved: boolean; quote: { guest_total_cents: number } };
+    expect(body.reserved).toBe(false);
+    expect(body.quote.guest_total_cents).toBe(612_000);
+    expect(await res.text()).not.toMatch(/client_secret|bookingId/);
+  });
+});
+
 test.describe("signed-in cancel from the trip page", () => {
   test("confirm cancel shows the refund and marks the stay canceled", async ({ page, request }) => {
     await ensureDb();

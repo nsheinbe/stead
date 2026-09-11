@@ -217,6 +217,9 @@ export const bookings = pgTable(
     nightlyRateCents: integer("nightly_rate_cents").notNull(),
     staySubtotalCents: integer("stay_subtotal_cents").notNull(),
     networkFeeCents: integer("network_fee_cents").notNull(),
+    // The rate that produced network_fee_cents. Snapshotted so a historical
+    // receipt can label itself without reading today's config (0012).
+    networkFeeBps: integer("network_fee_bps").notNull(),
     guestTotalCents: integer("guest_total_cents").notNull(),
     depositCents: integer("deposit_cents").notNull(),
     cancellationPolicy: cancellationPolicy("cancellation_policy").notNull(),

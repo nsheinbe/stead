@@ -71,6 +71,10 @@ app.use("/trips", requireUser);
 app.use("/trips/*", requireUser);
 app.route("/trips", tripsRoutes);
 
+// Deliberately only the collection path: POST /bookings creates a hold and
+// needs a member, while POST /bookings/quote is a read-only price preview that
+// must work before sign-in. Do not add a "/bookings/*" guard here without
+// moving the quote route elsewhere.
 app.use("/bookings", requireUser);
 app.route("/bookings", bookingsRoutes);
 

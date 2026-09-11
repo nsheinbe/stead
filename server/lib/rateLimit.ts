@@ -26,6 +26,9 @@ const store = new Map<string, Bucket>();
 
 export const RATE_LIMITS = {
   bookings: { name: "bookings", windowMs: 15 * 60_000, max: 8 },
+  // Read-only and public, so the ceiling is higher than create-booking's:
+  // a renter legitimately re-prices while trying dates.
+  quotes: { name: "quotes", windowMs: 15 * 60_000, max: 60 },
   cancel: { name: "cancel", windowMs: 15 * 60_000, max: 8 },
   messages: { name: "messages", windowMs: 15 * 60_000, max: 30 },
   claims: { name: "claims", windowMs: 15 * 60_000, max: 10 },

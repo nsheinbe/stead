@@ -171,11 +171,11 @@ describeDb("state transitions are closed to app_user", () => {
         (tx) => tx`
           INSERT INTO public.bookings (
             listing_id, guest_id, check_in, check_out, guests, nights,
-            nightly_rate_cents, stay_subtotal_cents, network_fee_cents, guest_total_cents,
-            deposit_cents, cancellation_policy, status
+            nightly_rate_cents, stay_subtotal_cents, network_fee_cents, network_fee_bps,
+            guest_total_cents, deposit_cents, cancellation_policy, status
           ) VALUES (
             ${listingId}::uuid, ${guestId}::uuid, '2027-09-01', '2027-10-01', 2, 30,
-            20000, 600000, 12000, 612000, 30000, 'moderate', 'pending_payment'
+            20000, 600000, 12000, 200, 612000, 30000, 'moderate', 'pending_payment'
           )
         `,
       );

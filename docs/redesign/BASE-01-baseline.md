@@ -163,6 +163,21 @@ its owning ticket replaces the screen, so nothing is half-edited.
 | `TripDetail.tsx` | "Guest A cannot read guest B's booking", "Slice 1 does not invent a code" | LIFE-01 |
 | `Landing.tsx` footer | copyright line must read "Copyright 2026 Stead contributors" | NAV-01 (shared footer) |
 
+## 6b. Phase-2 progress against that list
+
+| Item | Status |
+| --- | --- |
+| F01/F03 contextual auth, error mapping, continuation | done (INT-01, INT-02) |
+| F02 checkout draft loss across sign-in | done (INT-03) |
+| F04/F06 deposit in card total, hardcoded "flat 2%" | done (PAY-01) |
+| F05 connected-account SetupIntent unused by the browser | open — PAY-02, held |
+| F07 editor hydrated from the dashboard summary | open — HOST-01 |
+| F08 published vs payout-ready | open — HOST-02/03 |
+| Landing body copy ("member-owned", "instant payout", "permanent") | open — ACQ-01 |
+| Host money inputs bypass `src/lib/cents.ts` | open — HOST-02 |
+| Picsum photo fallback | open — RENT-01 |
+| `Explore` seed-command empty state | fixed in passing (one member-visible string) |
+
 ## 7. Runtime unknowns (not verifiable from source)
 
 - Deployed configuration on Vercel + Neon: fee basis points, cron scheduling for

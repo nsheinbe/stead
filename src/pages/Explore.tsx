@@ -58,8 +58,8 @@ export function ExplorePage() {
         ) : null}
         {listings.data && listings.data.length === 0 && !emptyFiltered ? (
           <StatusBanner
-            title="No homes yet"
-            detail="Run npm run db:seed against the database — one host, six listings across timezones."
+            title="No homes are listed right now"
+            detail="Check back soon for new homes."
           />
         ) : null}
         {emptyFiltered ? (

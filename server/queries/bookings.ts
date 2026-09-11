@@ -105,6 +105,7 @@ export async function getTripForParty(
         columns: {
           amountCents: true,
           state: true,
+          method: true,
           heldAt: true,
           windowClosesAt: true,
           releasedAt: true,
@@ -158,6 +159,7 @@ export async function getTripForParty(
     nightlyRateCents: row.nightlyRateCents,
     staySubtotalCents: row.staySubtotalCents,
     networkFeeCents: row.networkFeeCents,
+    networkFeeBps: row.networkFeeBps,
     guestTotalCents: row.guestTotalCents,
     depositCents: row.depositCents,
     cancellationPolicy: row.cancellationPolicy,
@@ -166,6 +168,7 @@ export async function getTripForParty(
       ? {
           amountCents: row.escrow.amountCents,
           state: row.escrow.state,
+          method: row.escrow.method,
           heldAt: row.escrow.heldAt?.toISOString() ?? null,
           windowClosesAt: row.escrow.windowClosesAt?.toISOString() ?? null,
           releasedAt: row.escrow.releasedAt?.toISOString() ?? null,

@@ -106,6 +106,7 @@ export type EscrowStep = {
 export type EscrowDetail = {
   amountCents: number;
   state: EscrowState;
+  method: DepositMethod;
   heldAt: string | null;
   windowClosesAt: string | null;
   releasedAt: string | null;
@@ -147,6 +148,8 @@ export type TripDetail = TripSummary & {
   nightlyRateCents: number;
   staySubtotalCents: number;
   networkFeeCents: number;
+  /** Snapshotted at booking; never today's configuration. */
+  networkFeeBps: number;
   cancellationPolicy: CancellationPolicy;
   createdAt: string;
   escrow: EscrowDetail | null;
@@ -218,21 +221,43 @@ export type CreateBookingRequest = {
   guests: number;
 };
 
+export type DepositMethod = "auth_hold" | "card_on_file";
+
+export type StayQuote = {
+  nightly_rate_cents: number;
+  nights: number;
+  stay_subtotal_cents: number;
+  network_fee_cents: number;
+  guest_total_cents: number;
+  deposit_cents: number;
+};
+
+/**
+ * A price preview from POST /api/bookings/quote. `reserved` is always false:
+ * nothing is held until a booking is created, and the quote returned by
+ * creation is the one that governs the charge.
+ */
+export type StayQuoteResponse = {
+  quote: StayQuote;
+  networkFeeBps: number;
+  depositMethod: DepositMethod;
+  cancellationPolicy: CancellationPolicy;
+  timezone: string;
+  maxGuests: number;
+  reserved: false;
+};
+
 export type CreateBookingResponse = {
   bookingId: string;
-  quote: {
-    nightly_rate_cents: number;
-    nights: number;
-    stay_subtotal_cents: number;
-    network_fee_cents: number;
-    guest_total_cents: number;
-    deposit_cents: number;
-  };
+  quote: StayQuote;
+  /** The rate that produced quote.network_fee_cents, for an honest label. */
+  networkFeeBps: number;
   paymentClientSecret: string | null;
   setupClientSecret: string | null;
-  depositMethod: "auth_hold" | "card_on_file";
+  depositMethod: DepositMethod;
   mockPayment: boolean;
   timezone: string;
+  cancellationPolicy: CancellationPolicy;
 };
 
 export const TYPE_LABEL: Record<ListingType, string> = {

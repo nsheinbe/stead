@@ -28,6 +28,7 @@ import type {
   UnreadCount,
   IdentitySessionResponse,
   OpsSnapshot,
+  StayQuoteResponse,
 } from "./types";
 import { listingFiltersToSearch, type ListingFilters } from "./filters";
 
@@ -241,6 +242,14 @@ export const api = {
 
   submitReview: (bookingId: string, body: { rating: number; tags: string[]; body: string }) =>
     request<ReviewForm>(`/api/reviews/${bookingId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+
+  /** Price preview only. Reserves nothing; creation is the authority. */
+  quoteStay: (body: CreateBookingRequest) =>
+    request<StayQuoteResponse>("/api/bookings/quote", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
