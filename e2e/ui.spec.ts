@@ -389,3 +389,44 @@ test.describe("listing creation (HOST-02)", () => {
     await expect(page).toHaveURL(/\/host\/start$/);
   });
 });
+
+test.describe("payout readiness (HOST-03)", () => {
+  test("a return from Stripe never claims the account is live", async ({ page }) => {
+    await ensureDb();
+    const owner = await seedHost();
+    await signIn(page, owner.token);
+
+    // ?done=1 only means the host came back. This account has nothing enabled.
+    await page.goto("/host/payouts?done=1");
+    await expect(page.getByRole("heading", { level: 1, name: "Payouts" })).toBeVisible();
+    await expect(page.getByText("Payouts aren't set up yet")).toBeVisible();
+    await expect(page.getByText(/We're checking with Stripe/i)).toBeVisible();
+
+    // The four facts are shown as four facts, none of them claimed.
+    await expect(page.getByText("Can accept a guest's payment")).toBeVisible();
+    await expect(page.getByText("Can pay out to your bank")).toBeVisible();
+    await expect(page.getByText("Your payout account is live")).toHaveCount(0);
+    await expect(page.getByText(/Payouts live|PAYOUTS LIVE/)).toHaveCount(0);
+  });
+
+  test("an expired Stripe link explains itself without losing progress", async ({ page }) => {
+    await ensureDb();
+    const owner = await seedHost();
+    await signIn(page, owner.token);
+
+    await page.goto("/host/payouts?refresh=1");
+    await expect(page.getByText("That Stripe link had expired.")).toBeVisible();
+    await expect(page.getByText(/Nothing was charged/i)).toBeVisible();
+  });
+
+  test("the network fee shown to hosts comes from configuration", async ({ page }) => {
+    await ensureDb();
+    const owner = await seedHost();
+    await signIn(page, owner.token);
+
+    await page.goto("/host/payouts");
+    await expect(page.getByText(/2% network fee/)).toBeVisible();
+    // The retired copy claimed a flat rate as a fixed fact of the product.
+    await expect(page.getByText(/flat 2%/i)).toHaveCount(0);
+  });
+});

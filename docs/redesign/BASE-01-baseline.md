@@ -172,7 +172,7 @@ its owning ticket replaces the screen, so nothing is half-edited.
 | F04/F06 deposit in card total, hardcoded "flat 2%" | done (PAY-01) |
 | F05 connected-account SetupIntent unused by the browser | open — PAY-02, held |
 | F07 editor hydrated from the dashboard summary | done (HOST-01) |
-| F08 published vs payout-ready | stated in the UI (HOST-02); readiness detail open — HOST-03 |
+| F08 published vs payout-ready | done (HOST-02 states it, HOST-03 breaks readiness into its four facts) |
 | Landing body copy ("member-owned", "instant payout", "permanent") | done (ACQ-01) |
 | Host money inputs bypass `src/lib/cents.ts` | done (HOST-01 editor, HOST-02 wizard; the inline create form is gone) |
 | Picsum photo fallback | done (ACQ-01 `ListingPhoto`, RENT-01) |
@@ -195,6 +195,14 @@ its owning ticket replaces the screen, so nothing is half-edited.
   `POST /api/listings` needs a complete listing and a wizard is the honest way
   to collect one. The wizard creates the draft once, at the end of "Price and
   terms", and steps four and five continue in the editor against that real id.
+- **`?done=1` is not activation.** `/host/payouts` derives readiness only from
+  what the server retrieved from Stripe, and a return from onboarding starts a
+  bounded poll (20 tries at 3s) that ends in an honest "Stripe hasn't confirmed
+  yet" rather than a spinner. `src/lib/payoutReadiness.ts` holds that logic so
+  it is testable without Stripe.
+- The four Connect facts are rendered separately, because `charges_enabled` and
+  `payouts_enabled` move independently: an account can take a guest's money
+  while Stripe holds the payout.
 - No partial-draft table was added. Before the first save the only thing kept
   on the device is the INT-03 non-sensitive set (name, type, city, country,
   time zone, capacity); rate, deposit, address and description are not.
