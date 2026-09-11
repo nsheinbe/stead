@@ -8,6 +8,7 @@ import { HTTPException } from "hono/http-exception";
 import { requireUser, tenantQuery, type AppEnv } from "../lib/http";
 import {
   isCurrentUserOps,
+  listConversionTotals,
   listOpsDisputes,
   listOpsFrozenPayouts,
   listOpsHeartbeats,
@@ -25,13 +26,14 @@ opsRoutes.get("/", async (c) => {
     throw new HTTPException(403, { message: "This page is for ops." });
   }
 
-  const [disputes, heartbeats, frozenPayouts] = await tenantQuery(c, async (tx) => {
-    const [d, h, p] = await Promise.all([
+  const [disputes, heartbeats, frozenPayouts, conversions] = await tenantQuery(c, async (tx) => {
+    const [d, h, p, conv] = await Promise.all([
       listOpsDisputes(tx),
       listOpsHeartbeats(tx),
       listOpsFrozenPayouts(tx),
+      listConversionTotals(tx),
     ]);
-    return [d, h, p] as const;
+    return [d, h, p, conv] as const;
   });
 
   const rows: HeartbeatRow[] = heartbeats.map((h) => ({
@@ -52,6 +54,7 @@ opsRoutes.get("/", async (c) => {
       errored: erroredJobs.has(h.job),
     })),
     frozenPayouts,
+    conversions,
   };
   return c.json(body);
 });

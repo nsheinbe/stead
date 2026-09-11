@@ -1,16 +1,15 @@
-import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
-import { loadStripe, type Stripe } from "@stripe/stripe-js";
 import { useQuery } from "@tanstack/react-query";
-import { addDays, addMonths, format, parseISO, startOfDay } from "date-fns";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { addDays, format, parseISO } from "date-fns";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { CancellationPolicyCard } from "../components/CancellationPolicyCard";
 import { DepositSequence } from "../components/EscrowTimeline";
-import { BackChevron } from "../components/Icons";
 import { DepositNote, PriceBreakdown } from "../components/PriceBreakdown";
 import { Shell } from "../components/Shell";
-import { StatusBanner } from "../components/StatusBanner";
-import { StatusMessage } from "../components/ui";
+import { GuestStepper } from "../components/booking/GuestStepper";
+import { PayStep } from "../components/booking/PayStep";
+import { StayCalendar } from "../components/booking/StayCalendar";
+import { Button, Progress, Skeleton, StatusMessage } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { api } from "../lib/api";
 import { loginHref } from "../lib/continuation";
@@ -21,18 +20,9 @@ import {
   readBookingDraft,
   saveBookingDraft,
 } from "../lib/drafts";
-import { monthGrid, prettyDay, prettyRange } from "../lib/dates";
-import { stripePublishableKey } from "../lib/env";
-import { formatUsd, MIN_STAY_NIGHTS, nightsBetween, quoteStay, type StayQuote } from "../lib/money";
-import type { CreateBookingResponse, ListingDetail } from "../lib/types";
-
-let stripePromise: Promise<Stripe | null> | null = null;
-function getStripe(): Promise<Stripe | null> {
-  const key = stripePublishableKey();
-  if (!key) return Promise.resolve(null);
-  stripePromise ??= loadStripe(key);
-  return stripePromise;
-}
+import { prettyDay, prettyRange } from "../lib/dates";
+import { formatUsd, MIN_STAY_NIGHTS, nightsBetween, quoteStay } from "../lib/money";
+import type { CreateBookingResponse } from "../lib/types";
 
 /** What happened to a same-device draft, once, for the member to read. */
 type RestoreNotice =
@@ -48,7 +38,6 @@ export function BookPage() {
   const navigate = useNavigate();
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [month, setMonth] = useState(() => startOfDay(new Date()));
   const [checkIn, setCheckIn] = useState<string | null>(null);
   const [checkOut, setCheckOut] = useState<string | null>(null);
   const [guestsWanted, setGuestsWanted] = useState(2);
@@ -144,7 +133,6 @@ export function BookPage() {
     setCheckIn(draft.checkIn);
     setCheckOut(draft.checkOut);
     setGuestsWanted(guests);
-    setMonth(startOfDay(parseISO(draft.checkIn)));
     setDraftId(draft.draftId);
     setStep(2);
     setRestoreNotice({ kind: "restored", changed });
@@ -250,160 +238,92 @@ export function BookPage() {
     if (result) setStep(3);
   }
 
-  const cells = useMemo(() => monthGrid(month), [month]);
-  const today = isoToday();
-
   return (
     <Shell focused width="narrow" backTo={listing ? `/listing/${listing.id}` : "/explore"} backLabel="Home details">
-      <div className="flex flex-1 flex-col pb-7 pt-6">
-        <div className="mb-3.5 flex items-center gap-3">
-          <button
-            type="button"
-            aria-label="Back"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-linen"
-            onClick={() => {
-              if (step === 1) navigate(listing ? `/listing/${listing.id}` : "/explore");
-              else setStep((step - 1) as 1 | 2);
-            }}
-          >
-            <BackChevron />
-          </button>
-          <div className="flex flex-1 flex-col">
-            <span className="text-base font-bold">
-              {step === 1 ? "Your stay" : step === 2 ? "Price & terms" : "Payment"}
-            </span>
-            <span className="text-xs text-ink/55">
-              {listing?.title ?? "Stay"}
-              {checkIn && checkOut ? ` · ${prettyRange(checkIn, checkOut)}` : ""}
-            </span>
+      <div className="flex flex-1 flex-col gap-5 pb-8 pt-6">
+        <div className="flex flex-col gap-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <h1 className="m-0 text-[1.75rem] sm:text-[2rem]">
+                {step === 1 ? "Your stay" : step === 2 ? "Price & terms" : "Payment"}
+              </h1>
+              <p className="m-0 text-sm text-ink-secondary">
+                {listing?.title ?? "Loading…"}
+                {checkIn && checkOut ? ` · ${prettyRange(checkIn, checkOut)}` : ""}
+              </p>
+            </div>
+            {step > 1 && step < 3 ? (
+              <Button variant="quiet" size="sm" onClick={() => setStep((step - 1) as 1 | 2)}>
+                Back
+              </Button>
+            ) : null}
           </div>
-          <span className="money text-[12.5px] font-bold text-ink/50">{step} of 3</span>
-        </div>
-        <div className="mb-4 flex gap-1.5">
-          {[1, 2, 3].map((n) => (
-            <div
-              key={n}
-              className={`h-1 flex-1 rounded-full ${n <= step ? "bg-spruce" : "bg-[#E5DDCA]"}`}
-            />
-          ))}
+          <Progress steps={["Your stay", "Price & terms", "Payment"]} current={step} label="Booking progress" />
         </div>
 
-        {listingQuery.isLoading || authLoading ? <StatusBanner title="Loading…" /> : null}
-        {listingQuery.isError ? <StatusBanner title="Listing not found" /> : null}
-        {submitError ? <StatusBanner tone="claim" title={submitError} /> : null}
-
-        {restoreNotice ? (
-          <div className="mb-3.5">
-            <RestoreMessage notice={restoreNotice} onDismiss={() => setRestoreNotice(null)} />
+        {listingQuery.isPending || authLoading ? (
+          <div aria-busy="true">
+            <p role="status" className="sr-only">
+              Loading this home
+            </p>
+            <Skeleton className="h-64 w-full" />
           </div>
         ) : null}
+        {listingQuery.isError ? (
+          <StatusMessage tone="danger" title="We couldn't find this home.">
+            <p>It may no longer be listed, or the link may be out of date.</p>
+          </StatusMessage>
+        ) : null}
+        {submitError ? <StatusMessage tone="danger" title={submitError} /> : null}
+        {restoreNotice ? <RestoreMessage notice={restoreNotice} onDismiss={() => setRestoreNotice(null)} /> : null}
 
         {listing && step === 1 ? (
-          <div className="flex flex-1 flex-col gap-3.5">
-            <div className="flex flex-col gap-2.5 rounded-card bg-linen p-4">
-              <div className="flex items-center justify-between px-1">
-                <span className="text-[15px] font-bold">{format(month, "MMMM yyyy")}</span>
-                <div className="flex gap-4">
-                  <button type="button" aria-label="Previous month" onClick={() => setMonth(addMonths(month, -1))}>
-                    ‹
-                  </button>
-                  <button type="button" aria-label="Next month" onClick={() => setMonth(addMonths(month, 1))}>
-                    ›
-                  </button>
-                </div>
+          <div className="flex flex-1 flex-col gap-4">
+            <StayCalendar checkIn={checkIn} checkOut={checkOut} onPick={pickDay} initialMonth={checkIn} />
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-card border border-divider px-4 py-3">
+                <p className="m-0 text-metadata font-semibold uppercase tracking-[0.1em] text-ink-secondary">
+                  Check-in
+                </p>
+                <p className="m-0 font-semibold">{checkIn ? prettyDay(checkIn) : "Pick a date"}</p>
+                {checkIn ? (
+                  <p className="m-0 text-sm text-ink-secondary">
+                    From {configQuery.data?.checkinLocalTime ?? "16:00"}
+                  </p>
+                ) : null}
               </div>
-              <div className="grid grid-cols-7 justify-items-center text-[11.5px] font-semibold text-ink/45">
-                {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
-                  <span key={`${d}-${i}`}>{d}</span>
-                ))}
-              </div>
-              <div className="grid grid-cols-7 justify-items-center gap-y-0.5">
-                {cells.map(({ date, inMonth }) => {
-                  const iso = format(date, "yyyy-MM-dd");
-                  const tooShort = Boolean(checkIn && !checkOut && minCheckout && iso > checkIn && iso < minCheckout);
-                  const disabled = !inMonth || iso < today || tooShort;
-                  const selected = iso === checkIn || iso === checkOut;
-                  const inRange = checkIn && checkOut && iso > checkIn && iso < checkOut;
-                  return (
-                    <button
-                      key={iso + String(inMonth)}
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => pickDay(iso)}
-                      className={`h-9 w-9 rounded-full text-[13px] ${
-                        selected
-                          ? "bg-spruce font-bold text-paper"
-                          : inRange
-                            ? "bg-spruce/15 font-semibold"
-                            : disabled
-                              ? "text-ink/25"
-                              : "font-medium"
-                      }`}
-                    >
-                      {date.getDate()}
-                    </button>
-                  );
-                })}
+              <div className="rounded-card border border-divider px-4 py-3">
+                <p className="m-0 text-metadata font-semibold uppercase tracking-[0.1em] text-ink-secondary">
+                  Checkout
+                </p>
+                <p className="m-0 font-semibold">{checkOut ? prettyDay(checkOut) : "Pick a date"}</p>
+                {checkOut ? (
+                  <p className="m-0 text-sm text-ink-secondary">
+                    By {configQuery.data?.checkoutLocalTime ?? "11:00"}
+                  </p>
+                ) : null}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2.5">
-              <div className="flex flex-col gap-0.5 rounded-xl border border-linen-tint px-3.5 py-2.5">
-                <span className="text-[11px] font-bold tracking-wider text-ink/50">CHECK-IN</span>
-                <span className="text-[14.5px] font-bold">
-                  {checkIn ? `${prettyDay(checkIn)} · ${configQuery.data?.checkinLocalTime ?? "16:00"}` : "Pick a date"}
-                </span>
-              </div>
-              <div className="flex flex-col gap-0.5 rounded-xl border border-linen-tint px-3.5 py-2.5">
-                <span className="text-[11px] font-bold tracking-wider text-ink/50">CHECKOUT</span>
-                <span className="text-[14.5px] font-bold">
-                  {checkOut ? `${prettyDay(checkOut)} · ${configQuery.data?.checkoutLocalTime ?? "11:00"}` : "Pick a date"}
-                </span>
-              </div>
-            </div>
-            {checkIn && !checkOut && minCheckout ? (
-              <p className="m-0 text-center text-[12px] text-ink/55">
-                Earliest checkout for a {MIN_STAY_NIGHTS}-night stay: {prettyDay(minCheckout)}.
-              </p>
-            ) : null}
-            <div className="flex items-center justify-between rounded-xl border border-linen-tint px-3.5 py-3">
-              <div className="flex flex-col">
-                <span className="text-[14.5px] font-bold">Guests</span>
-                <span className="text-xs text-ink/55">This home sleeps {listing.maxGuests}</span>
-              </div>
-              <div className="flex items-center gap-3.5">
-                <button
-                  type="button"
-                  aria-label="Fewer guests"
-                  className="flex h-10 w-10 items-center justify-center rounded-full border-[1.5px] border-[#D8CDB6] text-xl text-ink/60"
-                  onClick={() => setGuestsWanted(Math.max(1, guests - 1))}
-                >
-                  −
-                </button>
-                <span className="money text-[17px] font-bold">{guests}</span>
-                <button
-                  type="button"
-                  aria-label="More guests"
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-spruce text-xl text-paper"
-                  onClick={() => setGuestsWanted(Math.min(listing.maxGuests, guests + 1))}
-                >
-                  +
-                </button>
-              </div>
-            </div>
-            <button
-              type="button"
-              disabled={!quote}
-              className="mt-auto rounded-xl bg-spruce py-4 text-[15.5px] font-bold text-paper disabled:opacity-40 hover:bg-spruce-deep"
-              onClick={() => {
-                persistSelection();
-                setStep(2);
-              }}
-            >
-              {quote ? "Review price" : "Pick dates to continue"}
-            </button>
-            <p className="m-0 text-center text-[11.5px] text-ink/50">
-              Choose at least {MIN_STAY_NIGHTS} nights. You'll review the exact price before anything is charged.
+
+            <GuestStepper
+              guests={guests}
+              maxGuests={listing.maxGuests}
+              onChange={(next) => setGuestsWanted(next)}
+            />
+
+            <p className="m-0 text-sm text-ink-secondary">
+              Choose at least {MIN_STAY_NIGHTS} nights. Times follow this home's time zone ({listing.timezone}).
             </p>
+
+            <div className="mt-auto flex flex-col gap-2 pt-2">
+              <Button block disabled={!quote} onClick={() => { persistSelection(); setStep(2); }}>
+                {quote ? "Review price" : "Pick dates to continue"}
+              </Button>
+              <p className="m-0 text-center text-sm text-ink-secondary">
+                Nothing is reserved yet. You'll review the exact price before anything is charged.
+              </p>
+            </div>
           </div>
         ) : null}
 
@@ -459,14 +379,16 @@ export function BookPage() {
               </StatusMessage>
             ) : null}
             <CancellationPolicyCard policy={listing.cancellationPolicy} compact />
-            <button
-              type="button"
-              disabled={creating}
-              className="mt-auto rounded-xl bg-spruce py-4 text-[15.5px] font-bold text-paper hover:bg-spruce-deep disabled:opacity-60"
-              onClick={() => void goToPayment()}
-            >
-              {creating ? "Checking these dates…" : user ? "Continue to payment" : "Sign in to continue"}
-            </button>
+            <div className="mt-auto flex flex-col gap-2 pt-2">
+              <Button
+                block
+                busy={creating}
+                busyLabel="Checking these dates…"
+                onClick={() => void goToPayment()}
+              >
+                {user ? "Continue to payment" : "Sign in to continue"}
+              </Button>
+            </div>
             {!user ? (
               <p className="m-0 text-center text-[11.5px] text-ink/50">
                 Your dates and guest count stay saved in this browser while you sign in.
@@ -475,8 +397,14 @@ export function BookPage() {
           </div>
         ) : null}
 
-        {listing && quote && step === 3 && created ? (
-          <PayStep listing={listing} quote={quote} created={created} checkIn={checkIn} checkOut={checkOut} guests={guests} />
+        {listing && step === 3 && created ? (
+          <PayStep
+            listing={listing}
+            created={created}
+            checkIn={checkIn}
+            checkOut={checkOut}
+            guests={guests}
+          />
         ) : null}
       </div>
     </Shell>
@@ -535,118 +463,4 @@ function safeNights(checkIn: string, checkOut: string): number {
   } catch {
     return 0;
   }
-}
-
-function PayStep({
-  listing,
-  quote,
-  created,
-  checkIn,
-  checkOut,
-  guests,
-}: {
-  listing: ListingDetail;
-  quote: StayQuote;
-  created: CreateBookingResponse;
-  checkIn: string | null;
-  checkOut: string | null;
-  guests: number;
-}) {
-  const thumb = listing.photos[0]?.storagePath;
-  // What the processor will actually take. The deposit is NOT part of it:
-  // the server's PaymentIntent is for guest_total_cents, and the deposit is a
-  // separate arrangement on the host's connected account.
-  const payable = created.quote.guest_total_cents;
-
-  return (
-    <div className="flex flex-1 flex-col gap-3.5">
-      <div className="flex items-center gap-3 rounded-[14px] bg-linen px-3.5 py-3">
-        <div className="h-[54px] w-[54px] shrink-0 overflow-hidden rounded-[10px] bg-linen-tint">
-          {thumb ? <img src={thumb} alt="" className="h-full w-full object-cover" /> : null}
-        </div>
-        <div className="flex flex-col gap-0.5">
-          <span className="text-[14.5px] font-bold">{listing.title}</span>
-          <span className="text-xs text-ink/55">
-            {checkIn && checkOut ? prettyRange(checkIn, checkOut) : ""} · {quote.nights} nights · {guests} guests
-          </span>
-        </div>
-      </div>
-
-      {created.paymentClientSecret && stripePublishableKey() ? (
-        <Elements stripe={getStripe()} options={{ clientSecret: created.paymentClientSecret }}>
-          <StripePayForm bookingId={created.bookingId} payableLabel={formatUsd(payable)} />
-        </Elements>
-      ) : (
-        <StatusMessage tone="warning" title="Payment is unavailable right now. Your stay is not confirmed.">
-          <p>Your dates are held briefly while payment is unavailable. Please try again shortly.</p>
-        </StatusMessage>
-      )}
-
-      <div className="flex flex-col gap-2.5 rounded-[14px] border border-linen-tint px-4 py-4">
-        <PriceBreakdown
-          nightlyRateCents={created.quote.nightly_rate_cents}
-          nights={created.quote.nights}
-          staySubtotalCents={created.quote.stay_subtotal_cents}
-          networkFeeCents={created.quote.network_fee_cents}
-          guestTotalCents={created.quote.guest_total_cents}
-          networkFeeBps={created.networkFeeBps}
-          authoritative
-        />
-      </div>
-      <DepositNote amountCents={created.quote.deposit_cents} method={created.depositMethod} />
-      {created.mockPayment ? (
-        <Link
-          to="/trips"
-          className="rounded-xl bg-spruce py-4 text-center text-[15.5px] font-bold text-paper no-underline hover:bg-spruce-deep hover:text-paper"
-        >
-          View trips
-        </Link>
-      ) : null}
-    </div>
-  );
-}
-
-function StripePayForm({ bookingId, payableLabel }: { bookingId: string; payableLabel: string }) {
-  const stripe = useStripe();
-  const elements = useElements();
-  const navigate = useNavigate();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function pay() {
-    if (!stripe || !elements) return;
-    setBusy(true);
-    setError(null);
-    const { error: confirmError } = await stripe.confirmPayment({
-      elements,
-      confirmParams: {
-        return_url: `${window.location.origin}/trips/${bookingId}`,
-      },
-      redirect: "if_required",
-    });
-    setBusy(false);
-    if (confirmError) {
-      setError(confirmError.message ?? "Payment failed");
-      return;
-    }
-    navigate(`/trips/${bookingId}`);
-  }
-
-  return (
-    <div className="flex flex-col gap-3">
-      <span className="px-0.5 text-[11.5px] font-bold tracking-[0.12em] text-ink/50">PAY WITH</span>
-      <div className="rounded-xl border-[1.5px] border-spruce bg-spruce/[0.04] p-3.5">
-        <PaymentElement />
-      </div>
-      {error ? <StatusBanner tone="claim" title={error} /> : null}
-      <button
-        type="button"
-        disabled={!stripe || busy}
-        onClick={() => void pay()}
-        className="rounded-xl bg-spruce py-4 text-[15.5px] font-bold text-paper hover:bg-spruce-deep disabled:opacity-60"
-      >
-        {busy ? "Confirming your payment…" : `Pay ${payableLabel}`}
-      </button>
-    </div>
-  );
 }

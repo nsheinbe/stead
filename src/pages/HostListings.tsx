@@ -1,97 +1,55 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { HostSubnav } from "../components/HostSubnav";
+import { ListingPhoto } from "../components/ListingPhoto";
 import { Shell } from "../components/Shell";
 import { SignInPrompt } from "../components/SignInPrompt";
-import { StatusBanner } from "../components/StatusBanner";
+import {
+  Button,
+  ButtonLink,
+  Card,
+  Dialog,
+  EmptyState,
+  PageHeader,
+  Skeleton,
+  StatusMessage,
+  StatusPill,
+  Surface,
+} from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { api, ApiError } from "../lib/api";
-import { clearHostPrecreateDraft, readHostPrecreateDraft, saveHostPrecreateDraft } from "../lib/drafts";
 import { formatUsd } from "../lib/money";
-import { StatusMessage } from "../components/ui";
-import type { HostListing, ListingInput, ListingStatus } from "../lib/types";
+import type { HostListing, ListingStatus } from "../lib/types";
 
 const STATUS_LABEL: Record<ListingStatus, string> = {
   draft: "Draft",
-  active: "Live",
+  active: "Published",
   paused: "Paused",
 };
 
-/** The browser knows its own zone, which is the right default for a new home. */
-function localTimeZone(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-  } catch {
-    return "UTC";
-  }
-}
-
-const EMPTY: ListingInput = {
-  title: "",
-  type: "entire_home",
-  city: "",
-  country: "US",
-  timezone: localTimeZone(),
-  nightlyRateCents: 20000,
-  depositCents: 30000,
-  maxGuests: 2,
+const STATUS_NOTE: Record<ListingStatus, string> = {
+  draft: "Only you can see this home.",
+  active: "Guests can find this home and request stays.",
+  paused: "Off the market. Existing stays are unaffected.",
 };
 
+/**
+ * The homeowner's dashboard.
+ *
+ * Creation lives at `/host/start`, which is the one canonical path: a listing
+ * needs a complete, valid set of fields before `POST /api/listings` will take
+ * it, and a wizard is the honest way to collect them. This page lists what
+ * exists and changes its state.
+ *
+ * "Published" and "payout-ready" are different facts and are shown as
+ * different facts. A home can be visible while a stay still cannot charge,
+ * because the server fails closed without a Stripe payout account.
+ */
 export function HostListingsPage() {
   const { user, status } = useAuth();
   const queryClient = useQueryClient();
-  const [draft, setDraft] = useState<ListingInput>(EMPTY);
-  const [params] = useSearchParams();
-  const [creating, setCreating] = useState(params.get("create") === "1");
-  const [precreateNotice, setPrecreateNotice] = useState<"restored" | "unavailable" | null>(null);
-  const restoredPrecreate = useRef(false);
-
-  /**
-   * Bring back the essentials this device remembered from before sign-in.
-   * Only the non-sensitive ones are kept (INT-03): a title, the kind of home,
-   * city, country, time zone and capacity. Rate, deposit, address and
-   * description are never written to anonymous storage, so they start empty.
-   */
-  useEffect(() => {
-    if (restoredPrecreate.current || status !== "signed_in") return;
-    restoredPrecreate.current = true;
-    const result = readHostPrecreateDraft(user?.id ?? null);
-    if (result.status === "unavailable") {
-      setPrecreateNotice("unavailable");
-      return;
-    }
-    if (result.status !== "restored") return;
-    const fields = result.draft.fields;
-    if (Object.keys(fields).length === 0) return;
-    setDraft((current) => ({ ...current, ...fields }));
-    setCreating(true);
-    setPrecreateNotice("restored");
-  }, [status, user?.id]);
-
-  /** Keep the essentials on this device while the member is filling them in. */
-  function rememberPrecreate(next: ListingInput) {
-    const saved = saveHostPrecreateDraft(
-      {
-        title: next.title || undefined,
-        type: next.type,
-        city: next.city || undefined,
-        country: next.country || undefined,
-        timezone: next.timezone || undefined,
-        maxGuests: next.maxGuests,
-      },
-      user?.id ?? null,
-    );
-    if (!saved.ok) setPrecreateNotice("unavailable");
-  }
-
-  function updateDraft(patch: Partial<ListingInput>) {
-    setDraft((current) => {
-      const next = { ...current, ...patch };
-      rememberPrecreate(next);
-      return next;
-    });
-  }
+  const [confirmDelete, setConfirmDelete] = useState<HostListing | null>(null);
 
   const listings = useQuery({
     queryKey: ["host-listings", user?.id],
@@ -104,49 +62,31 @@ export function HostListingsPage() {
     enabled: Boolean(user),
     queryFn: () => api.connectStatus(),
   });
-  const payoutsReady = connect.data?.chargesEnabled && connect.data?.payoutsEnabled;
+  const payoutsReady = Boolean(connect.data?.chargesEnabled && connect.data?.payoutsEnabled);
 
-  const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: ["host-listings", user?.id] });
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["host-listings", user?.id] });
 
-  const create = useMutation({
-    mutationFn: (input: ListingInput) => api.createListing(input),
-    onSuccess: async () => {
-      clearHostPrecreateDraft();
-      setPrecreateNotice(null);
-      setDraft({ ...EMPTY, timezone: localTimeZone() });
-      setCreating(false);
-      await invalidate();
-    },
-  });
-
-  const setStatus = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: ListingStatus }) =>
-      api.updateListing(id, { status }),
+  const setListingStatus = useMutation({
+    mutationFn: ({ id, status: next }: { id: string; status: ListingStatus }) =>
+      api.updateListing(id, { status: next }),
     onSuccess: invalidate,
   });
 
   const remove = useMutation({
     mutationFn: (id: string) => api.deleteListing(id),
-    onSuccess: invalidate,
+    onSuccess: async () => {
+      setConfirmDelete(null);
+      await invalidate();
+    },
   });
 
+  const rows = listings.data ?? [];
+  const published = rows.filter((row) => row.status === "active").length;
+
   return (
-    <Shell width="narrow">
-      <div className="flex flex-1 flex-col gap-3.5 pb-6 pt-6">
+    <Shell width="narrow" workspace="hosting" title="Your homes">
+      <div className="flex flex-1 flex-col gap-6 py-6 sm:py-8">
         <HostSubnav />
-        <div className="flex items-center justify-between">
-          <h1 className="m-0 font-display text-2xl font-semibold">Your homes</h1>
-          {user && (
-            <button
-              type="button"
-              onClick={() => setCreating((open) => !open)}
-              className="rounded-full bg-spruce px-4 py-2 text-sm font-bold text-paper"
-            >
-              {creating ? "Cancel" : "Add a home"}
-            </button>
-          )}
-        </div>
 
         {status !== "signed_in" ? (
           <SignInPrompt
@@ -158,232 +98,195 @@ export function HostListingsPage() {
           />
         ) : (
           <>
-            {connect.data && !payoutsReady && (
-              <div className="flex flex-col gap-2 rounded-card border border-linen-tint bg-linen px-4 py-3.5">
-                <span className="text-sm font-bold">Set up payouts before a guest books</span>
-                <p className="m-0 text-[12.5px] leading-relaxed text-ink/65">
-                  Guests pay you directly. A listing can go live now; a stay cannot charge until
-                  Stripe has your payout account.
-                </p>
-                <Link
-                  to="/host/payouts"
-                  className="self-start text-sm font-bold text-spruce no-underline"
-                >
-                  Continue to payouts
-                </Link>
-              </div>
-            )}
-            {creating && precreateNotice === "restored" ? (
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <PageHeader title="Your homes" description="Add one, edit it, and publish it when you're ready." />
+              <ButtonLink to="/host/start">Add a home</ButtonLink>
+            </div>
+
+            {connect.data && !payoutsReady && published > 0 ? (
               <StatusMessage
-                tone="success"
-                title="We brought back what you'd started."
+                tone="warning"
+                title="Your published homes can't take payment yet."
                 action={
-                  <button
-                    type="button"
-                    onClick={() => {
-                      clearHostPrecreateDraft();
-                      setPrecreateNotice(null);
-                      setDraft({ ...EMPTY, timezone: localTimeZone() });
-                    }}
-                    className="text-sm font-semibold underline"
-                  >
-                    Start over
-                  </button>
+                  <ButtonLink to="/host/payouts" variant="secondary" size="sm">
+                    Set up payouts
+                  </ButtonLink>
                 }
               >
-                <p>Check the details below. Your home isn't saved to your account until you save it.</p>
+                <p>
+                  Guests pay you directly through Stripe. Until your payout account is ready, a guest cannot
+                  complete a booking for {published === 1 ? "this home" : "these homes"}.
+                </p>
               </StatusMessage>
             ) : null}
-            {creating && precreateNotice === "unavailable" ? (
-              <StatusMessage tone="warning" title="Your entries couldn't be saved on this device.">
-                <p>You can still fill in the form and save. Leaving the page may mean starting again.</p>
-              </StatusMessage>
+
+            {connect.data && !payoutsReady && published === 0 ? (
+              <Surface padding="sm">
+                <p className="m-0 text-sm text-ink-secondary">
+                  Payout setup is separate from publishing, and both are needed before a guest can pay.{" "}
+                  <Link to="/host/payouts" className="font-semibold">
+                    Set up payouts
+                  </Link>
+                  .
+                </p>
+              </Surface>
             ) : null}
-            {creating && (
-              <form
-                className="flex flex-col gap-3 rounded-card border border-linen-tint p-[18px]"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  create.mutate(draft);
-                }}
+
+            {listings.isPending ? (
+              <div className="flex flex-col gap-4" aria-busy="true">
+                <p role="status" className="sr-only">
+                  Loading your homes
+                </p>
+                <Skeleton className="h-32 w-full" />
+                <Skeleton className="h-32 w-full" />
+              </div>
+            ) : listings.isError ? (
+              <StatusMessage
+                tone="danger"
+                title="We couldn't load your homes."
+                action={
+                  <Button variant="secondary" size="sm" onClick={() => void listings.refetch()}>
+                    Try again
+                  </Button>
+                }
+              />
+            ) : rows.length === 0 ? (
+              <EmptyState
+                title="You haven't added a home yet."
+                action={<ButtonLink to="/host/start">Add a home</ButtonLink>}
               >
-                <label className="flex flex-col gap-1 text-xs font-bold text-ink/60">
-                  TITLE
-                  <input
-                    required
-                    minLength={3}
-                    value={draft.title}
-                    onChange={(e) => updateDraft({ title: e.target.value })}
-                    className="rounded-lg border border-linen-tint px-3 py-2 text-sm font-normal text-ink"
-                  />
-                </label>
-                <div className="flex gap-3">
-                  <label className="flex flex-1 flex-col gap-1 text-xs font-bold text-ink/60">
-                    CITY
-                    <input
-                      required
-                      value={draft.city}
-                      onChange={(e) => updateDraft({ city: e.target.value })}
-                      className="rounded-lg border border-linen-tint px-3 py-2 text-sm font-normal text-ink"
-                    />
-                  </label>
-                  <label className="flex w-24 flex-col gap-1 text-xs font-bold text-ink/60">
-                    COUNTRY
-                    <input
-                      required
-                      maxLength={2}
-                      value={draft.country}
-                      onChange={(e) => updateDraft({ country: e.target.value.toUpperCase() })}
-                      className="rounded-lg border border-linen-tint px-3 py-2 text-sm font-normal uppercase text-ink"
-                    />
-                  </label>
-                </div>
-                <label className="flex flex-col gap-1 text-xs font-bold text-ink/60">
-                  TIME ZONE
-                  <input
-                    required
-                    value={draft.timezone}
-                    onChange={(e) => updateDraft({ timezone: e.target.value })}
-                    className="rounded-lg border border-linen-tint px-3 py-2 text-sm font-normal text-ink"
-                  />
-                  <span className="text-[11px] font-normal text-ink/50">
-                    Check-in and checkout run on this clock, so it has to be a real IANA zone.
-                  </span>
-                </label>
-                <div className="flex gap-3">
-                  <label className="flex flex-1 flex-col gap-1 text-xs font-bold text-ink/60">
-                    NIGHTLY (USD)
-                    <input
-                      type="number"
-                      min={1}
-                      value={draft.nightlyRateCents / 100}
-                      onChange={(e) =>
-                        setDraft((c) => ({ ...c, nightlyRateCents: Math.round(Number(e.target.value) * 100) }))
-                      }
-                      className="money rounded-lg border border-linen-tint px-3 py-2 text-sm font-normal text-ink"
-                    />
-                  </label>
-                  <label className="flex flex-1 flex-col gap-1 text-xs font-bold text-ink/60">
-                    DEPOSIT (USD)
-                    <input
-                      type="number"
-                      min={0}
-                      value={draft.depositCents / 100}
-                      onChange={(e) =>
-                        setDraft((c) => ({ ...c, depositCents: Math.round(Number(e.target.value) * 100) }))
-                      }
-                      className="money rounded-lg border border-linen-tint px-3 py-2 text-sm font-normal text-ink"
-                    />
-                  </label>
-                  <label className="flex w-24 flex-col gap-1 text-xs font-bold text-ink/60">
-                    SLEEPS
-                    <input
-                      type="number"
-                      min={1}
-                      value={draft.maxGuests}
-                      onChange={(e) => updateDraft({ maxGuests: Number(e.target.value) })}
-                      className="rounded-lg border border-linen-tint px-3 py-2 text-sm font-normal text-ink"
-                    />
-                  </label>
-                </div>
-                {create.isError && (
-                  <StatusBanner
-                    tone="claim"
-                    title="Could not save this home"
-                    detail={
-                      create.error instanceof ApiError
-                        ? create.error.message
-                        : "Something went wrong. Try again."
+                <p>A new home starts as a draft. Nobody can see it until you publish it.</p>
+              </EmptyState>
+            ) : (
+              <ul className="m-0 flex list-none flex-col gap-4 p-0">
+                {rows.map((listing) => (
+                  <li key={listing.id}>
+                    <Card>
+                      <div className="flex flex-col gap-4 sm:flex-row">
+                        <div className="w-full shrink-0 sm:w-40">
+                          <ListingPhoto
+                            src={listing.photos[0]?.storagePath}
+                            alt=""
+                            className="rounded-card"
+                          />
+                        </div>
+                        <div className="flex min-w-0 flex-1 flex-col gap-3">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <h2 className="m-0 text-base font-semibold">
+                                <Link to={`/host/listings/${listing.id}`}>
+                                  {listing.title || "Untitled home"}
+                                </Link>
+                              </h2>
+                              <p className="m-0 text-sm text-ink-secondary">
+                                {listing.city}, {listing.country} · sleeps {listing.maxGuests}
+                              </p>
+                              <p className="money m-0 text-sm text-ink-secondary">
+                                {formatUsd(listing.nightlyRateCents)} per night
+                              </p>
+                            </div>
+                            <StatusPill tone={listing.status === "active" ? "brand" : "neutral"}>
+                              {STATUS_LABEL[listing.status]}
+                            </StatusPill>
+                          </div>
+
+                          <p className="m-0 text-sm text-ink-secondary">{STATUS_NOTE[listing.status]}</p>
+
+                          <div className="flex flex-wrap gap-2">
+                            <ButtonLink to={`/host/listings/${listing.id}`} variant="secondary" size="sm">
+                              Edit this home
+                            </ButtonLink>
+                            {listing.status === "active" ? (
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                busy={
+                                  setListingStatus.isPending &&
+                                  setListingStatus.variables?.id === listing.id
+                                }
+                                onClick={() =>
+                                  setListingStatus.mutate({ id: listing.id, status: "paused" })
+                                }
+                              >
+                                Take it off the market
+                              </Button>
+                            ) : (
+                              <Button
+                                size="sm"
+                                busy={
+                                  setListingStatus.isPending &&
+                                  setListingStatus.variables?.id === listing.id
+                                }
+                                onClick={() =>
+                                  setListingStatus.mutate({ id: listing.id, status: "active" })
+                                }
+                              >
+                                Publish this home
+                              </Button>
+                            )}
+                            <Button variant="danger" size="sm" onClick={() => setConfirmDelete(listing)}>
+                              Delete
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </Card>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {setListingStatus.isError ? (
+              <StatusMessage tone="danger" title="We couldn't change that home's status.">
+                <p>
+                  {setListingStatus.error instanceof ApiError
+                    ? setListingStatus.error.message
+                    : "Nothing changed. Please try again."}
+                </p>
+              </StatusMessage>
+            ) : null}
+
+            <Dialog
+              open={confirmDelete !== null}
+              onClose={() => setConfirmDelete(null)}
+              title="Delete this home?"
+              description={
+                confirmDelete
+                  ? `“${confirmDelete.title || "Untitled home"}” and its photos will be removed. This cannot be undone.`
+                  : undefined
+              }
+              size="sm"
+            >
+              <p className="m-0 text-sm text-ink-secondary">
+                A home with stays booked against it cannot be deleted — take it off the market instead, so
+                those stays survive.
+              </p>
+              {remove.isError ? (
+                <div className="mt-4">
+                  <StatusMessage
+                    tone="danger"
+                    title={
+                      remove.error instanceof ApiError
+                        ? remove.error.message
+                        : "We couldn't delete that home. Please try again."
                     }
                   />
-                )}
-                <button
-                  type="submit"
-                  disabled={create.isPending}
-                  className="self-start rounded-full bg-spruce px-4 py-2 text-sm font-bold text-paper disabled:opacity-60"
+                </div>
+              ) : null}
+              <div className="mt-5 flex flex-wrap gap-3">
+                <Button
+                  variant="danger"
+                  busy={remove.isPending}
+                  busyLabel="Deleting…"
+                  onClick={() => confirmDelete && remove.mutate(confirmDelete.id)}
                 >
-                  {create.isPending ? "Saving…" : "Save as draft"}
-                </button>
-              </form>
-            )}
-
-            {listings.isLoading && <StatusBanner title="Loading your homes…" />}
-            {listings.isError && <StatusBanner tone="claim" title="Could not load your homes" />}
-            {listings.data?.length === 0 && !creating && (
-              <StatusBanner
-                title="No homes yet"
-                detail="Add one and it starts as a draft — nobody can book it until you publish."
-              />
-            )}
-
-            {listings.data?.map((listing: HostListing) => (
-              <div
-                key={listing.id}
-                className="flex flex-col gap-3 rounded-card border border-linen-tint p-[18px]"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex flex-col gap-0.5">
-                    <Link to={`/host/listings/${listing.id}`} className="text-sm font-bold text-ink">
-                      {listing.title || "Untitled home"}
-                    </Link>
-                    <span className="text-xs text-ink/55">
-                      {listing.city}, {listing.country} · sleeps {listing.maxGuests}
-                    </span>
-                    <span className="money text-xs text-ink/70">
-                      {formatUsd(listing.nightlyRateCents)} / night
-                    </span>
-                  </div>
-                  <span className="text-[11.5px] font-bold tracking-[0.1em] text-ink/50">
-                    {STATUS_LABEL[listing.status].toUpperCase()}
-                  </span>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {listing.status !== "active" ? (
-                    <button
-                      type="button"
-                      onClick={() => setStatus.mutate({ id: listing.id, status: "active" })}
-                      className="rounded-full border border-spruce px-3 py-1.5 text-xs font-bold text-spruce"
-                    >
-                      Publish
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setStatus.mutate({ id: listing.id, status: "paused" })}
-                      className="rounded-full border border-linen-tint px-3 py-1.5 text-xs font-bold text-ink/70"
-                    >
-                      Take off the market
-                    </button>
-                  )}
-                  <Link
-                    to={`/host/listings/${listing.id}`}
-                    className="rounded-full border border-linen-tint px-3 py-1.5 text-xs font-bold text-ink/70"
-                  >
-                    Edit and photos
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => remove.mutate(listing.id)}
-                    className="rounded-full border border-claim/40 px-3 py-1.5 text-xs font-bold text-claim"
-                  >
-                    Delete
-                  </button>
-                </div>
+                  Delete this home
+                </Button>
+                <Button variant="secondary" onClick={() => setConfirmDelete(null)}>
+                  Keep it
+                </Button>
               </div>
-            ))}
-
-            {remove.isError && (
-              <StatusBanner
-                tone="claim"
-                title="Could not delete that home"
-                detail={
-                  remove.error instanceof ApiError
-                    ? remove.error.message
-                    : "Something went wrong. Try again."
-                }
-              />
-            )}
+            </Dialog>
           </>
         )}
       </div>

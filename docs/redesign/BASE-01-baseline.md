@@ -156,11 +156,11 @@ its owning ticket replaces the screen, so nothing is half-edited.
 | `Book.tsx` | "Request to book", "Held in neutral escrow", "Card total today", "paid … instantly" | RENT-02 / PAY-01 |
 | `ListingDetail.tsx` | "Request to book" / "Book this stay", "hosts list here because they keep more at 2%" | RENT-01 |
 | `FeeCompare.tsx` | "Guest pays, all-in", "2% FLAT" | ACQ-01 (retain only if its inputs are verified) |
-| `TrustPassportCard.tsx` | "MEMBER OWNED · NEUTRAL ESCROW", "INSTANT PAYOUT" | LIFE-02 |
-| `Review.tsx` | "Permanent, and tied to the booking receipt" | LIFE-02 |
-| `Trips.tsx`, `Login.tsx` | "Google sign-in is waiting on an OAuth client" (developer copy) | LIFE-01 / INT-01 |
+| `TrustPassportCard.tsx` | "MEMBER OWNED · NEUTRAL ESCROW", "INSTANT PAYOUT" | done (LIFE-02) |
+| `Review.tsx` | "Permanent, and tied to the booking receipt" | done (LIFE-02) |
+| `Trips.tsx`, `Login.tsx` | "Google sign-in is waiting on an OAuth client" (developer copy) | done (INT-01, LIFE-01) |
 | `Explore.tsx` | "Run npm run db:seed against the database" | RENT-01 |
-| `TripDetail.tsx` | "Guest A cannot read guest B's booking", "Slice 1 does not invent a code" | LIFE-01 |
+| `TripDetail.tsx` | "Guest A cannot read guest B's booking", "Slice 1 does not invent a code" | done (LIFE-01) |
 | `Landing.tsx` footer | copyright line must read "Copyright 2026 Stead contributors" | NAV-01 (shared footer) |
 
 ## 6b. Phase-2 progress against that list
@@ -171,12 +171,149 @@ its owning ticket replaces the screen, so nothing is half-edited.
 | F02 checkout draft loss across sign-in | done (INT-03) |
 | F04/F06 deposit in card total, hardcoded "flat 2%" | done (PAY-01) |
 | F05 connected-account SetupIntent unused by the browser | open — PAY-02, held |
-| F07 editor hydrated from the dashboard summary | open — HOST-01 |
-| F08 published vs payout-ready | open — HOST-02/03 |
-| Landing body copy ("member-owned", "instant payout", "permanent") | open — ACQ-01 |
-| Host money inputs bypass `src/lib/cents.ts` | open — HOST-02 |
-| Picsum photo fallback | open — RENT-01 |
+| F07 editor hydrated from the dashboard summary | done (HOST-01) |
+| F08 published vs payout-ready | done (HOST-02 states it, HOST-03 breaks readiness into its four facts) |
+| Landing body copy ("member-owned", "instant payout", "permanent") | done (ACQ-01) |
+| Host money inputs bypass `src/lib/cents.ts` | done (HOST-01 editor, HOST-02 wizard; the inline create form is gone) |
+| Picsum photo fallback | done (ACQ-01 `ListingPhoto`, RENT-01) |
 | `Explore` seed-command empty state | fixed in passing (one member-visible string) |
+
+## 6c. Phase-3 notes
+
+- **F07 is closed by contract, not by inspection.** `tests/listing-edit.test.ts`
+  asserts over HTTP that the dashboard summary still omits `description`,
+  `type`, `addressLine`, `region` and `amenities` — so if a future editor
+  hydrates from it again, the round-trip test next to it fails rather than the
+  defect returning silently.
+- The editor now saves `diffListingInput`, so an untouched field is absent from
+  the PATCH body. This is what makes a stale read safe: `PATCH /api/listings/:id`
+  writes only the keys it receives.
+- `lat`/`lng` remain out of `ListingInput` and `ListingDetail`. Nothing in the
+  editor needs them and the handoff says not to add a map for this redesign.
+- **Creation now has one path.** The inline create form on `/host/listings` is
+  gone; `/host/start` is the only place a listing is created, because
+  `POST /api/listings` needs a complete listing and a wizard is the honest way
+  to collect one. The wizard creates the draft once, at the end of "Price and
+  terms", and steps four and five continue in the editor against that real id.
+- **`?done=1` is not activation.** `/host/payouts` derives readiness only from
+  what the server retrieved from Stripe, and a return from onboarding starts a
+  bounded poll (20 tries at 3s) that ends in an honest "Stripe hasn't confirmed
+  yet" rather than a spinner. `src/lib/payoutReadiness.ts` holds that logic so
+  it is testable without Stripe.
+- The four Connect facts are rendered separately, because `charges_enabled` and
+  `payouts_enabled` move independently: an account can take a guest's money
+  while Stripe holds the payout.
+- No partial-draft table was added. Before the first save the only thing kept
+  on the device is the INT-03 non-sensitive set (name, type, city, country,
+  time zone, capacity); rate, deposit, address and description are not.
+
+## 6d. LIFE-01 notes
+
+- **`pending_payment` has no resume action, deliberately.** There is no
+  endpoint that hands back an existing booking's payment secret, so any
+  "finish paying" link would have to send the guest through `/book/:id` and
+  create a second hold on the same dates. `tests/trip-status.test.ts` asserts
+  the absence, and a browser test asserts no `/book/` link appears on an
+  unconfirmed stay. Resuming is PAY-02's `payment-ready` contract.
+- A settling payment and an abandoned checkout are indistinguishable from the
+  browser, so the copy says payment is *unrecorded* — never that it failed.
+- No status is rendered from its database value any more. `src/lib/tripStatus.ts`
+  maps each of the seven booking statuses to a label, a meaning and at most one
+  next action, and differs by whether the viewer is the guest or the host.
+- Check-in and checkout times come from `app_config`. When config has not
+  loaded, the date stands alone rather than being paired with a guessed hour.
+
+## 6e. LIFE-02 notes
+
+- **"Publish review" was wrong about what the button did.** Submitting saves a
+  review; `app.publish_due_reviews` publishes both sides together when the
+  second is written or 14 days after listing-local checkout. The button now
+  says "Submit your review" and the copy says what happens next.
+- The 14 days is a constant inside `drizzle/0008_reviews.sql`, not config, so
+  `src/lib/reviews.ts` mirrors it with a comment pointing at the migration.
+- **A null rating is not a zero.** `statOrAbsent` renders "Not enough activity
+  yet"; a genuine 0 still renders as 0. Both are asserted, because collapsing
+  them invents a bad review out of an empty record.
+- The identity card no longer swallows the profile page (S11 says it must not)
+  and no longer carries claims a profile cannot make — "member owned", "neutral
+  escrow", "instant payout", "issued by the members" are gone, as is the
+  machine-readable strip that dressed a summary up as a document.
+- Message drafts stay in component state and are never persisted. A shared
+  browser would otherwise hand a half-written private message to the next
+  person; the page says so rather than letting anyone assume it is saved. A
+  failed send keeps every character, and the browser test forces a 503 to prove
+  it.
+
+## 6f. SAFE-01 notes
+
+- **Arbiters could not open the claims they are meant to resolve.** `0007` gave
+  them read access to `claims` and `escrow_deposits` but not to `bookings` or
+  `listings`, and `getClaimForViewer` joins both — so it returned null for the
+  one role with `canResolve`. `drizzle/0013_arbiter_claim_visibility.sql` adds
+  two narrow SELECT policies: an arbiter reads a booking only when a claim
+  exists on it, and a listing only when one of its bookings has a claim.
+- The helpers behind those policies are `SECURITY DEFINER` deliberately. A
+  policy on `bookings` selecting from `claims` would recurse, because the
+  `claims` policy already selects from `bookings`; Postgres raises "infinite
+  recursion detected in policy for relation".
+- **This phase now has a migration.** `0013` is written but has NOT been
+  applied to Neon — the journal there is hybrid and applying it is the
+  operator's call. Until it is applied, arbitration on the deployed app stays
+  broken in exactly the way it already is; nothing else regresses.
+- The cross-role isolation matrix in `tests/rls.test.ts` asserted
+  `arbiter → bookings = 0`. Its fixture has a claim, so `0013` changes that to
+  1 by design. The assertion was updated and two probes added alongside it: an
+  arbiter reading a claim-free booking is still 0, and an arbiter has no write
+  path to a booking or a listing.
+- **An open card dispute freezes every claim transition**, and the page now
+  says so. `respond_claim`, `resolve_claim` and `file_claim` all refuse
+  silently while `app.booking_has_open_dispute` is true; `ClaimDetail` carries
+  `chargebackOpen` and folds it into `canRespond`/`canResolve`, so the page
+  never offers an action the server will reject.
+- Every irreversible action on a claim is now confirmed with its exact amount
+  and who receives it before it is sent. None of them fire on a first click.
+
+## 6g. MEAS-01 notes
+
+- **Facts are written by triggers on the transitions, not by application code
+  after them.** `stripe_events` claims an event id first, so an analytics write
+  made after the confirming transaction is lost forever on a retry — the event
+  is already claimed and will not be reprocessed. A trigger commits with the
+  transition or not at all, and does not care which code path caused it.
+- Every trigger **fails open**. A missing fact is recoverable by
+  reconciliation; a refused payment is not. `tests/conversion-facts.test.ts`
+  proves it by replacing the recorder with one that raises and checking the
+  booking still commits.
+- Lifetime dedupe is a partial unique index, not application logic, so a
+  replayed webhook, a retried request and two concurrent confirmations produce
+  one row. The concurrency case is asserted with three parallel calls.
+- `app_user` has **SELECT only** on `conversion_facts`, scoped to its own rows,
+  and no EXECUTE on the recorder. A member cannot insert, update, delete,
+  forge one against someone else, or call the writer.
+- Ops gets `app.conversion_totals()` — counts, never rows. A member without the
+  ops flag gets nothing back at all.
+- **Not done in this slice, and deliberately so:** `signup_verified` needs a
+  trigger on the Auth.js identity tables, and the measurement spec says to
+  validate the installed version's verification ordering first rather than
+  guess. The outcome is in the enum and the table is ready for it. The delivery
+  outbox and external sink are also out — a disabled sink must never discard a
+  durable fact, and the facts stand on their own without one.
+- **A second migration.** `0014_conversion_facts.sql` joins 0013 as written but
+  not applied to Neon.
+
+## 6h. QA-01 notes
+
+- Verification inventory, limitations and the unperformed manual matrix are in
+  `docs/redesign/QA-01-verification.md`. It records what was **not** run as
+  plainly as what was: no axe sweep, Chromium only, no visual snapshots, and
+  the live-Stripe gate **not passed**.
+- Writing the accessibility spec found a real defect: `SignInPrompt` rendered
+  an `h2` and was the entire page on a protected route, so every signed-out
+  protected page had no `h1` — leaving the shell's route-change focus with
+  nothing to land on. Fixed in the same commit, across all three of the
+  component's states.
+- New browser specs must be added to `testMatch` in `playwright.config.ts`, or
+  no project collects them and they silently never run.
 
 ## 7. Runtime unknowns (not verifiable from source)
 

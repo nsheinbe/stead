@@ -217,3 +217,29 @@ export async function listExpiredUnrefunded(
     guestTotalCents: Number(row.guest_total_cents),
   }));
 }
+
+/**
+ * Conversion totals for ops. Counts only.
+ *
+ * `app.conversion_totals()` returns nothing at all to a member without the ops
+ * flag, and returns aggregates rather than rows to one with it — ops needs to
+ * know how many members activated, not which ones.
+ */
+export async function listConversionTotals(tx: Tx): Promise<
+  { outcome: string; total: number; firstAt: string | null; lastAt: string | null }[]
+> {
+  const rows = (await tx.execute(sql`
+    SELECT outcome, total, first_at, last_at FROM app.conversion_totals()
+  `)) as unknown as {
+    outcome: string;
+    total: string | number;
+    first_at: string | null;
+    last_at: string | null;
+  }[];
+  return rows.map((row) => ({
+    outcome: row.outcome,
+    total: Number(row.total),
+    firstAt: row.first_at ? new Date(row.first_at).toISOString() : null,
+    lastAt: row.last_at ? new Date(row.last_at).toISOString() : null,
+  }));
+}

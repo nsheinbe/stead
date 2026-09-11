@@ -6,7 +6,16 @@
  * that a signed-in guest can cancel from /trips/:id.
  */
 import { expect, test, type Page } from "@playwright/test";
-import { confirmBooking, ensureDb, isoDay, seedBookableParty } from "./helpers/party";
+import {
+  backdateStay,
+  confirmBooking,
+  cronHeaders,
+  ensureDb,
+  isoDay,
+  seedBookableParty,
+  seedHost,
+} from "./helpers/party";
+import { insertBooking } from "../tests/helpers/db";
 import { SESSION_COOKIE } from "../tests/helpers/session";
 
 async function signIn(page: Page, token: string) {
@@ -25,23 +34,65 @@ async function signIn(page: Page, token: string) {
 }
 
 test.describe("public pages", () => {
-  test("landing shows the fee math and a path to explore", async ({ page }) => {
+  test("landing leads both audiences and states the minimum before search", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    await expect(page.getByText(/Member-owned home rentals/i)).toBeVisible();
-    await expect(page.getByRole("link", { name: "Find a stay" }).first()).toBeVisible();
-    await page.getByRole("link", { name: "Find a stay" }).first().click();
+    await expect(page.getByRole("heading", { level: 1, name: /A home for your next chapter/i })).toBeVisible();
+    // The floor is visible above the search control, not buried below it.
+    await expect(page.getByText("Homes for 30 nights or more").first()).toBeVisible();
+    await expect(page.getByRole("link", { name: /List your home/ }).first()).toBeVisible();
+
+    // No unverifiable claims survive the redesign.
+    await expect(page.getByText(/member-owned|toll booth|neutral escrow|instant payout/i)).toHaveCount(0);
+    await expect(page.getByText(/flat 2%|only 2%|all-in/i)).toHaveCount(0);
+    await expect(page.getByText("Copyright 2026 Stead contributors")).toBeVisible();
+
+    await page.getByRole("button", { name: "Find a home" }).click();
     await expect(page).toHaveURL(/\/explore/);
-    await expect(page.getByText(/Where to/)).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Find your next home" })).toBeVisible();
   });
 
-  test("explore lists member homes", async ({ page, request }) => {
+  test("landing search carries its terms into results", async ({ page }) => {
+    await page.goto("/");
+    await page.getByLabel("Where would you like to stay?").fill("Hudson");
+    await page.getByLabel("Guests").fill("2");
+    await page.getByRole("button", { name: "Find a home" }).click();
+    await expect(page).toHaveURL(/q=Hudson/);
+    await expect(page).toHaveURL(/guests=2/);
+  });
+
+  test("explore lists homes with a comparable estimate", async ({ page, request }) => {
     await ensureDb();
     const { title } = await seedBookableParty("Explore visible cottage");
     const listed = await request.get("/api/listings");
     expect(listed.status()).toBe(200);
     await page.goto("/explore");
     await expect(page.getByText(title)).toBeVisible({ timeout: 15_000 });
+    // $200/night x 30 nights + 2% = $6,120, labelled by its basis.
+    await expect(page.getByText("$6,120 for 30 nights").first()).toBeVisible();
+    await expect(page.getByText(/available for your dates/i)).toHaveCount(0);
+  });
+
+  test("explore filters live in the URL and can be cleared", async ({ page }) => {
+    await ensureDb();
+    await seedBookableParty("Filter state cottage");
+    await page.goto("/explore");
+    await page.getByLabel("Where would you like to stay?").fill("Nowhereville");
+    await page.getByRole("button", { name: "Search" }).click();
+    await expect(page).toHaveURL(/q=Nowhereville/);
+    await expect(page.getByText("No homes match these filters.")).toBeVisible();
+    await page.getByRole("button", { name: "Clear filters" }).first().click();
+    await expect(page).not.toHaveURL(/q=/);
+  });
+
+  test("a home page prices the minimum stay and offers dates", async ({ page }) => {
+    await ensureDb();
+    const { listingId, title } = await seedBookableParty("Detail cottage");
+    await page.goto(`/listing/${listingId}`);
+    await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
+    await expect(page.getByText("Estimated stay total · 30 nights")).toBeVisible();
+    await expect(page.getByTestId("stay-total")).toHaveText("$6,120");
+    await expect(page.getByRole("link", { name: "Choose dates" })).toBeVisible();
+    await expect(page.getByText(/Request to book/i)).toHaveCount(0);
   });
 });
 
@@ -185,15 +236,11 @@ test.describe("honest money (PAY-01)", () => {
     // $200 x 30 nights = $6,000, plus a 2% guest network fee = $6,120.
     await expect(page.getByTestId("stay-total")).toHaveText("$6,120");
     await expect(page.getByText("Guest network fee (2%)")).toBeVisible();
-    await expect(page.getByText("Estimated stay total", { exact: true })).toBeVisible();
 
     const deposit = page.getByTestId("deposit-note");
     await expect(deposit.getByRole("heading", { name: "Deposit arrangement" })).toBeVisible();
     await expect(deposit).toContainText("separate from your stay charge");
     await expect(deposit).not.toContainText(/held in|neutral escrow|returned automatically/i);
-
-    await expect(page.getByRole("link", { name: "Choose dates" })).toBeVisible();
-    await expect(page.getByText(/Request to book/i)).toHaveCount(0);
   });
 
   test("the payable amount never includes the deposit", async ({ page, request }) => {
@@ -259,7 +306,328 @@ test.describe("signed-in cancel from the trip page", () => {
     await page.goto(`/trips/${body.bookingId}`);
     await expect(page.getByText(title)).toBeVisible({ timeout: 15_000 });
     await page.getByRole("button", { name: "Cancel this stay" }).click();
+    // The refund the server would actually pay is shown before the confirm.
+    await expect(page.getByRole("dialog")).toContainText("Refund to the card");
     await page.getByRole("button", { name: "Confirm cancel" }).click();
-    await expect(page.getByText(/canceled by guest/i)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("This stay is canceled.")).toBeVisible({ timeout: 15_000 });
+    // The status reads as a sentence, not as the database's own value.
+    await expect(page.getByText("You canceled this stay.", { exact: false })).toBeVisible();
+    await expect(page.getByText(/canceled_by_guest/)).toHaveCount(0);
+  });
+});
+
+test.describe("listing creation (HOST-02)", () => {
+  test("the wizard creates exactly one draft, then publishes it", async ({ page, request }) => {
+    await ensureDb();
+    const owner = await seedHost();
+    await signIn(page, owner.token);
+
+    const name = `Wizard cottage ${Date.now()}`;
+    await page.goto("/host/start");
+    await expect(page.getByRole("heading", { level: 1, name: "Start your listing" })).toBeVisible();
+
+    // Basics. The floor is stated, and nothing is saved yet.
+    await expect(page.getByText(/Nothing is saved to your account until/i)).toBeVisible();
+    await page.getByLabel("Name of the home").fill(name);
+    await page.getByLabel("City").fill("Hudson");
+    await page.getByLabel("Sleeps").fill("3");
+    await page.getByRole("button", { name: "Continue" }).click();
+
+    // The optional group can be skipped outright.
+    await expect(page.getByRole("heading", { name: "Home details" })).toBeVisible();
+    await page.getByRole("button", { name: "Skip this" }).click();
+
+    // Price and terms is where the draft is created.
+    await expect(page.getByRole("heading", { name: "Price and terms" })).toBeVisible();
+    await page.getByLabel("Nightly rate").fill("175.50");
+    await page.getByLabel("Deposit").fill("250");
+    await page.getByRole("button", { name: "Save draft and add photos" }).click();
+
+    await expect(page).toHaveURL(/\/host\/listings\/[0-9a-f-]+\?setup=photos/, { timeout: 15_000 });
+    await expect(page.getByText("No photos yet.")).toBeVisible();
+
+    await page.getByRole("button", { name: "Continue to review" }).click();
+    await expect(page).toHaveURL(/setup=review/);
+    await expect(page.getByRole("heading", { name: "Review" })).toBeVisible();
+    // The review reads the saved listing, so the money is the server's.
+    await expect(page.getByText("$175.50")).toBeVisible();
+    await expect(page.getByText("$250")).toBeVisible();
+    // Published and payout-ready are stated as different things.
+    await expect(page.getByText(/Payouts are separate from publishing/i)).toBeVisible();
+
+    await page.getByRole("button", { name: "Publish this home" }).click();
+    await expect(page.getByText("Your home is published.")).toBeVisible({ timeout: 15_000 });
+
+    // Exactly one listing exists, and its money is what was typed.
+    const mine = await request.get("/api/listings/mine", {
+      headers: { cookie: `${owner.cookie}` },
+    });
+    expect(mine.status()).toBe(200);
+    const rows = (await mine.json()) as { title: string; nightlyRateCents: number; status: string }[];
+    const created = rows.filter((row) => row.title === name);
+    expect(created).toHaveLength(1);
+    expect(created[0]?.nightlyRateCents).toBe(17_550);
+    expect(created[0]?.status).toBe("active");
+  });
+
+  test("the wizard refuses to go on without the fields the server requires", async ({ page }) => {
+    await ensureDb();
+    const owner = await seedHost();
+    await signIn(page, owner.token);
+
+    await page.goto("/host/start");
+    await page.getByRole("button", { name: "Continue" }).click();
+
+    // Still on Basics, with the problems named rather than a 400 from the API.
+    await expect(page.getByRole("alert")).toContainText("Check the highlighted fields");
+    await expect(page.getByRole("heading", { name: "Basics" })).toBeVisible();
+
+    await page.getByLabel("Name of the home").fill("A home with a bad zone");
+    await page.getByLabel("City").fill("Hudson");
+    await page.getByLabel("Time zone").fill("Mars/Olympus");
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page.getByRole("alert")).toContainText(/IANA time zone/);
+  });
+
+  test("the homes dashboard sends creation to the wizard and confirms deletion", async ({ page }) => {
+    await ensureDb();
+    const owner = await seedHost();
+    await signIn(page, owner.token);
+
+    await page.goto("/host/listings");
+    await expect(page.getByRole("heading", { level: 1, name: "Your homes" })).toBeVisible();
+    await expect(page.getByText("You haven't added a home yet.")).toBeVisible();
+
+    // One canonical creation path: no inline form on this page any more.
+    await page.getByRole("link", { name: "Add a home" }).first().click();
+    await expect(page).toHaveURL(/\/host\/start$/);
+  });
+});
+
+test.describe("payout readiness (HOST-03)", () => {
+  test("a return from Stripe never claims the account is live", async ({ page }) => {
+    await ensureDb();
+    const owner = await seedHost();
+    await signIn(page, owner.token);
+
+    // ?done=1 only means the host came back. This account has nothing enabled.
+    await page.goto("/host/payouts?done=1");
+    await expect(page.getByRole("heading", { level: 1, name: "Payouts" })).toBeVisible();
+    await expect(page.getByText("Payouts aren't set up yet")).toBeVisible();
+    await expect(page.getByText(/We're checking with Stripe/i)).toBeVisible();
+
+    // The four facts are shown as four facts, none of them claimed.
+    await expect(page.getByText("Can accept a guest's payment")).toBeVisible();
+    await expect(page.getByText("Can pay out to your bank")).toBeVisible();
+    await expect(page.getByText("Your payout account is live")).toHaveCount(0);
+    await expect(page.getByText(/Payouts live|PAYOUTS LIVE/)).toHaveCount(0);
+  });
+
+  test("an expired Stripe link explains itself without losing progress", async ({ page }) => {
+    await ensureDb();
+    const owner = await seedHost();
+    await signIn(page, owner.token);
+
+    await page.goto("/host/payouts?refresh=1");
+    await expect(page.getByText("That Stripe link had expired.")).toBeVisible();
+    await expect(page.getByText(/Nothing was charged/i)).toBeVisible();
+  });
+
+  test("the network fee shown to hosts comes from configuration", async ({ page }) => {
+    await ensureDb();
+    const owner = await seedHost();
+    await signIn(page, owner.token);
+
+    await page.goto("/host/payouts");
+    await expect(page.getByText(/2% network fee/)).toBeVisible();
+    // The retired copy claimed a flat rate as a fixed fact of the product.
+    await expect(page.getByText(/flat 2%/i)).toHaveCount(0);
+  });
+});
+
+test.describe("stay lifecycle (LIFE-01)", () => {
+  test("an unconfirmed stay says payment is unrecorded, and offers no second checkout", async ({ page }) => {
+    await ensureDb();
+    const { listingId, guestId, token, title } = await seedBookableParty("Unconfirmed cottage");
+    const bookingId = await insertBooking({
+      listingId,
+      guestId,
+      checkIn: isoDay(50),
+      checkOut: isoDay(80),
+      status: "pending_payment",
+    });
+
+    await signIn(page, token);
+    await page.goto(`/trips/${bookingId}`);
+    await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible({ timeout: 15_000 });
+
+    await expect(page.getByText("Not confirmed").first()).toBeVisible();
+    await expect(page.getByText(/haven't recorded payment for this stay/i)).toBeVisible();
+    // A settling payment and an abandoned checkout look the same from here.
+    await expect(page.getByText(/payment failed|declined/i)).toHaveCount(0);
+    // No route back into checkout, which would hold the same dates twice.
+    await expect(page.getByRole("link", { name: /finish paying|retry payment|complete payment/i })).toHaveCount(0);
+    await expect(page.locator(`a[href="/book/${listingId}"]`)).toHaveCount(0);
+  });
+
+  test("an expired hold says the dates were released and nothing was charged", async ({ page }) => {
+    await ensureDb();
+    const { listingId, guestId, token } = await seedBookableParty("Expired cottage");
+    const bookingId = await insertBooking({
+      listingId,
+      guestId,
+      checkIn: isoDay(90),
+      checkOut: isoDay(120),
+      status: "expired",
+    });
+
+    await signIn(page, token);
+    await page.goto(`/trips/${bookingId}`);
+    await expect(page.getByText("Hold expired").first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/Nothing was charged/)).toBeVisible();
+    await expect(page.getByRole("link", { name: "See this home" })).toBeVisible();
+  });
+
+  test("the stays list separates what needs attention from what is settled", async ({ page }) => {
+    await ensureDb();
+    const { listingId, guestId, token } = await seedBookableParty("Grouped cottage");
+    await insertBooking({
+      listingId,
+      guestId,
+      checkIn: isoDay(200),
+      checkOut: isoDay(230),
+      status: "pending_payment",
+    });
+    await insertBooking({
+      listingId,
+      guestId,
+      checkIn: isoDay(300),
+      checkOut: isoDay(330),
+      status: "confirmed",
+    });
+
+    await signIn(page, token);
+    await page.goto("/trips");
+    await expect(page.getByRole("heading", { level: 1, name: "Your stays" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { name: "Not confirmed", level: 2 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Upcoming and current", level: 2 })).toBeVisible();
+    // No raw database value reaches the member.
+    await expect(page.getByText(/pending_payment|canceled_by_guest/)).toHaveCount(0);
+  });
+
+  test("a deposit never reads as released before the server records it", async ({ page, request }) => {
+    await ensureDb();
+    const { listingId, cookie, token } = await seedBookableParty("Deposit wording cottage");
+    const created = await request.post("/api/bookings", {
+      headers: { cookie, "content-type": "application/json" },
+      data: { listingId, checkIn: isoDay(45), checkOut: isoDay(75), guests: 2 },
+    });
+    expect(created.status(), await created.text()).toBe(200);
+    const { bookingId } = (await created.json()) as { bookingId: string };
+    await confirmBooking(bookingId);
+
+    await signIn(page, token);
+    await page.goto(`/trips/${bookingId}`);
+    const deposit = page.getByTestId("deposit-status");
+    await expect(deposit).toBeVisible({ timeout: 15_000 });
+    // Scheduled is not held, and neither is released.
+    await expect(deposit).not.toContainText(/Released/);
+    await expect(deposit).toContainText(/Nothing has been charged|Scheduled/);
+  });
+});
+
+test.describe("profiles and reviews (LIFE-02)", () => {
+  test("a profile with no history shows absence, not a zero rating", async ({ page }) => {
+    await ensureDb();
+    const owner = await seedHost("Fresh Member");
+    await signIn(page, owner.token);
+
+    await page.goto(`/passport/${owner.hostId}`);
+    await expect(page.getByRole("heading", { level: 1, name: "Fresh Member" })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // No stays yet means no rating — which is not a rating of zero.
+    await expect(page.getByText("Not enough activity yet").first()).toBeVisible();
+    await expect(page.getByText("0.00 out of 5")).toHaveCount(0);
+    await expect(page.getByText("No reviews published yet.")).toBeVisible();
+
+    // Verification states the check, never a guarantee.
+    await expect(page.getByText("Email verified").first()).toBeVisible();
+    await expect(page.getByText(/No identity document has been checked/)).toBeVisible();
+  });
+
+  test("a profile makes no claim it cannot support", async ({ page }) => {
+    await ensureDb();
+    const owner = await seedHost("Claim Free");
+    await signIn(page, owner.token);
+    await page.goto(`/passport/${owner.hostId}`);
+    await expect(page.getByRole("heading", { level: 1, name: "Claim Free" })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    await expect(page.getByText(/member[- ]owned|instant payout|neutral escrow/i)).toHaveCount(0);
+    await expect(page.getByText(/issued by the members|permanent/i)).toHaveCount(0);
+    await expect(page.getByText(/not a background check/i)).toBeVisible();
+  });
+
+  test("an unsent message survives a failed send", async ({ page }) => {
+    await ensureDb();
+    const { listingId, guestId, token } = await seedBookableParty("Message retry cottage");
+    await signIn(page, token);
+
+    // Force the transient failure this recovery exists for.
+    let fail = true;
+    await page.route("**/api/messages", async (route) => {
+      if (route.request().method() === "POST" && fail) {
+        fail = false;
+        await route.fulfill({ status: 503, contentType: "application/json", body: '{"error":"nope"}' });
+        return;
+      }
+      await route.continue();
+    });
+
+    await page.goto(`/messages/${listingId}/${guestId}`);
+    const box = page.getByLabel(/^Message /);
+    await expect(box).toBeVisible({ timeout: 15_000 });
+    await box.fill("Is the courtyard shared with the neighbours?");
+    await page.getByRole("button", { name: "Send message" }).click();
+
+    await expect(page.getByText("Your message wasn't sent.")).toBeVisible();
+    // Every character is still there, and the retry sends it.
+    await expect(box).toHaveValue("Is the courtyard shared with the neighbours?");
+    await page.getByRole("button", { name: "Try again" }).click();
+    await expect(page.getByText("Is the courtyard shared with the neighbours?").first()).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(box).toHaveValue("");
+  });
+
+  test("the review form says submit, because submitting is not publishing", async ({ page, request }) => {
+    await ensureDb();
+    const { listingId, cookie, token } = await seedBookableParty("Review wording cottage");
+    const created = await request.post("/api/bookings", {
+      headers: { cookie, "content-type": "application/json" },
+      data: { listingId, checkIn: isoDay(45), checkOut: isoDay(75), guests: 2 },
+    });
+    expect(created.status(), await created.text()).toBe(200);
+    const { bookingId } = (await created.json()) as { bookingId: string };
+    await confirmBooking(bookingId);
+    await backdateStay(bookingId);
+    // Reviews open on checkout, and checkout is the cron's to declare.
+    await request.post("/api/cron/check-in", { headers: cronHeaders() });
+    const checkedOut = await request.post("/api/cron/check-out", { headers: cronHeaders() });
+    expect(checkedOut.status(), await checkedOut.text()).toBe(200);
+
+    await signIn(page, token);
+    await page.goto(`/review/${bookingId}`);
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible({ timeout: 15_000 });
+
+    await expect(page.getByRole("button", { name: "Submit your review" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Publish review/i })).toHaveCount(0);
+    await expect(page.getByText(/permanent/i)).toHaveCount(0);
+    // The rating is a real radio group with numbers, not a row of icons.
+    await expect(page.getByRole("radio", { name: /5.*Excellent/ })).toBeVisible();
+    await expect(page.getByText("14 days after checkout").first()).toBeVisible();
   });
 });

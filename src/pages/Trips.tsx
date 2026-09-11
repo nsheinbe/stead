@@ -1,24 +1,35 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
+import { ListingPhoto } from "../components/ListingPhoto";
 import { Shell } from "../components/Shell";
 import { SignInPrompt } from "../components/SignInPrompt";
-import { StatusBanner } from "../components/StatusBanner";
+import {
+  Button,
+  ButtonLink,
+  Card,
+  EmptyState,
+  PageHeader,
+  Skeleton,
+  StatusMessage,
+  StatusPill,
+} from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
-import { prettyRange } from "../lib/dates";
 import { api } from "../lib/api";
+import { prettyRange } from "../lib/dates";
 import { formatUsd } from "../lib/money";
-import type { BookingStatus } from "../lib/types";
+import { TRIP_GROUP_LABEL, tripGroup, tripState, type TripGroup } from "../lib/tripStatus";
+import type { TripSummary } from "../lib/types";
 
-const STATUS_LABEL: Record<BookingStatus, string> = {
-  pending_payment: "Awaiting payment",
-  confirmed: "Confirmed",
-  checked_in: "In stay",
-  completed: "Completed",
-  canceled_by_guest: "Canceled",
-  canceled_by_host: "Canceled by host",
-  expired: "Expired hold",
-};
+const GROUP_ORDER: TripGroup[] = ["needs_attention", "upcoming", "past"];
 
+/**
+ * Every stay this member is on.
+ *
+ * Grouped by what the server says, not by date arithmetic: a stay with no
+ * recorded payment goes to the top because it is the only one with anything
+ * outstanding, and the rest split into live and finished. Each row says what
+ * its status means rather than showing a word the member has to decode.
+ */
 export function TripsPage() {
   const { user, status } = useAuth();
 
@@ -28,72 +39,107 @@ export function TripsPage() {
     queryFn: () => api.trips(),
   });
 
-  return (
-    <Shell width="narrow">
-      <div className="flex flex-1 flex-col gap-3.5 pb-6 pt-6">
-        <div className="flex items-center justify-between">
-          <h1 className="m-0 font-display text-2xl font-semibold">Your stays</h1>
-        </div>
+  const rows = trips.data ?? [];
+  const grouped = new Map<TripGroup, TripSummary[]>();
+  for (const trip of rows) {
+    const group = tripGroup(trip.status);
+    grouped.set(group, [...(grouped.get(group) ?? []), trip]);
+  }
 
+  return (
+    <Shell width="narrow" workspace="renter" title="Your stays">
+      <div className="flex flex-1 flex-col gap-6 py-6 sm:py-8">
         {status !== "signed_in" ? (
           <SignInPrompt
             title="Sign in to see your stays"
             description="Your stays, their dates and their status live in your account. We'll bring you straight back here."
             intent="renter"
           />
-        ) : null}
+        ) : (
+          <>
+            <PageHeader title="Your stays" description="Everything you've booked, and where each one stands." />
 
-        {user && trips.isLoading ? <StatusBanner title="Loading trips…" /> : null}
-        {trips.isError ? (
-          <StatusBanner
-            tone="claim"
-            title="Could not load trips"
-            detail={trips.error instanceof Error ? trips.error.message : undefined}
-          />
-        ) : null}
-        {user && trips.data && trips.data.length === 0 ? (
-          <StatusBanner
-            title="No trips yet"
-            detail="Find a member home and request to book. Abandoned checkouts expire in 30 minutes so dates stay free."
-          />
-        ) : null}
-
-        {user && !trips.data?.length ? (
-          <Link
-            to="/explore"
-            className="rounded-xl bg-spruce py-3.5 text-center text-sm font-bold text-paper no-underline hover:bg-spruce-deep hover:text-paper"
-          >
-            Find a stay
-          </Link>
-        ) : null}
-
-        <div className="flex flex-col gap-3">
-          {trips.data?.map((booking) => {
-            const photo = booking.listing.photos[0];
-            return (
-              <Link
-                key={booking.id}
-                to={`/trips/${booking.id}`}
-                className="flex items-center gap-3 rounded-[14px] border border-linen-tint px-3.5 py-3 text-inherit no-underline"
+            {trips.isPending ? (
+              <div className="flex flex-col gap-4" aria-busy="true">
+                <p role="status" className="sr-only">
+                  Loading your stays
+                </p>
+                <Skeleton className="h-28 w-full" />
+                <Skeleton className="h-28 w-full" />
+              </div>
+            ) : trips.isError ? (
+              <StatusMessage
+                tone="danger"
+                title="We couldn't load your stays."
+                action={
+                  <Button variant="secondary" size="sm" onClick={() => void trips.refetch()}>
+                    Try again
+                  </Button>
+                }
               >
-                <div className="h-[54px] w-[54px] shrink-0 overflow-hidden rounded-[10px] bg-linen">
-                  {photo ? (
-                    <img src={photo.storagePath} alt="" className="h-full w-full object-cover" />
-                  ) : null}
-                </div>
-                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="truncate text-[15px] font-bold">{booking.listing.title}</span>
-                  <span className="text-xs text-ink/55">
-                    {prettyRange(booking.checkIn, booking.checkOut)} · {booking.listing.city}
-                  </span>
-                  <span className="money text-xs font-semibold text-ink/70">
-                    {STATUS_LABEL[booking.status]} · {formatUsd(booking.guestTotalCents)}
-                  </span>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
+                <p>Your stays are unaffected — this is about reaching the server.</p>
+              </StatusMessage>
+            ) : rows.length === 0 ? (
+              <EmptyState
+                title="You haven't booked a stay yet."
+                action={<ButtonLink to="/explore">Find a home</ButtonLink>}
+              >
+                <p>Homes here are for stays of a month or more. Your booked stays will appear here.</p>
+              </EmptyState>
+            ) : (
+              GROUP_ORDER.filter((group) => grouped.has(group)).map((group) => (
+                <section key={group} aria-labelledby={`trips-${group}`} className="flex flex-col gap-4">
+                  <h2 id={`trips-${group}`} className="m-0 text-card-title">
+                    {TRIP_GROUP_LABEL[group]}
+                  </h2>
+                  <ul className="m-0 flex list-none flex-col gap-4 p-0">
+                    {(grouped.get(group) ?? []).map((trip) => {
+                      const state = tripState({
+                        status: trip.status,
+                        listingId: trip.listing.id,
+                        bookingId: trip.id,
+                      });
+                      return (
+                        <li key={trip.id}>
+                          <Card padding="sm">
+                            <div className="flex gap-4">
+                              <div className="w-20 shrink-0 sm:w-28">
+                                <ListingPhoto
+                                  src={trip.listing.photos[0]?.storagePath}
+                                  alt=""
+                                  className="rounded-card"
+                                />
+                              </div>
+                              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                                <div className="flex flex-wrap items-start justify-between gap-2">
+                                  <h3 className="m-0 text-base font-semibold">
+                                    <Link to={`/trips/${trip.id}`}>{trip.listing.title}</Link>
+                                  </h3>
+                                  <StatusPill tone={state.tone === "brand" ? "brand" : "neutral"}>
+                                    {state.label}
+                                  </StatusPill>
+                                </div>
+                                <p className="m-0 text-sm text-ink-secondary">
+                                  {prettyRange(trip.checkIn, trip.checkOut)} · {trip.listing.city}
+                                </p>
+                                <p className="money m-0 text-sm text-ink-secondary">
+                                  {formatUsd(trip.guestTotalCents)} · {trip.nights} nights
+                                </p>
+                                {state.tone === "warning" ? (
+                                  <p className="m-0 text-sm text-ink-secondary">{state.meaning}</p>
+                                ) : null}
+                              </div>
+                            </div>
+                          </Card>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              ))
+            )}
+          </>
+        )}
       </div>
     </Shell>
   );
