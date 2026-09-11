@@ -250,20 +250,21 @@ export function signInEmail(url: string, host: string): Omit<Message, "to"> {
   return {
     subject: "Your Stead sign-in link",
     text: [
-      "A link. That is the whole door.",
+      "Here is your sign-in link.",
       "",
       `Sign in to Stead: ${url}`,
       "",
-      "The link works once and expires in 24 hours. If you did not ask for it, ignore this —",
-      "nobody can sign in without opening it.",
+      "The link works once and expires in 24 hours. If you did not ask for it, ignore this email.",
+      "To keep your selections, open this link in the browser where you started.",
       "",
       host,
     ].join("\n"),
     html: brandedEmailHtml({
-      eyebrow: "Member sign-in",
-      heading: "A link. That is the whole door.",
+      eyebrow: "Sign in",
+      heading: "Here is your sign-in link.",
       paragraphs: [
-        "It works once and expires in 24 hours. If you did not ask for it, ignore this — nobody can sign in without opening it.",
+        "It works once and expires in 24 hours. If you did not ask for it, ignore this email.",
+        "To keep your selections, open this link in the browser where you started.",
         host,
       ],
       cta: { href: url, label: "Sign in to Stead" },
