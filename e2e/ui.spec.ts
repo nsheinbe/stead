@@ -6,7 +6,15 @@
  * that a signed-in guest can cancel from /trips/:id.
  */
 import { expect, test, type Page } from "@playwright/test";
-import { confirmBooking, ensureDb, isoDay, seedBookableParty, seedHost } from "./helpers/party";
+import {
+  backdateStay,
+  confirmBooking,
+  cronHeaders,
+  ensureDb,
+  isoDay,
+  seedBookableParty,
+  seedHost,
+} from "./helpers/party";
 import { insertBooking } from "../tests/helpers/db";
 import { SESSION_COOKIE } from "../tests/helpers/session";
 
@@ -525,5 +533,101 @@ test.describe("stay lifecycle (LIFE-01)", () => {
     // Scheduled is not held, and neither is released.
     await expect(deposit).not.toContainText(/Released/);
     await expect(deposit).toContainText(/Nothing has been charged|Scheduled/);
+  });
+});
+
+test.describe("profiles and reviews (LIFE-02)", () => {
+  test("a profile with no history shows absence, not a zero rating", async ({ page }) => {
+    await ensureDb();
+    const owner = await seedHost("Fresh Member");
+    await signIn(page, owner.token);
+
+    await page.goto(`/passport/${owner.hostId}`);
+    await expect(page.getByRole("heading", { level: 1, name: "Fresh Member" })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // No stays yet means no rating — which is not a rating of zero.
+    await expect(page.getByText("Not enough activity yet").first()).toBeVisible();
+    await expect(page.getByText("0.00 out of 5")).toHaveCount(0);
+    await expect(page.getByText("No reviews published yet.")).toBeVisible();
+
+    // Verification states the check, never a guarantee.
+    await expect(page.getByText("Email verified").first()).toBeVisible();
+    await expect(page.getByText(/No identity document has been checked/)).toBeVisible();
+  });
+
+  test("a profile makes no claim it cannot support", async ({ page }) => {
+    await ensureDb();
+    const owner = await seedHost("Claim Free");
+    await signIn(page, owner.token);
+    await page.goto(`/passport/${owner.hostId}`);
+    await expect(page.getByRole("heading", { level: 1, name: "Claim Free" })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    await expect(page.getByText(/member[- ]owned|instant payout|neutral escrow/i)).toHaveCount(0);
+    await expect(page.getByText(/issued by the members|permanent/i)).toHaveCount(0);
+    await expect(page.getByText(/not a background check/i)).toBeVisible();
+  });
+
+  test("an unsent message survives a failed send", async ({ page }) => {
+    await ensureDb();
+    const { listingId, guestId, token } = await seedBookableParty("Message retry cottage");
+    await signIn(page, token);
+
+    // Force the transient failure this recovery exists for.
+    let fail = true;
+    await page.route("**/api/messages", async (route) => {
+      if (route.request().method() === "POST" && fail) {
+        fail = false;
+        await route.fulfill({ status: 503, contentType: "application/json", body: '{"error":"nope"}' });
+        return;
+      }
+      await route.continue();
+    });
+
+    await page.goto(`/messages/${listingId}/${guestId}`);
+    const box = page.getByLabel(/^Message /);
+    await expect(box).toBeVisible({ timeout: 15_000 });
+    await box.fill("Is the courtyard shared with the neighbours?");
+    await page.getByRole("button", { name: "Send message" }).click();
+
+    await expect(page.getByText("Your message wasn't sent.")).toBeVisible();
+    // Every character is still there, and the retry sends it.
+    await expect(box).toHaveValue("Is the courtyard shared with the neighbours?");
+    await page.getByRole("button", { name: "Try again" }).click();
+    await expect(page.getByText("Is the courtyard shared with the neighbours?").first()).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(box).toHaveValue("");
+  });
+
+  test("the review form says submit, because submitting is not publishing", async ({ page, request }) => {
+    await ensureDb();
+    const { listingId, cookie, token } = await seedBookableParty("Review wording cottage");
+    const created = await request.post("/api/bookings", {
+      headers: { cookie, "content-type": "application/json" },
+      data: { listingId, checkIn: isoDay(45), checkOut: isoDay(75), guests: 2 },
+    });
+    expect(created.status(), await created.text()).toBe(200);
+    const { bookingId } = (await created.json()) as { bookingId: string };
+    await confirmBooking(bookingId);
+    await backdateStay(bookingId);
+    // Reviews open on checkout, and checkout is the cron's to declare.
+    await request.post("/api/cron/check-in", { headers: cronHeaders() });
+    const checkedOut = await request.post("/api/cron/check-out", { headers: cronHeaders() });
+    expect(checkedOut.status(), await checkedOut.text()).toBe(200);
+
+    await signIn(page, token);
+    await page.goto(`/review/${bookingId}`);
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible({ timeout: 15_000 });
+
+    await expect(page.getByRole("button", { name: "Submit your review" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Publish review/i })).toHaveCount(0);
+    await expect(page.getByText(/permanent/i)).toHaveCount(0);
+    // The rating is a real radio group with numbers, not a row of icons.
+    await expect(page.getByRole("radio", { name: /5.*Excellent/ })).toBeVisible();
+    await expect(page.getByText("14 days after checkout").first()).toBeVisible();
   });
 });

@@ -36,3 +36,46 @@ export function mrzLine(displayName: string, number: string, stays: number, canc
   const code = number.replaceAll("-", "").replace("TP", "TP");
   return `${name}\n${code}<${String(stays).padStart(2, "0")}STAYS<${cancels}CANCEL<`;
 }
+
+/**
+ * What a verification tier actually asserts.
+ *
+ * A tier is a record of which checks a member completed, not a safety
+ * guarantee, and the wording keeps that distinction. Anything above the tiers
+ * the backend issues is reported as unknown rather than guessed at.
+ */
+export function verificationLabel(tier: number): string {
+  switch (tier) {
+    case 0:
+      return "Email verified";
+    case 1:
+      return "Phone verified";
+    case 2:
+      return "Government ID verified";
+    default:
+      return tier > 2 ? `Verification tier ${tier}` : "Not verified";
+  }
+}
+
+export function verificationDetail(tier: number): string {
+  switch (tier) {
+    case 0:
+      return "This member confirmed an email address. No identity document has been checked.";
+    case 1:
+      return "This member confirmed a phone number. No identity document has been checked.";
+    case 2:
+      return "Stripe checked a government ID for this member.";
+    default:
+      return "We don't have a verification record for this member.";
+  }
+}
+
+/**
+ * A statistic, or an honest absence.
+ *
+ * A member with no completed stays has no average rating — which is not the
+ * same as a rating of zero, and must never render as one.
+ */
+export function statOrAbsent(value: number | null, format: (n: number) => string): string {
+  return value == null ? "Not enough activity yet" : format(value);
+}

@@ -1,34 +1,99 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { Shell } from "../components/Shell";
-import { StatusBanner } from "../components/StatusBanner";
 import { TrustPassportCard } from "../components/TrustPassportCard";
+import {
+  Button,
+  ButtonLink,
+  Card,
+  EmptyState,
+  PageHeader,
+  Skeleton,
+  StatusMessage,
+  StatusPill,
+  Surface,
+} from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { api, ApiError } from "../lib/api";
 import { prettyDay } from "../lib/dates";
 import { stripePublishableKey } from "../lib/env";
+import {
+  formatPct,
+  formatRating,
+  statOrAbsent,
+  verificationDetail,
+  verificationLabel,
+} from "../lib/passport";
+import type { PublishedReview, TrustStats } from "../lib/types";
 
-function StarRow({ rating }: { rating: number }) {
+/**
+ * A rating as a number first.
+ *
+ * Stars alone are a picture of a number; the number is the fact. Screen
+ * readers and anyone comparing two profiles get the digits, and the stars are
+ * decoration beside them.
+ */
+function Rating({ value }: { value: number }) {
   return (
-    <div className="flex gap-0.5" aria-label={`${rating} out of 5`}>
-      {Array.from({ length: 5 }, (_, i) => (
-        <svg key={i} width="17" height="16" viewBox="0 0 17 16" aria-hidden>
-          <path
-            d="M8.5 0.8 L10.6 5.6 L15.8 6.1 L11.9 9.6 L13 14.7 L8.5 12.1 L4 14.7 L5.1 9.6 L1.2 6.1 L6.4 5.6 Z"
-            fill={i < rating ? "#B58B3E" : "rgba(181,139,62,.28)"}
-          />
-        </svg>
-      ))}
+    <p className="m-0 flex items-center gap-2">
+      <span className="money font-semibold">{value.toFixed(1)} out of 5</span>
+      <span aria-hidden className="text-brass">
+        {"★".repeat(Math.round(value))}
+        <span className="text-brass/30">{"★".repeat(5 - Math.round(value))}</span>
+      </span>
+    </p>
+  );
+}
+
+function Metric({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <p className="m-0 text-metadata font-bold uppercase tracking-[0.14em] text-ink-secondary">{label}</p>
+      <p className="money m-0 text-lg font-semibold">{value}</p>
+      {hint ? <p className="m-0 text-sm text-ink-secondary">{hint}</p> : null}
     </div>
   );
 }
 
+function ReviewCard({ review }: { review: PublishedReview }) {
+  return (
+    <Card as="li">
+      <Rating value={review.rating} />
+      {review.body ? (
+        <p className="mb-0 mt-3 max-w-reading whitespace-pre-line text-ink-secondary">{review.body}</p>
+      ) : (
+        <p className="mb-0 mt-3 text-sm text-ink-secondary">This review has a rating but no written note.</p>
+      )}
+      <p className="m-0 mt-4 text-sm text-ink-secondary">
+        {review.authorName} · {review.nights} nights in {review.city} · checked out{" "}
+        {prettyDay(review.checkOut)}
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {/* The receipt is what makes this a record of a real stay, so it is
+            stated as a fact about the booking rather than a badge. */}
+        <StatusPill>Booked through Stead · receipt {review.receipt}</StatusPill>
+        <StatusPill>
+          {review.direction === "host_reviews_guest" ? "Host reviewing a guest" : "Guest reviewing a host"}
+        </StatusPill>
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * A member's profile.
+ *
+ * The page shows history, not a promise. Every statistic renders exactly what
+ * the server returned: a member with no completed stays has no average rating,
+ * which is not a rating of zero and never displays as one. Verification says
+ * which checks were completed and nothing about what those checks guarantee.
+ */
 export function PassportPage() {
   const { userId } = useParams<{ userId: string }>();
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const isOwn = Boolean(user && userId && user.id === userId);
-  const identityReady = Boolean(stripePublishableKey());
+  const identityConfigured = Boolean(stripePublishableKey());
 
   const passport = useQuery({
     queryKey: ["passport", userId],
@@ -55,7 +120,7 @@ export function PassportPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `stead-trust-passport-${userId}.json`;
+      a.download = `stead-profile-${userId}.json`;
       a.click();
       URL.revokeObjectURL(url);
       return signed;
@@ -64,180 +129,220 @@ export function PassportPage() {
 
   const data = passport.data;
   const notFound = passport.error instanceof ApiError && passport.error.status === 404;
-  const latest = data?.reviews[0];
+
+  if (passport.isPending) {
+    return (
+      <Shell width="narrow" title="Member profile">
+        <div className="flex flex-1 flex-col gap-6 py-8" aria-busy="true">
+          <p role="status" className="sr-only">
+            Loading this profile
+          </p>
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-40 w-full" />
+        </div>
+      </Shell>
+    );
+  }
+
+  if (notFound || !data) {
+    return (
+      <Shell width="narrow" title="Member profile">
+        <div className="flex flex-1 flex-col gap-6 py-12">
+          <PageHeader
+            title="We couldn't find this profile."
+            description="That member may not exist, or the link may be out of date."
+          />
+          <ButtonLink to="/explore" className="self-start">
+            Find a home
+          </ButtonLink>
+        </div>
+      </Shell>
+    );
+  }
+
+  if (passport.isError) {
+    return (
+      <Shell width="narrow" title="Member profile">
+        <div className="flex flex-1 flex-col gap-6 py-12">
+          <StatusMessage
+            tone="danger"
+            title="We couldn't load this profile."
+            action={
+              <Button variant="secondary" size="sm" onClick={() => void passport.refetch()}>
+                Try again
+              </Button>
+            }
+          />
+        </div>
+      </Shell>
+    );
+  }
+
+  const stats: TrustStats = data.stats;
 
   return (
-    <Shell width="narrow">
-      <div className="flex flex-1 flex-col gap-3.5 bg-spruce px-[18px] pb-6 pt-6 text-paper md:rounded-card">
-        <div className="flex items-center justify-between">
-          <h1 className="m-0 font-display text-2xl font-semibold">Trust Passport</h1>
-          {isOwn ? (
-            <button
-              type="button"
-              onClick={() => exportPass.mutate()}
-              disabled={exportPass.isPending || !data}
-              aria-label="Export signed Trust Passport"
-              className="flex h-[38px] w-[38px] items-center justify-center rounded-full border-[1.5px] border-paper/40 text-paper disabled:opacity-60"
-            >
-              <svg width="15" height="17" viewBox="0 0 18 20" fill="none" aria-hidden>
-                <path
-                  d="M9 12 V2 M5.5 5 L9 1.5 L12.5 5"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M4 9 H2.5 V18.5 H15.5 V9 H14"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                />
-              </svg>
-            </button>
-          ) : null}
-        </div>
+    <Shell width="narrow" title="Member profile">
+      <div className="flex flex-1 flex-col gap-8 py-6 sm:py-8">
+        <TrustPassportCard passport={data} />
 
-        {passport.isLoading ? <StatusBanner title="Loading this passport…" /> : null}
-        {notFound ? <StatusBanner title="No passport here" detail="That member may not exist." /> : null}
-        {passport.isError && !notFound ? (
-          <StatusBanner tone="claim" title="Could not load this passport" />
-        ) : null}
-        {exportPass.isError ? (
-          <StatusBanner
-            tone="claim"
-            title="Could not export"
-            detail={exportPass.error instanceof ApiError ? exportPass.error.message : undefined}
-          />
-        ) : null}
-        {verifyId.isError ? (
-          <StatusBanner
-            tone="claim"
-            title="Could not start ID verification"
-            detail={verifyId.error instanceof ApiError ? verifyId.error.message : undefined}
-          />
-        ) : null}
+        {/* --- what we actually know -------------------------------- */}
+        <section aria-labelledby="history-heading" className="flex flex-col gap-4">
+          <h2 id="history-heading" className="m-0 text-card-title">
+            Stay history
+          </h2>
+          <Card>
+            <div className="grid gap-6 sm:grid-cols-2">
+              <Metric label="Stays completed" value={String(stats.staysCompleted)} />
+              <Metric
+                label="Published reviews"
+                value={String(stats.reviewCount)}
+                hint="Each one is tied to a stay booked through Stead."
+              />
+              <Metric
+                label="Rating as a guest"
+                value={statOrAbsent(stats.avgRatingAsGuest, (n) => `${formatRating(n)} out of 5`)}
+              />
+              <Metric
+                label="Rating as a host"
+                value={statOrAbsent(stats.avgRatingAsHost, (n) => `${formatRating(n)} out of 5`)}
+              />
+              <Metric
+                label="Stays with no damage claim"
+                value={String(stats.damageFreeStreak)}
+                hint="Consecutive, most recent first."
+              />
+              <Metric
+                label="Stays this member canceled as host"
+                value={String(stats.hostCancellations)}
+              />
+              <Metric
+                label="Message response rate"
+                value={statOrAbsent(stats.responseRate, (n) => formatPct(n))}
+              />
+            </div>
+          </Card>
+        </section>
 
-        {data ? (
-          <>
-            <TrustPassportCard passport={data} />
+        {/* --- verification ----------------------------------------- */}
+        <section aria-labelledby="verification-heading" className="flex flex-col gap-4">
+          <h2 id="verification-heading" className="m-0 text-card-title">
+            Verification
+          </h2>
+          <Card>
+            <p className="m-0 font-semibold">{verificationLabel(stats.verificationTier)}</p>
+            <p className="mb-0 mt-2 max-w-reading text-ink-secondary">
+              {verificationDetail(stats.verificationTier)}
+            </p>
+            <p className="mb-0 mt-3 max-w-reading text-sm text-ink-secondary">
+              Verification records which checks a member completed. It isn't a guarantee about how a stay
+              will go, and it doesn't vouch for anyone.
+            </p>
 
-            {isOwn && data.stats.verificationTier < 2 ? (
-              <div className="flex flex-col gap-2 rounded-card border border-brass/40 bg-paper/10 px-4 py-3">
-                <span className="text-sm font-bold text-paper">Raise your verification to tier 2</span>
-                <p className="m-0 text-[12.5px] leading-relaxed text-paper/75">
-                  Stripe Identity checks a government ID. Email is tier 0; a verified phone is
-                  tier 1; a verified ID is tier 2. It lands on this passport once the check
-                  completes.
+            {isOwn && stats.verificationTier < 2 ? (
+              <div className="mt-5 flex flex-col gap-3 border-t border-divider pt-5">
+                <p className="m-0 font-semibold">Add a government ID check</p>
+                <p className="m-0 max-w-reading text-sm text-ink-secondary">
+                  Stripe runs the check and tells us the result. It appears here once the check completes.
                 </p>
-                {identityReady ? (
-                  <button
-                    type="button"
+                {identityConfigured ? (
+                  <Button
+                    className="self-start"
+                    busy={verifyId.isPending}
+                    busyLabel="Opening Stripe…"
                     onClick={() => verifyId.mutate()}
-                    disabled={verifyId.isPending}
-                    className="self-start rounded-full bg-brass px-4 py-2 text-sm font-bold text-ink disabled:opacity-60"
                   >
-                    {verifyId.isPending ? "Opening Stripe…" : "Verify your ID"}
-                  </button>
+                    Verify your ID
+                  </Button>
                 ) : (
-                  <p className="m-0 text-[12.5px] text-paper/65">
-                    ID verification is not configured on this deployment.
-                  </p>
-                )}
-              </div>
-            ) : null}
-
-            <div className="flex justify-around px-2 pt-1">
-              <div className="flex flex-col items-center gap-1.5">
-                <span className="flex h-[58px] w-[58px] items-center justify-center rounded-full border-[1.5px] border-brass-light text-[17px] font-bold text-brass-light outline outline-1 outline-offset-[3px] outline-brass-light/40">
-                  {data.stats.damageFreeStreak}
-                </span>
-                <span className="text-[10px] font-semibold tracking-[0.06em] text-paper/65">STREAK</span>
-              </div>
-              <div className="flex flex-col items-center gap-1.5">
-                <span className="flex h-[58px] w-[58px] items-center justify-center rounded-full border-[1.5px] border-brass-light outline outline-1 outline-offset-[3px] outline-brass-light/40">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-                    <path
-                      d="M3.5 10.6 L12 3.4 L20.5 10.6 V20.5 H3.5 Z"
-                      stroke="#DDB672"
-                      strokeWidth="1.8"
-                      strokeLinejoin="round"
-                    />
-                    <circle cx="12" cy="13.2" r="1.8" fill="#DDB672" />
-                  </svg>
-                </span>
-                <span className="text-[10px] font-semibold tracking-[0.06em] text-paper/65">
-                  {data.isHost ? "HOSTS TOO" : "TRAVELS"}
-                </span>
-              </div>
-              <div className="flex flex-col items-center gap-1.5">
-                <span
-                  className="flex h-[58px] w-[58px] items-center justify-center rounded-full border-[1.5px] border-brass-light text-[14px] font-bold text-brass-light outline outline-1 outline-offset-[3px] outline-brass-light/40"
-                  data-testid="host-cancellations-badge"
-                >
-                  {data.stats.hostCancellations}
-                </span>
-                <span className="text-[10px] font-semibold tracking-[0.06em] text-paper/65">HOST CANCELS</span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2.5 rounded-xl border border-paper/15 bg-paper/10 px-3.5 py-3">
-              <span className="flex-1 text-[12.5px] leading-snug text-paper/80">
-                {data.stats.reviewCount}{" "}
-                {data.stats.reviewCount === 1 ? "review" : "reviews"}, each tied to a receipt.
-                {latest
-                  ? ` Latest: ${latest.authorName}, ${latest.rating}★, ${prettyDay(latest.checkOut)}.`
-                  : " None published yet."}
-              </span>
-            </div>
-
-            {data.reviews.length > 0 ? (
-              <div className="flex flex-col gap-3">
-                {data.reviews.map((review) => (
-                  <div
-                    key={review.id}
-                    className="flex flex-col gap-3 rounded-card bg-paper p-[18px] text-ink"
+                  <StatusMessage
+                    tone="info"
+                    live={false}
+                    title="ID verification isn't available on this deployment."
                   >
-                    <StarRow rating={review.rating} />
-                    {review.body ? (
-                      <p className="m-0 text-sm leading-relaxed text-ink/85">“{review.body}”</p>
-                    ) : null}
-                    <div className="flex items-center gap-3">
-                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-linen text-[15px] font-bold text-spruce">
-                        {review.authorName
-                          .split(/\s+/)
-                          .map((p) => p[0])
-                          .join("")
-                          .slice(0, 2)
-                          .toUpperCase()}
-                      </span>
-                      <div className="flex flex-col">
-                        <span className="text-[15px] font-bold">{review.authorName}</span>
-                        <span className="text-[13.5px] text-ink/55">
-                          {review.nights} nights · {review.city} · {prettyDay(review.checkOut)}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <span className="rounded-full bg-linen px-2.5 py-1.5 text-[12.5px] font-semibold">
-                        Verified stay · Receipt #{review.receipt}
-                      </span>
-                      <span className="rounded-full border border-[#DDD3BE] px-2.5 py-1.5 text-[12.5px] font-semibold text-ink/65">
-                        {review.direction === "host_reviews_guest" ? "Host → guest" : "Double-blind"}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                    <p>Nothing is wrong with your account — the check isn't configured here.</p>
+                  </StatusMessage>
+                )}
+                {verifyId.isError ? (
+                  <StatusMessage
+                    tone="danger"
+                    title={
+                      verifyId.error instanceof ApiError
+                        ? verifyId.error.message
+                        : "We couldn't start the ID check. Please try again."
+                    }
+                  />
+                ) : null}
               </div>
             ) : null}
+          </Card>
+        </section>
 
-            {!isOwn && userId ? (
-              <Link to="/explore" className="text-sm font-bold text-brass-light no-underline">
-                Find a stay →
-              </Link>
-            ) : null}
-          </>
-        ) : null}
+        {/* --- reviews ---------------------------------------------- */}
+        <section aria-labelledby="reviews-heading" className="flex flex-col gap-4">
+          <h2 id="reviews-heading" className="m-0 text-card-title">
+            {stats.reviewCount === 1 ? "1 published review" : `${stats.reviewCount} published reviews`}
+          </h2>
+          {data.reviews.length === 0 ? (
+            <EmptyState title="No reviews published yet.">
+              <p>
+                A review publishes once both sides have written one, or once the window closes. Until then
+                neither side sees the other's.
+              </p>
+            </EmptyState>
+          ) : (
+            <ul className="m-0 flex list-none flex-col gap-4 p-0">
+              {data.reviews.map((review) => (
+                <ReviewCard key={review.id} review={review} />
+              ))}
+            </ul>
+          )}
+        </section>
+
+        {/* --- explainer and owner tools ---------------------------- */}
+        <Surface>
+          <h2 className="m-0 text-card-title">About this profile</h2>
+          <p className="mb-0 mt-3 max-w-reading text-ink-secondary">
+            Everything here comes from stays booked through Stead: completed stays, reviews written after
+            checkout, and claims raised against a deposit. A review cannot be written by someone who
+            wasn't on the booking, and it can't be removed by the person it's about.
+          </p>
+          <p className="mb-0 mt-3 max-w-reading text-ink-secondary">
+            It is a record of activity here, not a background check, and it says nothing about stays
+            elsewhere.
+          </p>
+
+          {isOwn ? (
+            <div className="mt-5 flex flex-col gap-3 border-t border-divider pt-5">
+              <p className="m-0 font-semibold">Take your record with you</p>
+              <p className="m-0 max-w-reading text-sm text-ink-secondary">
+                Download your history as a signed JSON file. The signature lets anyone you give it to check
+                that Stead produced it and that nothing in it was altered.
+              </p>
+              <Button
+                variant="secondary"
+                className="self-start"
+                busy={exportPass.isPending}
+                busyLabel="Preparing your file…"
+                onClick={() => exportPass.mutate()}
+              >
+                Download your signed record
+              </Button>
+              {exportPass.isError ? (
+                <StatusMessage
+                  tone="danger"
+                  title={
+                    exportPass.error instanceof ApiError
+                      ? exportPass.error.message
+                      : "We couldn't prepare that file. Please try again."
+                  }
+                />
+              ) : null}
+              {exportPass.isSuccess ? (
+                <StatusMessage tone="success" title="Your signed record has downloaded." />
+              ) : null}
+            </div>
+          ) : null}
+        </Surface>
       </div>
     </Shell>
   );

@@ -156,8 +156,8 @@ its owning ticket replaces the screen, so nothing is half-edited.
 | `Book.tsx` | "Request to book", "Held in neutral escrow", "Card total today", "paid … instantly" | RENT-02 / PAY-01 |
 | `ListingDetail.tsx` | "Request to book" / "Book this stay", "hosts list here because they keep more at 2%" | RENT-01 |
 | `FeeCompare.tsx` | "Guest pays, all-in", "2% FLAT" | ACQ-01 (retain only if its inputs are verified) |
-| `TrustPassportCard.tsx` | "MEMBER OWNED · NEUTRAL ESCROW", "INSTANT PAYOUT" | LIFE-02 |
-| `Review.tsx` | "Permanent, and tied to the booking receipt" | LIFE-02 |
+| `TrustPassportCard.tsx` | "MEMBER OWNED · NEUTRAL ESCROW", "INSTANT PAYOUT" | done (LIFE-02) |
+| `Review.tsx` | "Permanent, and tied to the booking receipt" | done (LIFE-02) |
 | `Trips.tsx`, `Login.tsx` | "Google sign-in is waiting on an OAuth client" (developer copy) | done (INT-01, LIFE-01) |
 | `Explore.tsx` | "Run npm run db:seed against the database" | RENT-01 |
 | `TripDetail.tsx` | "Guest A cannot read guest B's booking", "Slice 1 does not invent a code" | done (LIFE-01) |
@@ -222,6 +222,27 @@ its owning ticket replaces the screen, so nothing is half-edited.
   next action, and differs by whether the viewer is the guest or the host.
 - Check-in and checkout times come from `app_config`. When config has not
   loaded, the date stands alone rather than being paired with a guessed hour.
+
+## 6e. LIFE-02 notes
+
+- **"Publish review" was wrong about what the button did.** Submitting saves a
+  review; `app.publish_due_reviews` publishes both sides together when the
+  second is written or 14 days after listing-local checkout. The button now
+  says "Submit your review" and the copy says what happens next.
+- The 14 days is a constant inside `drizzle/0008_reviews.sql`, not config, so
+  `src/lib/reviews.ts` mirrors it with a comment pointing at the migration.
+- **A null rating is not a zero.** `statOrAbsent` renders "Not enough activity
+  yet"; a genuine 0 still renders as 0. Both are asserted, because collapsing
+  them invents a bad review out of an empty record.
+- The identity card no longer swallows the profile page (S11 says it must not)
+  and no longer carries claims a profile cannot make — "member owned", "neutral
+  escrow", "instant payout", "issued by the members" are gone, as is the
+  machine-readable strip that dressed a summary up as a document.
+- Message drafts stay in component state and are never persisted. A shared
+  browser would otherwise hand a half-written private message to the next
+  person; the page says so rather than letting anyone assume it is saved. A
+  failed send keeps every character, and the browser test forces a 503 to prove
+  it.
 
 ## 7. Runtime unknowns (not verifiable from source)
 
