@@ -301,6 +301,20 @@ its owning ticket replaces the screen, so nothing is half-edited.
 - **A second migration.** `0014_conversion_facts.sql` joins 0013 as written but
   not applied to Neon.
 
+## 6h. QA-01 notes
+
+- Verification inventory, limitations and the unperformed manual matrix are in
+  `docs/redesign/QA-01-verification.md`. It records what was **not** run as
+  plainly as what was: no axe sweep, Chromium only, no visual snapshots, and
+  the live-Stripe gate **not passed**.
+- Writing the accessibility spec found a real defect: `SignInPrompt` rendered
+  an `h2` and was the entire page on a protected route, so every signed-out
+  protected page had no `h1` — leaving the shell's route-change focus with
+  nothing to land on. Fixed in the same commit, across all three of the
+  component's states.
+- New browser specs must be added to `testMatch` in `playwright.config.ts`, or
+  no project collects them and they silently never run.
+
 ## 7. Runtime unknowns (not verifiable from source)
 
 - Deployed configuration on Vercel + Neon: fee basis points, cron scheduling for
