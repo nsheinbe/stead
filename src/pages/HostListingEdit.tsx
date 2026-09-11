@@ -1,58 +1,138 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { HostSubnav } from "../components/HostSubnav";
+import { ListingPhoto } from "../components/ListingPhoto";
 import { Shell } from "../components/Shell";
 import { SignInPrompt } from "../components/SignInPrompt";
-import { StatusBanner } from "../components/StatusBanner";
+import {
+  Button,
+  ButtonLink,
+  Card,
+  Checkbox,
+  ErrorSummary,
+  PageHeader,
+  Select,
+  Skeleton,
+  StatusMessage,
+  StatusPill,
+  Textarea,
+  TextInput,
+  type FieldErrorItem,
+} from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { api, ApiError } from "../lib/api";
-import type { HostListing, ListingInput } from "../lib/types";
+import {
+  diffListingInput,
+  LISTING_FIELD_ORDER,
+  listingFormFromDetail,
+  listingFormToInput,
+  type ListingFormErrors,
+  type ListingFormField,
+  type ListingFormValues,
+} from "../lib/listingForm";
+import { POLICY_LABEL, TYPE_LABEL, type ListingDetail, type ListingInput } from "../lib/types";
 
-type Editable = Pick<
-  ListingInput,
-  "title" | "city" | "country" | "timezone" | "nightlyRateCents" | "depositCents" | "maxGuests"
->;
+/** DOM ids, so the error summary can move focus to the field it names. */
+const FIELD_ID: Record<ListingFormField, string> = {
+  title: "listing-title",
+  description: "listing-description",
+  type: "listing-type",
+  addressLine: "listing-address",
+  city: "listing-city",
+  region: "listing-region",
+  country: "listing-country",
+  timezone: "listing-timezone",
+  nightlyRate: "listing-nightly",
+  deposit: "listing-deposit",
+  maxGuests: "listing-guests",
+  bedrooms: "listing-bedrooms",
+  beds: "listing-beds",
+  wifi: "listing-wifi",
+  kitchen: "listing-kitchen",
+  fireplace: "listing-fireplace",
+  courtyard: "listing-courtyard",
+  instantBook: "listing-instant-book",
+  cancellationPolicy: "listing-policy",
+};
 
-function toEditable(listing: HostListing): Editable {
-  return {
-    title: listing.title,
-    city: listing.city,
-    country: listing.country,
-    timezone: listing.timezone,
-    nightlyRateCents: listing.nightlyRateCents,
-    depositCents: listing.depositCents,
-    maxGuests: listing.maxGuests,
-  };
+function summaryErrors(errors: ListingFormErrors): FieldErrorItem[] {
+  return LISTING_FIELD_ORDER.filter((field) => errors[field]).map((field) => ({
+    fieldId: FIELD_ID[field],
+    message: errors[field] as string,
+  }));
 }
 
+const STATUS_LABEL: Record<ListingDetail["status"], string> = {
+  draft: "Draft",
+  active: "Listed",
+  paused: "Paused",
+};
+
+/**
+ * Edit one home.
+ *
+ * Hydration reads `GET /api/listings/:id`, not the dashboard summary. The
+ * summary carries seven fields; the detail carries all sixteen editable ones,
+ * and the server already lets an owner read their own draft or paused home —
+ * so this needed no new endpoint, only the right one.
+ *
+ * Saving sends the diff. A field the host did not touch is absent from the
+ * PATCH body rather than resent, which is what keeps a stale read from
+ * overwriting a value changed elsewhere.
+ *
+ * Ownership is checked here so the page does not offer controls that would
+ * 404. It is not the enforcement: `listings_host_update` is, and the route
+ * mirrors it.
+ */
 export function HostListingEditPage() {
   const { listingId } = useParams<{ listingId: string }>();
   const { user, status } = useAuth();
   const queryClient = useQueryClient();
   const fileInput = useRef<HTMLInputElement>(null);
-  const [form, setForm] = useState<Editable | null>(null);
+
+  const [form, setForm] = useState<ListingFormValues | null>(null);
+  const [baseline, setBaseline] = useState<ListingInput | null>(null);
+  const [errors, setErrors] = useState<ListingFormErrors>({});
+  const [saved, setSaved] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
-  const listings = useQuery({
-    queryKey: ["host-listings", user?.id],
-    enabled: Boolean(user),
-    queryFn: () => api.hostListings(),
+  const listingQuery = useQuery({
+    queryKey: ["listing", listingId],
+    enabled: Boolean(listingId) && status === "signed_in",
+    queryFn: () => api.listing(listingId as string),
+    retry: (count, error) => !(error instanceof ApiError && error.status === 404) && count < 1,
   });
 
-  const listing = listings.data?.find((row) => row.id === listingId);
+  const listing = listingQuery.data;
+  const isOwner = Boolean(listing?.host && user && listing.host.id === user.id);
 
-  // Seed the form once the listing arrives, without clobbering later edits.
+  // Seed once, and only from a listing this member owns. Later edits are not
+  // clobbered by a background refetch.
   useEffect(() => {
-    if (listing && form === null) setForm(toEditable(listing));
-  }, [listing, form]);
+    if (!listing || !isOwner || form !== null) return;
+    const values = listingFormFromDetail(listing);
+    const hydrated = listingFormToInput(values);
+    setForm(values);
+    setBaseline(hydrated.ok ? hydrated.input : null);
+  }, [listing, isOwner, form]);
 
-  const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: ["host-listings", user?.id] });
+  const invalidate = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["listing", listingId] }),
+      queryClient.invalidateQueries({ queryKey: ["host-listings", user?.id] }),
+    ]);
+  };
 
   const save = useMutation({
-    mutationFn: (patch: Editable) => api.updateListing(listingId as string, patch),
-    onSuccess: invalidate,
+    mutationFn: (patch: Partial<ListingInput>) => api.updateListing(listingId as string, patch),
+    onSuccess: async (_result, patch) => {
+      // The baseline moves to what the server now holds, so a second save
+      // sends only what changed after this one.
+      setBaseline((previous) => (previous ? { ...previous, ...patch } : previous));
+      setSaved(true);
+      await invalidate();
+    },
   });
 
   const upload = useMutation({
@@ -69,9 +149,7 @@ export function HostListingEditPage() {
       await invalidate();
     },
     onError: (err) => {
-      setUploadError(
-        err instanceof ApiError ? err.message : "That photo could not be uploaded.",
-      );
+      setUploadError(err instanceof ApiError ? err.message : "That photo could not be uploaded.");
     },
   });
 
@@ -80,9 +158,38 @@ export function HostListingEditPage() {
     onSuccess: invalidate,
   });
 
+  function update<K extends ListingFormField>(field: K, value: ListingFormValues[K]) {
+    setForm((previous) => (previous ? { ...previous, [field]: value } : previous));
+    setSaved(false);
+    // Clearing on edit keeps a corrected field from staying red.
+    setErrors((previous) => {
+      if (!previous[field]) return previous;
+      const next = { ...previous };
+      delete next[field];
+      return next;
+    });
+  }
+
+  function submit() {
+    if (!form || !baseline) return;
+    const result = listingFormToInput(form);
+    if (!result.ok) {
+      setErrors(result.errors);
+      setSaved(false);
+      return;
+    }
+    setErrors({});
+    const patch = diffListingInput(baseline, result.input);
+    if (Object.keys(patch).length === 0) {
+      setSaved(true);
+      return;
+    }
+    save.mutate(patch);
+  }
+
   if (status !== "signed_in") {
     return (
-      <Shell width="narrow" workspace="hosting">
+      <Shell width="narrow" workspace="hosting" title="Edit your home">
         <div className="py-8">
           <SignInPrompt
             title="Sign in to edit this home"
@@ -94,164 +201,375 @@ export function HostListingEditPage() {
     );
   }
 
+  const notFound = listingQuery.error instanceof ApiError && listingQuery.error.status === 404;
+
   return (
-    <Shell width="narrow">
-      <div className="flex flex-1 flex-col gap-3.5 pb-6 pt-6">
+    <Shell width="narrow" workspace="hosting" title="Edit your home" backTo="/host/listings" backLabel="Your homes">
+      <div className="flex flex-1 flex-col gap-6 py-6 sm:py-8">
         <HostSubnav />
-        <Link to="/host/listings" className="text-xs font-bold text-ink/55">
-          ← Your homes
-        </Link>
 
-        {listings.isLoading && <StatusBanner title="Loading…" />}
-        {listings.isError && <StatusBanner tone="claim" title="Could not load this home" />}
-        {listings.data && !listing && (
-          <StatusBanner title="No home here" detail="It may have been deleted." />
-        )}
-
-        {listing && form && (
+        {listingQuery.isPending ? (
+          <div className="flex flex-col gap-4" aria-busy="true">
+            <p role="status" className="sr-only">
+              Loading this home
+            </p>
+            <Skeleton className="h-9 w-2/3" />
+            <Skeleton className="h-64 w-full" />
+          </div>
+        ) : notFound || !listing ? (
           <>
-            <h1 className="m-0 font-display text-2xl font-semibold">{listing.title || "Untitled home"}</h1>
-
-            <form
-              className="flex flex-col gap-3 rounded-card border border-linen-tint p-[18px]"
-              onSubmit={(e) => {
-                e.preventDefault();
-                save.mutate(form);
-              }}
-            >
-              <label className="flex flex-col gap-1 text-xs font-bold text-ink/60">
-                TITLE
-                <input
-                  required
-                  minLength={3}
-                  value={form.title}
-                  onChange={(e) => setForm({ ...form, title: e.target.value })}
-                  className="rounded-lg border border-linen-tint px-3 py-2 text-sm font-normal text-ink"
-                />
-              </label>
-              <div className="flex gap-3">
-                <label className="flex flex-1 flex-col gap-1 text-xs font-bold text-ink/60">
-                  CITY
-                  <input
-                    required
-                    value={form.city}
-                    onChange={(e) => setForm({ ...form, city: e.target.value })}
-                    className="rounded-lg border border-linen-tint px-3 py-2 text-sm font-normal text-ink"
-                  />
-                </label>
-                <label className="flex w-24 flex-col gap-1 text-xs font-bold text-ink/60">
-                  COUNTRY
-                  <input
-                    required
-                    maxLength={2}
-                    value={form.country}
-                    onChange={(e) => setForm({ ...form, country: e.target.value.toUpperCase() })}
-                    className="rounded-lg border border-linen-tint px-3 py-2 text-sm font-normal uppercase text-ink"
-                  />
-                </label>
-              </div>
-              <label className="flex flex-col gap-1 text-xs font-bold text-ink/60">
-                TIME ZONE
-                <input
-                  required
-                  value={form.timezone}
-                  onChange={(e) => setForm({ ...form, timezone: e.target.value })}
-                  className="rounded-lg border border-linen-tint px-3 py-2 text-sm font-normal text-ink"
-                />
-              </label>
-              <div className="flex gap-3">
-                <label className="flex flex-1 flex-col gap-1 text-xs font-bold text-ink/60">
-                  NIGHTLY (USD)
-                  <input
-                    type="number"
-                    min={1}
-                    value={form.nightlyRateCents / 100}
-                    onChange={(e) =>
-                      setForm({ ...form, nightlyRateCents: Math.round(Number(e.target.value) * 100) })
-                    }
-                    className="money rounded-lg border border-linen-tint px-3 py-2 text-sm font-normal text-ink"
-                  />
-                </label>
-                <label className="flex flex-1 flex-col gap-1 text-xs font-bold text-ink/60">
-                  DEPOSIT (USD)
-                  <input
-                    type="number"
-                    min={0}
-                    value={form.depositCents / 100}
-                    onChange={(e) =>
-                      setForm({ ...form, depositCents: Math.round(Number(e.target.value) * 100) })
-                    }
-                    className="money rounded-lg border border-linen-tint px-3 py-2 text-sm font-normal text-ink"
-                  />
-                </label>
-                <label className="flex w-24 flex-col gap-1 text-xs font-bold text-ink/60">
-                  SLEEPS
-                  <input
-                    type="number"
-                    min={1}
-                    value={form.maxGuests}
-                    onChange={(e) => setForm({ ...form, maxGuests: Number(e.target.value) })}
-                    className="rounded-lg border border-linen-tint px-3 py-2 text-sm font-normal text-ink"
-                  />
-                </label>
-              </div>
-              {save.isError && (
-                <StatusBanner
-                  tone="claim"
-                  title="Could not save"
-                  detail={save.error instanceof ApiError ? save.error.message : "Try again."}
-                />
-              )}
-              <button
-                type="submit"
-                disabled={save.isPending}
-                className="self-start rounded-full bg-spruce px-4 py-2 text-sm font-bold text-paper disabled:opacity-60"
-              >
-                {save.isPending ? "Saving…" : "Save changes"}
-              </button>
-            </form>
-
-            <h2 className="m-0 mt-2 font-display text-lg font-semibold">Photos</h2>
-            <input
-              ref={fileInput}
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/avif"
-              disabled={upload.isPending}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) upload.mutate(file);
-              }}
-              className="text-sm"
+            <PageHeader
+              title="We couldn't find this home."
+              description="It may have been deleted, or the link may be out of date."
             />
-            {upload.isPending && <StatusBanner title="Uploading…" />}
-            {uploadError && <StatusBanner tone="claim" title="Upload failed" detail={uploadError} />}
-            {listing.photos.length === 0 && (
-              <StatusBanner
-                title="No photos yet"
-                detail="A home without photos is a hard sell."
-              />
-            )}
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-              {listing.photos.map((photo) => (
-                <div key={photo.id} className="flex flex-col gap-1">
-                  <img
-                    src={photo.storagePath}
-                    alt=""
-                    loading="lazy"
-                    className="aspect-[4/3] w-full rounded-card object-cover"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removePhoto.mutate(photo.id)}
-                    className="self-start text-xs font-bold text-claim"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
+            <ButtonLink to="/host/listings" className="self-start">
+              Your homes
+            </ButtonLink>
+          </>
+        ) : listingQuery.isError ? (
+          <StatusMessage
+            tone="danger"
+            title="We couldn't load this home."
+            action={
+              <Button variant="secondary" size="sm" onClick={() => void listingQuery.refetch()}>
+                Try again
+              </Button>
+            }
+          />
+        ) : !isOwner ? (
+          <>
+            <PageHeader
+              title="This home isn't yours to edit."
+              description="Only the homeowner can change a listing. You can still view it as a guest would."
+            />
+            <div className="flex flex-wrap gap-3">
+              <ButtonLink to={`/listing/${listing.id}`}>View this home</ButtonLink>
+              <ButtonLink to="/host/listings" variant="secondary">
+                Your homes
+              </ButtonLink>
             </div>
           </>
-        )}
+        ) : form ? (
+          <>
+            <div className="flex flex-col gap-3">
+              <PageHeader
+                title={listing.title || "Untitled home"}
+                description="Changes save to this listing. Only the fields you edit are sent."
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusPill tone={listing.status === "active" ? "brand" : "neutral"}>
+                  {STATUS_LABEL[listing.status]}
+                </StatusPill>
+                <ButtonLink to={`/listing/${listing.id}`} variant="quiet" size="sm">
+                  Preview as a guest
+                </ButtonLink>
+              </div>
+            </div>
+
+            <form
+              className="flex flex-col gap-6"
+              noValidate
+              onSubmit={(event) => {
+                event.preventDefault();
+                submit();
+              }}
+            >
+              <ErrorSummary errors={summaryErrors(errors)} />
+
+              <Card as="section" aria-labelledby="basics-heading">
+                <h2 id="basics-heading" className="m-0 text-card-title">
+                  The home
+                </h2>
+                <div className="mt-4 flex flex-col gap-5">
+                  <TextInput
+                    id={FIELD_ID.title}
+                    label="Name"
+                    hint="What a guest will see first."
+                    value={form.title}
+                    error={errors.title}
+                    onChange={(e) => update("title", e.target.value)}
+                  />
+                  <Textarea
+                    id={FIELD_ID.description}
+                    label="Description"
+                    optional
+                    rows={6}
+                    value={form.description}
+                    error={errors.description}
+                    onChange={(e) => update("description", e.target.value)}
+                  />
+                  <Select
+                    id={FIELD_ID.type}
+                    label="Type of home"
+                    value={form.type}
+                    error={errors.type}
+                    onChange={(e) => update("type", e.target.value as ListingFormValues["type"])}
+                  >
+                    {(Object.keys(TYPE_LABEL) as (keyof typeof TYPE_LABEL)[]).map((key) => (
+                      <option key={key} value={key}>
+                        {TYPE_LABEL[key]}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              </Card>
+
+              <Card as="section" aria-labelledby="where-heading">
+                <h2 id="where-heading" className="m-0 text-card-title">
+                  Where it is
+                </h2>
+                <div className="mt-4 flex flex-col gap-5">
+                  <TextInput
+                    id={FIELD_ID.addressLine}
+                    label="Street address"
+                    optional
+                    hint="Shared with a guest after a stay is confirmed, not on the public page."
+                    value={form.addressLine}
+                    error={errors.addressLine}
+                    onChange={(e) => update("addressLine", e.target.value)}
+                  />
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <TextInput
+                      id={FIELD_ID.city}
+                      label="City"
+                      value={form.city}
+                      error={errors.city}
+                      onChange={(e) => update("city", e.target.value)}
+                    />
+                    <TextInput
+                      id={FIELD_ID.region}
+                      label="State or region"
+                      optional
+                      value={form.region}
+                      error={errors.region}
+                      onChange={(e) => update("region", e.target.value)}
+                    />
+                    <TextInput
+                      id={FIELD_ID.country}
+                      label="Country"
+                      hint="Two-letter code, such as US."
+                      inputMode="text"
+                      maxLength={2}
+                      className="uppercase"
+                      value={form.country}
+                      error={errors.country}
+                      onChange={(e) => update("country", e.target.value.toUpperCase())}
+                    />
+                    <TextInput
+                      id={FIELD_ID.timezone}
+                      label="Time zone"
+                      hint="Check-in and checkout follow this zone, such as America/New_York."
+                      value={form.timezone}
+                      error={errors.timezone}
+                      onChange={(e) => update("timezone", e.target.value)}
+                    />
+                  </div>
+                </div>
+              </Card>
+
+              <Card as="section" aria-labelledby="price-heading">
+                <h2 id="price-heading" className="m-0 text-card-title">
+                  Price and terms
+                </h2>
+                <div className="mt-4 flex flex-col gap-5">
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <TextInput
+                      id={FIELD_ID.nightlyRate}
+                      label="Nightly rate"
+                      hint="In US dollars. Guests are quoted this for every night of the stay."
+                      inputMode="decimal"
+                      className="money"
+                      value={form.nightlyRate}
+                      error={errors.nightlyRate}
+                      onChange={(e) => update("nightlyRate", e.target.value)}
+                    />
+                    <TextInput
+                      id={FIELD_ID.deposit}
+                      label="Deposit"
+                      hint="A maximum for damage claims, not a charge taken up front."
+                      inputMode="decimal"
+                      className="money"
+                      value={form.deposit}
+                      error={errors.deposit}
+                      onChange={(e) => update("deposit", e.target.value)}
+                    />
+                  </div>
+                  <Select
+                    id={FIELD_ID.cancellationPolicy}
+                    label="Cancellation policy"
+                    value={form.cancellationPolicy}
+                    error={errors.cancellationPolicy}
+                    onChange={(e) =>
+                      update("cancellationPolicy", e.target.value as ListingFormValues["cancellationPolicy"])
+                    }
+                  >
+                    {(Object.keys(POLICY_LABEL) as (keyof typeof POLICY_LABEL)[]).map((key) => (
+                      <option key={key} value={key}>
+                        {POLICY_LABEL[key]}
+                      </option>
+                    ))}
+                  </Select>
+                  <Checkbox
+                    id={FIELD_ID.instantBook}
+                    label="Let guests book without asking first"
+                    hint="A guest who meets your terms can reserve dates straight away."
+                    checked={form.instantBook}
+                    onChange={(e) => update("instantBook", e.target.checked)}
+                  />
+                </div>
+              </Card>
+
+              <Card as="section" aria-labelledby="whats-here-heading">
+                <h2 id="whats-here-heading" className="m-0 text-card-title">
+                  What's here
+                </h2>
+                <p className="m-0 mt-2 text-sm text-ink-secondary">
+                  Left blank, these stay off the home's page rather than showing as a no.
+                </p>
+                <div className="mt-4 flex flex-col gap-5">
+                  <div className="grid gap-5 sm:grid-cols-3">
+                    <TextInput
+                      id={FIELD_ID.maxGuests}
+                      label="Sleeps"
+                      inputMode="numeric"
+                      value={form.maxGuests}
+                      error={errors.maxGuests}
+                      onChange={(e) => update("maxGuests", e.target.value)}
+                    />
+                    <TextInput
+                      id={FIELD_ID.bedrooms}
+                      label="Bedrooms"
+                      optional
+                      inputMode="numeric"
+                      value={form.bedrooms}
+                      error={errors.bedrooms}
+                      onChange={(e) => update("bedrooms", e.target.value)}
+                    />
+                    <TextInput
+                      id={FIELD_ID.beds}
+                      label="Beds"
+                      optional
+                      inputMode="numeric"
+                      value={form.beds}
+                      error={errors.beds}
+                      onChange={(e) => update("beds", e.target.value)}
+                    />
+                  </div>
+                  <fieldset className="m-0 border-0 p-0">
+                    <legend className="mb-2 text-sm font-semibold text-ink">Amenities</legend>
+                    <div className="grid gap-1 sm:grid-cols-2">
+                      <Checkbox
+                        id={FIELD_ID.wifi}
+                        label="Wi-Fi"
+                        checked={form.wifi}
+                        onChange={(e) => update("wifi", e.target.checked)}
+                      />
+                      <Checkbox
+                        id={FIELD_ID.kitchen}
+                        label="Kitchen"
+                        checked={form.kitchen}
+                        onChange={(e) => update("kitchen", e.target.checked)}
+                      />
+                      <Checkbox
+                        id={FIELD_ID.fireplace}
+                        label="Fireplace"
+                        checked={form.fireplace}
+                        onChange={(e) => update("fireplace", e.target.checked)}
+                      />
+                      <Checkbox
+                        id={FIELD_ID.courtyard}
+                        label="Courtyard"
+                        checked={form.courtyard}
+                        onChange={(e) => update("courtyard", e.target.checked)}
+                      />
+                    </div>
+                  </fieldset>
+                </div>
+              </Card>
+
+              {save.isError ? (
+                <StatusMessage
+                  tone="danger"
+                  title="We couldn't save your changes."
+                  action={
+                    <Button variant="secondary" size="sm" onClick={submit}>
+                      Try again
+                    </Button>
+                  }
+                >
+                  <p>
+                    {save.error instanceof ApiError
+                      ? save.error.message
+                      : "Nothing was changed. Please try again."}
+                  </p>
+                </StatusMessage>
+              ) : null}
+
+              <div className="flex flex-wrap items-center gap-4">
+                <Button type="submit" busy={save.isPending} busyLabel="Saving your changes…">
+                  Save changes
+                </Button>
+                <p role="status" className="m-0 text-sm text-ink-secondary">
+                  {saved && !save.isPending ? "Saved." : ""}
+                </p>
+              </div>
+            </form>
+
+            <section aria-labelledby="photos-heading" className="flex flex-col gap-4">
+              <h2 id="photos-heading" className="m-0 text-card-title">
+                Photos
+              </h2>
+
+              <div className="flex flex-col gap-2">
+                <label htmlFor="listing-photo" className="text-sm font-semibold text-ink">
+                  Add a photo
+                </label>
+                <input
+                  ref={fileInput}
+                  id="listing-photo"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/avif"
+                  disabled={upload.isPending}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) upload.mutate(file);
+                  }}
+                  className="text-sm"
+                />
+              </div>
+
+              {upload.isPending ? <StatusMessage tone="info" title="Uploading your photo…" /> : null}
+              {uploadError ? <StatusMessage tone="danger" title={uploadError} /> : null}
+
+              {listing.photos.length === 0 ? (
+                <StatusMessage tone="info" live={false} title="No photos yet.">
+                  <p>A home with no photos is a hard sell. Add at least one before you list it.</p>
+                </StatusMessage>
+              ) : (
+                <ul className="m-0 grid list-none gap-4 p-0 sm:grid-cols-3">
+                  {listing.photos.map((photo, index) => (
+                    <li key={photo.id} className="flex flex-col gap-2">
+                      <ListingPhoto src={photo.storagePath} alt="" className="rounded-card" />
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        className="self-start"
+                        busy={removePhoto.isPending && removePhoto.variables === photo.id}
+                        onClick={() => removePhoto.mutate(photo.id)}
+                      >
+                        Remove photo {index + 1}
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {removePhoto.isError ? (
+                <StatusMessage tone="danger" title="We couldn't remove that photo. Please try again." />
+              ) : null}
+            </section>
+          </>
+        ) : null}
       </div>
     </Shell>
   );

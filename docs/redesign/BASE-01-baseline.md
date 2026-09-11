@@ -171,12 +171,25 @@ its owning ticket replaces the screen, so nothing is half-edited.
 | F02 checkout draft loss across sign-in | done (INT-03) |
 | F04/F06 deposit in card total, hardcoded "flat 2%" | done (PAY-01) |
 | F05 connected-account SetupIntent unused by the browser | open — PAY-02, held |
-| F07 editor hydrated from the dashboard summary | open — HOST-01 |
+| F07 editor hydrated from the dashboard summary | done (HOST-01) |
 | F08 published vs payout-ready | open — HOST-02/03 |
-| Landing body copy ("member-owned", "instant payout", "permanent") | open — ACQ-01 |
-| Host money inputs bypass `src/lib/cents.ts` | open — HOST-02 |
-| Picsum photo fallback | open — RENT-01 |
+| Landing body copy ("member-owned", "instant payout", "permanent") | done (ACQ-01) |
+| Host money inputs bypass `src/lib/cents.ts` | editor done (HOST-01); `HostListings.tsx` create form open — HOST-02 |
+| Picsum photo fallback | done (ACQ-01 `ListingPhoto`, RENT-01) |
 | `Explore` seed-command empty state | fixed in passing (one member-visible string) |
+
+## 6c. Phase-3 notes
+
+- **F07 is closed by contract, not by inspection.** `tests/listing-edit.test.ts`
+  asserts over HTTP that the dashboard summary still omits `description`,
+  `type`, `addressLine`, `region` and `amenities` — so if a future editor
+  hydrates from it again, the round-trip test next to it fails rather than the
+  defect returning silently.
+- The editor now saves `diffListingInput`, so an untouched field is absent from
+  the PATCH body. This is what makes a stale read safe: `PATCH /api/listings/:id`
+  writes only the keys it receives.
+- `lat`/`lng` remain out of `ListingInput` and `ListingDetail`. Nothing in the
+  editor needs them and the handoff says not to add a map for this redesign.
 
 ## 7. Runtime unknowns (not verifiable from source)
 
