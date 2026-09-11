@@ -25,23 +25,65 @@ async function signIn(page: Page, token: string) {
 }
 
 test.describe("public pages", () => {
-  test("landing shows the fee math and a path to explore", async ({ page }) => {
+  test("landing leads both audiences and states the minimum before search", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    await expect(page.getByText(/Member-owned home rentals/i)).toBeVisible();
-    await expect(page.getByRole("link", { name: "Find a stay" }).first()).toBeVisible();
-    await page.getByRole("link", { name: "Find a stay" }).first().click();
+    await expect(page.getByRole("heading", { level: 1, name: /A home for your next chapter/i })).toBeVisible();
+    // The floor is visible above the search control, not buried below it.
+    await expect(page.getByText("Homes for 30 nights or more").first()).toBeVisible();
+    await expect(page.getByRole("link", { name: /List your home/ }).first()).toBeVisible();
+
+    // No unverifiable claims survive the redesign.
+    await expect(page.getByText(/member-owned|toll booth|neutral escrow|instant payout/i)).toHaveCount(0);
+    await expect(page.getByText(/flat 2%|only 2%|all-in/i)).toHaveCount(0);
+    await expect(page.getByText("Copyright 2026 Stead contributors")).toBeVisible();
+
+    await page.getByRole("button", { name: "Find a home" }).click();
     await expect(page).toHaveURL(/\/explore/);
-    await expect(page.getByText(/Where to/)).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Find your next home" })).toBeVisible();
   });
 
-  test("explore lists member homes", async ({ page, request }) => {
+  test("landing search carries its terms into results", async ({ page }) => {
+    await page.goto("/");
+    await page.getByLabel("Where would you like to stay?").fill("Hudson");
+    await page.getByLabel("Guests").fill("2");
+    await page.getByRole("button", { name: "Find a home" }).click();
+    await expect(page).toHaveURL(/q=Hudson/);
+    await expect(page).toHaveURL(/guests=2/);
+  });
+
+  test("explore lists homes with a comparable estimate", async ({ page, request }) => {
     await ensureDb();
     const { title } = await seedBookableParty("Explore visible cottage");
     const listed = await request.get("/api/listings");
     expect(listed.status()).toBe(200);
     await page.goto("/explore");
     await expect(page.getByText(title)).toBeVisible({ timeout: 15_000 });
+    // $200/night x 30 nights + 2% = $6,120, labelled by its basis.
+    await expect(page.getByText("$6,120 for 30 nights").first()).toBeVisible();
+    await expect(page.getByText(/available for your dates/i)).toHaveCount(0);
+  });
+
+  test("explore filters live in the URL and can be cleared", async ({ page }) => {
+    await ensureDb();
+    await seedBookableParty("Filter state cottage");
+    await page.goto("/explore");
+    await page.getByLabel("Where would you like to stay?").fill("Nowhereville");
+    await page.getByRole("button", { name: "Search" }).click();
+    await expect(page).toHaveURL(/q=Nowhereville/);
+    await expect(page.getByText("No homes match these filters.")).toBeVisible();
+    await page.getByRole("button", { name: "Clear filters" }).first().click();
+    await expect(page).not.toHaveURL(/q=/);
+  });
+
+  test("a home page prices the minimum stay and offers dates", async ({ page }) => {
+    await ensureDb();
+    const { listingId, title } = await seedBookableParty("Detail cottage");
+    await page.goto(`/listing/${listingId}`);
+    await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
+    await expect(page.getByText("Estimated stay total · 30 nights")).toBeVisible();
+    await expect(page.getByTestId("stay-total")).toHaveText("$6,120");
+    await expect(page.getByRole("link", { name: "Choose dates" })).toBeVisible();
+    await expect(page.getByText(/Request to book/i)).toHaveCount(0);
   });
 });
 
@@ -185,15 +227,11 @@ test.describe("honest money (PAY-01)", () => {
     // $200 x 30 nights = $6,000, plus a 2% guest network fee = $6,120.
     await expect(page.getByTestId("stay-total")).toHaveText("$6,120");
     await expect(page.getByText("Guest network fee (2%)")).toBeVisible();
-    await expect(page.getByText("Estimated stay total", { exact: true })).toBeVisible();
 
     const deposit = page.getByTestId("deposit-note");
     await expect(deposit.getByRole("heading", { name: "Deposit arrangement" })).toBeVisible();
     await expect(deposit).toContainText("separate from your stay charge");
     await expect(deposit).not.toContainText(/held in|neutral escrow|returned automatically/i);
-
-    await expect(page.getByRole("link", { name: "Choose dates" })).toBeVisible();
-    await expect(page.getByText(/Request to book/i)).toHaveCount(0);
   });
 
   test("the payable amount never includes the deposit", async ({ page, request }) => {
