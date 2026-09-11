@@ -158,9 +158,9 @@ its owning ticket replaces the screen, so nothing is half-edited.
 | `FeeCompare.tsx` | "Guest pays, all-in", "2% FLAT" | ACQ-01 (retain only if its inputs are verified) |
 | `TrustPassportCard.tsx` | "MEMBER OWNED · NEUTRAL ESCROW", "INSTANT PAYOUT" | LIFE-02 |
 | `Review.tsx` | "Permanent, and tied to the booking receipt" | LIFE-02 |
-| `Trips.tsx`, `Login.tsx` | "Google sign-in is waiting on an OAuth client" (developer copy) | LIFE-01 / INT-01 |
+| `Trips.tsx`, `Login.tsx` | "Google sign-in is waiting on an OAuth client" (developer copy) | done (INT-01, LIFE-01) |
 | `Explore.tsx` | "Run npm run db:seed against the database" | RENT-01 |
-| `TripDetail.tsx` | "Guest A cannot read guest B's booking", "Slice 1 does not invent a code" | LIFE-01 |
+| `TripDetail.tsx` | "Guest A cannot read guest B's booking", "Slice 1 does not invent a code" | done (LIFE-01) |
 | `Landing.tsx` footer | copyright line must read "Copyright 2026 Stead contributors" | NAV-01 (shared footer) |
 
 ## 6b. Phase-2 progress against that list
@@ -206,6 +206,22 @@ its owning ticket replaces the screen, so nothing is half-edited.
 - No partial-draft table was added. Before the first save the only thing kept
   on the device is the INT-03 non-sensitive set (name, type, city, country,
   time zone, capacity); rate, deposit, address and description are not.
+
+## 6d. LIFE-01 notes
+
+- **`pending_payment` has no resume action, deliberately.** There is no
+  endpoint that hands back an existing booking's payment secret, so any
+  "finish paying" link would have to send the guest through `/book/:id` and
+  create a second hold on the same dates. `tests/trip-status.test.ts` asserts
+  the absence, and a browser test asserts no `/book/` link appears on an
+  unconfirmed stay. Resuming is PAY-02's `payment-ready` contract.
+- A settling payment and an abandoned checkout are indistinguishable from the
+  browser, so the copy says payment is *unrecorded* — never that it failed.
+- No status is rendered from its database value any more. `src/lib/tripStatus.ts`
+  maps each of the seven booking statuses to a label, a meaning and at most one
+  next action, and differs by whether the viewer is the guest or the host.
+- Check-in and checkout times come from `app_config`. When config has not
+  loaded, the date stands alone rather than being paired with a guessed hour.
 
 ## 7. Runtime unknowns (not verifiable from source)
 

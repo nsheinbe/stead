@@ -3,25 +3,56 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { CancellationPolicyCard } from "../components/CancellationPolicyCard";
 import { EscrowTimeline } from "../components/EscrowTimeline";
+import { ListingPhoto } from "../components/ListingPhoto";
 import { PriceBreakdown } from "../components/PriceBreakdown";
-import { depositHeading } from "../lib/fees";
-import { Surface } from "../components/ui";
-import { InboxIcon } from "../components/Icons";
 import { Shell } from "../components/Shell";
 import { SignInPrompt } from "../components/SignInPrompt";
-import { StatusBanner } from "../components/StatusBanner";
+import {
+  Button,
+  ButtonLink,
+  Card,
+  DataList,
+  DataRow,
+  Dialog,
+  PageHeader,
+  Skeleton,
+  StatusMessage,
+  StatusPill,
+  Surface,
+  Textarea,
+  TextInput,
+} from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
-import { prettyRange } from "../lib/dates";
 import { api, ApiError } from "../lib/api";
 import { dollarsToCents } from "../lib/cents";
+import { prettyDay, prettyRange } from "../lib/dates";
+import { depositHeading } from "../lib/fees";
 import { formatUsd } from "../lib/money";
-import { CLAIM_STATE_LABEL } from "../lib/types";
+import { tripState } from "../lib/tripStatus";
+import { CLAIM_STATE_LABEL, type TripDetail } from "../lib/types";
 
+/**
+ * One stay, from the server's point of view.
+ *
+ * Every fact on this page is one the server recorded: the status decides what
+ * the stay is, the cancellation preview decides what a cancellation would
+ * refund, and the deposit timeline comes from `escrow_audit`. Nothing is
+ * projected forward and nothing counts down.
+ *
+ * The two recovery cases are the ones that used to render as a bare status
+ * word. A stay with no recorded payment says so — not that payment failed,
+ * because a settling payment and an abandoned checkout look the same from
+ * here. An expired hold says the dates were released and nothing was charged.
+ * Neither offers a "finish paying" action: resuming an existing booking's
+ * payment has no contract yet, and sending someone back to checkout would hold
+ * the same dates twice.
+ */
 export function TripDetailPage() {
   const { bookingId } = useParams<{ bookingId: string }>();
-  const { user, loading, status } = useAuth();
+  const { user, status: sessionStatus } = useAuth();
   const queryClient = useQueryClient();
   const [amount, setAmount] = useState("");
+  const [amountError, setAmountError] = useState<string | null>(null);
   const [description, setDescription] = useState("");
   const [confirmCancel, setConfirmCancel] = useState(false);
 
@@ -31,6 +62,12 @@ export function TripDetailPage() {
     queryFn: () => api.trip(bookingId as string),
     retry: false,
   });
+  const config = useQuery({ queryKey: ["config"], queryFn: () => api.config() });
+
+  const invalidate = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["trip", bookingId] });
+    await queryClient.invalidateQueries({ queryKey: ["trips"] });
+  };
 
   const file = useMutation({
     mutationFn: () => {
@@ -40,9 +77,7 @@ export function TripDetailPage() {
       }
       return api.fileClaim({ bookingId, amountCents, description });
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["trip", bookingId] });
-    },
+    onSuccess: invalidate,
   });
 
   const cancelStay = useMutation({
@@ -52,8 +87,7 @@ export function TripDetailPage() {
     },
     onSuccess: async () => {
       setConfirmCancel(false);
-      await queryClient.invalidateQueries({ queryKey: ["trip", bookingId] });
-      await queryClient.invalidateQueries({ queryKey: ["trips"] });
+      await invalidate();
     },
   });
 
@@ -63,299 +97,439 @@ export function TripDetailPage() {
       if (!id) throw new ApiError(400, "No claim on this stay");
       return api.respondClaim(id, accept);
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["trip", bookingId] });
-    },
+    onSuccess: invalidate,
   });
 
   const booking = trip.data;
-  const listing = booking?.listing;
-  const photo = listing?.photos[0];
-  const escrow = booking?.escrow;
   const notFound = trip.error instanceof ApiError && trip.error.status === 404;
 
-  return (
-    <Shell width="narrow">
-      <div className="flex flex-1 flex-col gap-3.5 pb-6 pt-6">
-        <div className="flex items-center justify-between">
-          <h1 className="m-0 font-display text-2xl font-semibold">Your stay</h1>
-          {booking ? (
-            <span className="rounded-full bg-linen px-3 py-1.5 text-xs font-bold capitalize">
-              {booking.status.replaceAll("_", " ")}
-            </span>
-          ) : null}
-        </div>
-
-        {loading || trip.isLoading ? <StatusBanner title="Loading this stay…" /> : null}
-        {user && notFound ? (
-          <StatusBanner
-            title="We couldn't find this stay"
-            detail="It may no longer be available, or this link may not be yours."
-          />
-        ) : null}
-        {status !== "signed_in" ? (
+  if (sessionStatus !== "signed_in") {
+    return (
+      <Shell width="narrow" workspace="renter" title="Your stay">
+        <div className="py-8">
           <SignInPrompt
             title="Sign in to see this stay"
             description="Only the guest on this stay and the home's host can open it."
             intent="renter"
           />
-        ) : null}
+        </div>
+      </Shell>
+    );
+  }
 
-        {booking && listing ? (
-          <>
-            <div className="flex items-center gap-3 rounded-[14px] border border-linen-tint px-3.5 py-3">
-              <div className="h-[54px] w-[54px] shrink-0 overflow-hidden rounded-[10px] bg-linen">
-                {photo ? <img src={photo.storagePath} alt="" className="h-full w-full object-cover" /> : null}
-              </div>
-              <div className="flex flex-1 flex-col gap-0.5">
-                <span className="text-[15px] font-bold">{listing.title}</span>
-                <span className="text-xs text-ink/55">
-                  {prettyRange(booking.checkIn, booking.checkOut)} · {listing.city}
-                  {listing.region ? `, ${listing.region}` : ""}
-                </span>
-              </div>
-            </div>
+  if (trip.isPending) {
+    return (
+      <Shell width="narrow" workspace="renter" title="Your stay">
+        <div className="flex flex-1 flex-col gap-4 py-8" aria-busy="true">
+          <p role="status" className="sr-only">
+            Loading this stay
+          </p>
+          <Skeleton className="h-9 w-1/2" />
+          <Skeleton className="h-28 w-full" />
+          <Skeleton className="h-48 w-full" />
+        </div>
+      </Shell>
+    );
+  }
 
-            <div className="flex flex-col gap-2 rounded-card bg-linen p-[18px]">
-              <span className="text-[11.5px] font-bold tracking-[0.14em] text-ink/50">ACCESS</span>
-              <p className="m-0 text-[12.5px] leading-relaxed text-ink/60">
-                Check-in {booking.checkIn}, in the home's time zone ({listing.timezone}). Message your host for
-                arrival details.
-              </p>
-            </div>
+  if (notFound || !booking) {
+    return (
+      <Shell width="narrow" workspace="renter" title="Your stay">
+        <div className="flex flex-1 flex-col gap-6 py-12">
+          <PageHeader
+            title="We couldn't find this stay."
+            description="It may no longer exist, or this link may belong to someone else's booking."
+          />
+          <ButtonLink to="/trips" className="self-start">
+            Your stays
+          </ButtonLink>
+        </div>
+      </Shell>
+    );
+  }
 
-            <Surface padding="sm" data-testid="deposit-status">
-              <div className="flex items-baseline justify-between gap-4">
-                <h2 className="m-0 text-base font-semibold">Deposit status</h2>
-                <span className="money font-semibold">
-                  {formatUsd(escrow?.amountCents ?? booking.depositCents)}
-                </span>
-              </div>
-              <div className="mt-3">
-                {escrow ? (
-                  <EscrowTimeline escrow={escrow} timezone={listing.timezone} />
-                ) : (
-                  <p className="m-0 text-sm text-ink-secondary">No deposit update is available yet.</p>
-                )}
-              </div>
-            </Surface>
+  if (trip.isError) {
+    return (
+      <Shell width="narrow" workspace="renter" title="Your stay">
+        <div className="flex flex-1 flex-col gap-6 py-12">
+          <StatusMessage
+            tone="danger"
+            title="We couldn't load this stay."
+            action={
+              <Button variant="secondary" size="sm" onClick={() => void trip.refetch()}>
+                Try again
+              </Button>
+            }
+          />
+        </div>
+      </Shell>
+    );
+  }
 
-            <div className="flex flex-col gap-2 rounded-[14px] border border-linen-tint px-4 py-3.5">
-              <h2 className="m-0 text-base font-semibold">Your price</h2>
-              <PriceBreakdown
-                nightlyRateCents={booking.nightlyRateCents}
-                nights={booking.nights}
-                staySubtotalCents={booking.staySubtotalCents}
-                networkFeeCents={booking.networkFeeCents}
-                guestTotalCents={booking.guestTotalCents}
-                networkFeeBps={booking.networkFeeBps}
-                authoritative
-              />
-              <p className="m-0 text-sm text-ink-secondary">
-                The {depositHeading().toLowerCase()} above is separate from this charge.
-              </p>
-            </div>
+  const listing = booking.listing;
+  const escrow = booking.escrow;
+  const state = tripState({
+    status: booking.status,
+    listingId: listing.id,
+    bookingId: booking.id,
+    viewerIsHost: booking.viewerIsHost,
+    review: booking.review,
+  });
+  const other = booking.viewerIsHost ? booking.guest : booking.host;
+  const place = [listing.city, listing.region].filter(Boolean).join(", ");
 
-            <div className="flex gap-2.5">
-              <Link
+  return (
+    <Shell width="narrow" workspace="renter" title="Your stay" backTo="/trips" backLabel="Your stays">
+      <div className="flex flex-1 flex-col gap-6 py-6 sm:py-8">
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <PageHeader title={listing.title} description={`${prettyRange(booking.checkIn, booking.checkOut)} · ${place}`} />
+            <StatusPill tone={state.tone === "brand" ? "brand" : "neutral"}>{state.label}</StatusPill>
+          </div>
+          <p className="m-0 max-w-reading text-ink-secondary">{state.meaning}</p>
+          {state.action ? (
+            <ButtonLink to={state.action.to} variant="secondary" className="self-start">
+              {state.action.label}
+            </ButtonLink>
+          ) : null}
+        </div>
+
+        <div className="flex gap-4">
+          <div className="w-28 shrink-0 sm:w-36">
+            <ListingPhoto src={listing.photos[0]?.storagePath} alt="" className="rounded-card" />
+          </div>
+          <Card padding="sm" className="flex-1">
+            <DataList>
+              <DataRow label="Check-in" value={checkInLine(booking, config.data?.checkinLocalTime)} />
+              <DataRow label="Checkout" value={checkOutLine(booking, config.data?.checkoutLocalTime)} />
+              <DataRow label="Guests" value={String(booking.guests)} />
+              <DataRow label="Time zone" value={listing.timezone} />
+            </DataList>
+          </Card>
+        </div>
+
+        {/* --- arrival ---------------------------------------------- */}
+        {booking.status === "confirmed" || booking.status === "checked_in" ? (
+          <Surface padding="sm">
+            <h2 className="m-0 text-base font-semibold">Getting in</h2>
+            <p className="mb-0 mt-2 text-sm text-ink-secondary">
+              {booking.viewerIsHost
+                ? `Send ${other.displayName} the arrival details before check-in. Stead doesn't hold keys or codes.`
+                : `Your host shares arrival details directly. Message ${other.displayName} if you haven't had them yet.`}
+            </p>
+            <div className="mt-4">
+              <ButtonLink
                 to={`/messages/${listing.id}/${booking.guest.id}`}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-spruce py-3.5 text-[14px] font-bold text-paper no-underline hover:bg-spruce-deep hover:text-paper"
+                variant="secondary"
+                size="sm"
               >
-                <InboxIcon className="h-4 w-4" />
-                Message {booking.viewerIsHost ? booking.guest.displayName : booking.host.displayName}
-              </Link>
+                Message {other.displayName}
+              </ButtonLink>
             </div>
+          </Surface>
+        ) : (
+          <div>
+            <ButtonLink to={`/messages/${listing.id}/${booking.guest.id}`} variant="secondary">
+              Message {other.displayName}
+            </ButtonLink>
+          </div>
+        )}
 
-            <CancellationPolicyCard policy={booking.cancellationPolicy} compact />
+        {/* --- money ------------------------------------------------ */}
+        <section aria-labelledby="price-heading" className="flex flex-col gap-3">
+          <h2 id="price-heading" className="m-0 text-card-title">
+            What this stay cost
+          </h2>
+          <Card padding="sm">
+            <PriceBreakdown
+              nightlyRateCents={booking.nightlyRateCents}
+              nights={booking.nights}
+              staySubtotalCents={booking.staySubtotalCents}
+              networkFeeCents={booking.networkFeeCents}
+              guestTotalCents={booking.guestTotalCents}
+              networkFeeBps={booking.networkFeeBps}
+              authoritative
+            />
+            <p className="m-0 mt-3 text-sm text-ink-secondary">
+              These are the figures recorded when the stay was booked, not today's rates. The{" "}
+              {depositHeading().toLowerCase()} below is separate from this charge.
+            </p>
+          </Card>
+        </section>
 
-            {booking.cancellation.canCancel ? (
-              <div className="flex flex-col gap-2.5 rounded-[14px] border border-linen-tint px-4 py-3.5">
-                <span className="text-sm font-bold">
-                  {booking.viewerIsHost ? "Cancel this booking" : "Cancel this stay"}
-                </span>
-                <p className="m-0 text-[12.5px] leading-relaxed text-ink/70" data-testid="cancel-preview-summary">
-                  {booking.cancellation.summary}
+        {/* --- deposit ---------------------------------------------- */}
+        <section aria-labelledby="deposit-heading" className="flex flex-col gap-3">
+          <h2 id="deposit-heading" className="m-0 text-card-title">
+            {depositHeading()}
+          </h2>
+          <Card padding="sm" data-testid="deposit-status">
+            <div className="flex items-baseline justify-between gap-4">
+              <p className="m-0 text-sm text-ink-secondary">Amount</p>
+              <p className="money m-0 font-semibold">
+                {formatUsd(escrow?.amountCents ?? booking.depositCents)}
+              </p>
+            </div>
+            <div className="mt-4">
+              {escrow ? (
+                <EscrowTimeline escrow={escrow} timezone={listing.timezone} />
+              ) : (
+                <p className="m-0 text-sm text-ink-secondary">
+                  Nothing has been recorded against the deposit for this stay.
                 </p>
-                <div className="flex flex-col gap-1.5 text-sm">
-                  <div className="money flex justify-between">
-                    <span className="text-ink/70">Refund to card</span>
-                    <span className="font-semibold" data-testid="cancel-preview-refund">
-                      {formatUsd(booking.cancellation.refundCents)}
-                    </span>
-                  </div>
-                  <div className="money flex justify-between">
-                    <span className="text-ink/70">Deposit released</span>
-                    <span className="font-semibold">{formatUsd(booking.cancellation.depositReleasedCents)}</span>
-                  </div>
-                </div>
-                {confirmCancel ? (
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      disabled={cancelStay.isPending}
-                      onClick={() => cancelStay.mutate()}
-                      className="rounded-full bg-claim px-4 py-2 text-sm font-bold text-paper disabled:opacity-60"
-                    >
-                      {cancelStay.isPending ? "Canceling…" : "Confirm cancel"}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={cancelStay.isPending}
-                      onClick={() => setConfirmCancel(false)}
-                      className="rounded-full border border-[#D8CDB6] px-4 py-2 text-sm font-bold"
-                    >
-                      Keep this stay
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setConfirmCancel(true)}
-                    className="self-start rounded-full border border-[#D8CDB6] px-4 py-2 text-sm font-bold"
-                  >
-                    {booking.viewerIsHost ? "Cancel booking" : "Cancel this stay"}
-                  </button>
-                )}
-                {cancelStay.isError ? (
-                  <StatusBanner
-                    tone="claim"
-                    title="Could not cancel"
-                    detail={cancelStay.error instanceof ApiError ? cancelStay.error.message : undefined}
-                  />
-                ) : null}
-                {cancelStay.isSuccess ? (
-                  <StatusBanner title="Canceled" detail={cancelStay.data.summary} />
-                ) : null}
+              )}
+            </div>
+          </Card>
+        </section>
+
+        {/* --- claim ------------------------------------------------ */}
+        {booking.claim ? (
+          <section aria-labelledby="claim-heading" className="flex flex-col gap-3">
+            <h2 id="claim-heading" className="m-0 text-card-title">
+              Claim on this stay
+            </h2>
+            <Card padding="sm">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="money m-0 font-semibold">{formatUsd(booking.claim.amountCents)}</p>
+                <StatusPill tone={booking.claim.state === "open" ? "danger" : "neutral"}>
+                  {CLAIM_STATE_LABEL[booking.claim.state]}
+                </StatusPill>
               </div>
-            ) : null}
+              <p className="mb-0 mt-3 whitespace-pre-line text-ink-secondary">{booking.claim.description}</p>
 
-            {booking.claim ? (
-              <div
-                className={`flex flex-col gap-2 rounded-card px-4 py-3.5 ${
-                  booking.claim.state === "guest_disputed" || booking.claim.state === "open"
-                    ? "bg-claim/10"
-                    : "bg-linen"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold">
-                    Claim · {formatUsd(booking.claim.amountCents)}
-                  </span>
-                  <span className="text-[11.5px] font-bold tracking-[0.1em] text-ink/50">
-                    {CLAIM_STATE_LABEL[booking.claim.state].toUpperCase()}
-                  </span>
-                </div>
-                <p className="m-0 text-[12.5px] leading-relaxed text-ink/70">
-                  {booking.claim.description}
-                </p>
-                {!booking.viewerIsHost && booking.claim.state === "open" ? (
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
+              {!booking.viewerIsHost && booking.claim.state === "open" ? (
+                <div className="mt-4 flex flex-col gap-3">
+                  <p className="m-0 text-sm text-ink-secondary">
+                    Accepting lets the agreed amount be charged to your card on file. Disputing sends the
+                    claim to independent arbitration.
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    <Button
+                      size="sm"
+                      busy={respond.isPending && respond.variables === true}
                       onClick={() => respond.mutate(true)}
-                      disabled={respond.isPending}
-                      className="rounded-full bg-spruce px-4 py-2 text-sm font-bold text-paper disabled:opacity-60"
                     >
-                      Accept claim
-                    </button>
-                    <button
-                      type="button"
+                      Accept this claim
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      busy={respond.isPending && respond.variables === false}
                       onClick={() => respond.mutate(false)}
-                      disabled={respond.isPending}
-                      className="rounded-full border border-claim/40 px-4 py-2 text-sm font-bold text-claim disabled:opacity-60"
                     >
-                      Dispute
-                    </button>
+                      Dispute it
+                    </Button>
                   </div>
-                ) : null}
-                <Link to={`/host/claims/${booking.claim.id}`} className="text-sm font-bold no-underline">
-                  Claim detail →
-                </Link>
-                {respond.isError ? (
-                  <StatusBanner
-                    tone="claim"
-                    title="Could not record that"
-                    detail={respond.error instanceof ApiError ? respond.error.message : undefined}
+                </div>
+              ) : null}
+
+              {respond.isError ? (
+                <div className="mt-4">
+                  <StatusMessage
+                    tone="danger"
+                    title={
+                      respond.error instanceof ApiError
+                        ? respond.error.message
+                        : "We couldn't record that. Please try again."
+                    }
                   />
-                ) : null}
-              </div>
-            ) : booking.viewerIsHost && escrow?.state === "claim_window" ? (
+                </div>
+              ) : null}
+
+              <p className="mb-0 mt-4">
+                <Link to={`/host/claims/${booking.claim.id}`} className="text-sm font-semibold">
+                  See the full claim
+                </Link>
+              </p>
+            </Card>
+          </section>
+        ) : booking.viewerIsHost && escrow?.state === "claim_window" ? (
+          <section aria-labelledby="file-claim-heading" className="flex flex-col gap-3">
+            <h2 id="file-claim-heading" className="m-0 text-card-title">
+              File a claim
+            </h2>
+            <Card padding="sm">
+              <p className="m-0 text-sm text-ink-secondary">
+                The claim window on this stay is open. A claim cannot exceed the{" "}
+                {formatUsd(escrow.amountCents)} deposit, and your guest can accept it or dispute it.
+              </p>
               <form
-                className="flex flex-col gap-3 rounded-card border-[1.5px] border-dashed border-claim/40 p-[18px]"
-                onSubmit={(e) => {
-                  e.preventDefault();
+                className="mt-4 flex flex-col gap-5"
+                noValidate
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const cents = dollarsToCents(amount);
+                  if (cents == null || cents < 1) {
+                    setAmountError("Enter an amount in dollars, such as 150 or 150.50.");
+                    return;
+                  }
+                  if (cents > escrow.amountCents) {
+                    setAmountError(`A claim cannot exceed the ${formatUsd(escrow.amountCents)} deposit.`);
+                    return;
+                  }
+                  setAmountError(null);
                   file.mutate();
                 }}
               >
-                <span className="text-sm font-bold">File a claim</span>
-                <p className="m-0 text-[12.5px] leading-relaxed text-ink/60">
-                  Amount cannot exceed the {formatUsd(escrow.amountCents)} deposit, and the window is still
-                  open.
-                </p>
-                <label className="flex flex-col gap-1 text-xs font-bold text-ink/60">
-                  AMOUNT
-                  <input
-                    required
-                    inputMode="decimal"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    placeholder="150.00"
-                    className="rounded-lg border border-linen-tint px-3 py-2 text-sm font-normal text-ink"
-                  />
-                </label>
-                <label className="flex flex-col gap-1 text-xs font-bold text-ink/60">
-                  WHAT HAPPENED
-                  <textarea
-                    required
-                    minLength={3}
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    rows={3}
-                    className="rounded-lg border border-linen-tint px-3 py-2 text-sm font-normal text-ink"
-                  />
-                </label>
-                <button
-                  type="submit"
-                  disabled={file.isPending}
-                  className="self-start rounded-full bg-claim px-4 py-2 text-sm font-bold text-paper disabled:opacity-60"
-                >
-                  {file.isPending ? "Filing…" : "File claim"}
-                </button>
+                <TextInput
+                  id="claim-amount"
+                  label="Amount"
+                  hint="In US dollars."
+                  inputMode="decimal"
+                  className="money"
+                  value={amount}
+                  error={amountError}
+                  onChange={(e) => {
+                    setAmount(e.target.value);
+                    setAmountError(null);
+                  }}
+                />
+                <Textarea
+                  id="claim-description"
+                  label="What happened"
+                  hint="Your guest sees this, and so does an arbiter if it's disputed."
+                  rows={4}
+                  required
+                  minLength={3}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                />
                 {file.isError ? (
-                  <StatusBanner
-                    tone="claim"
-                    title="Could not file that claim"
-                    detail={file.error instanceof ApiError ? file.error.message : undefined}
+                  <StatusMessage
+                    tone="danger"
+                    title={
+                      file.error instanceof ApiError
+                        ? file.error.message
+                        : "We couldn't file that claim. Please try again."
+                    }
                   />
                 ) : null}
+                <Button type="submit" variant="danger" className="self-start" busy={file.isPending} busyLabel="Filing…">
+                  File this claim
+                </Button>
               </form>
-            ) : null}
-
-            <div className="flex items-center justify-between gap-2.5 border-t border-[#EDE6D6] pt-3">
-              <span className="text-[12.5px] leading-snug text-ink/55">
-                {booking.status === "completed"
-                  ? booking.review.published
-                    ? "Reviews are published — both sides, at once."
-                    : booking.review.submitted
-                      ? "Your review is in. It publishes when the other side writes theirs, or in 14 days."
-                      : "Checkout is done — your review is open. Double-blind, as always."
-                  : "Checkout is 11:00 listing-local time — your review opens then. Double-blind, as always."}
-              </span>
-              {booking.status === "completed" ? (
-                <Link
-                  to={`/review/${booking.id}`}
-                  className="whitespace-nowrap text-[12.5px] font-bold no-underline"
-                >
-                  {booking.review.submitted ? "See review →" : "Write review →"}
-                </Link>
-              ) : null}
-            </div>
-            <Link to="/trips" className="text-sm font-bold no-underline">
-              All trips →
-            </Link>
-          </>
+            </Card>
+          </section>
         ) : null}
+
+        {/* --- terms and cancellation ------------------------------- */}
+        <section aria-labelledby="terms-heading" className="flex flex-col gap-3">
+          <h2 id="terms-heading" className="m-0 text-card-title">
+            Cancellation
+          </h2>
+          <CancellationPolicyCard policy={booking.cancellationPolicy} />
+
+          {booking.cancellation.canCancel ? (
+            <Card padding="sm">
+              <p className="m-0 text-sm text-ink-secondary" data-testid="cancel-preview-summary">
+                {booking.cancellation.summary}
+              </p>
+              <div className="mt-4">
+                <DataList>
+                  <DataRow
+                    label="Refund to the card"
+                    value={
+                      <span data-testid="cancel-preview-refund">
+                        {formatUsd(booking.cancellation.refundCents)}
+                      </span>
+                    }
+                  />
+                  <DataRow
+                    label="Deposit released"
+                    value={formatUsd(booking.cancellation.depositReleasedCents)}
+                  />
+                </DataList>
+              </div>
+              <p className="m-0 mt-3 text-sm text-ink-secondary">
+                These figures come from the server and are what would actually be refunded today.
+              </p>
+              <div className="mt-4">
+                <Button variant="danger" onClick={() => setConfirmCancel(true)}>
+                  {booking.viewerIsHost ? "Cancel this booking" : "Cancel this stay"}
+                </Button>
+              </div>
+            </Card>
+          ) : null}
+
+          {cancelStay.isSuccess ? (
+            <StatusMessage tone="info" title="This stay is canceled.">
+              <p>{cancelStay.data.summary}</p>
+            </StatusMessage>
+          ) : null}
+        </section>
+
+        {/* --- review ----------------------------------------------- */}
+        {booking.status === "completed" ? (
+          <Surface padding="sm">
+            <h2 className="m-0 text-base font-semibold">Your review</h2>
+            <p className="mb-0 mt-2 text-sm text-ink-secondary">
+              {booking.review.published
+                ? "Both reviews are published."
+                : booking.review.submitted
+                  ? "Your review is written. Neither side sees the other's until both are in, or until the window closes."
+                  : "Neither side sees the other's review until both are in, or until the window closes."}
+            </p>
+            <div className="mt-4">
+              <ButtonLink to={`/review/${booking.id}`} variant="secondary" size="sm">
+                {booking.review.submitted ? "See your review" : "Write your review"}
+              </ButtonLink>
+            </div>
+          </Surface>
+        ) : null}
+
+        <Dialog
+          open={confirmCancel}
+          onClose={() => setConfirmCancel(false)}
+          title={booking.viewerIsHost ? "Cancel this booking?" : "Cancel this stay?"}
+          description={booking.cancellation.summary}
+          size="sm"
+        >
+          <DataList>
+            <DataRow label="Refund to the card" value={formatUsd(booking.cancellation.refundCents)} />
+            <DataRow
+              label="Deposit released"
+              value={formatUsd(booking.cancellation.depositReleasedCents)}
+            />
+          </DataList>
+          {cancelStay.isError ? (
+            <div className="mt-4">
+              <StatusMessage
+                tone="danger"
+                title={
+                  cancelStay.error instanceof ApiError
+                    ? cancelStay.error.message
+                    : "We couldn't cancel this stay. Nothing has changed."
+                }
+              />
+            </div>
+          ) : null}
+          <div className="mt-5 flex flex-wrap gap-3">
+            <Button variant="danger" busy={cancelStay.isPending} busyLabel="Canceling…" onClick={() => cancelStay.mutate()}>
+              Confirm cancel
+            </Button>
+            <Button variant="secondary" onClick={() => setConfirmCancel(false)}>
+              Keep this stay
+            </Button>
+          </div>
+        </Dialog>
       </div>
     </Shell>
   );
+}
+
+/**
+ * Check-in and checkout as a date plus the home's local time.
+ *
+ * The time comes from `app_config`; when it has not loaded the date stands on
+ * its own rather than being paired with a guessed hour.
+ */
+function checkInLine(booking: TripDetail, checkinLocalTime: string | undefined): string {
+  return checkinLocalTime
+    ? `${prettyDay(booking.checkIn)}, from ${checkinLocalTime}`
+    : prettyDay(booking.checkIn);
+}
+
+function checkOutLine(booking: TripDetail, checkoutLocalTime: string | undefined): string {
+  return checkoutLocalTime
+    ? `${prettyDay(booking.checkOut)}, by ${checkoutLocalTime}`
+    : prettyDay(booking.checkOut);
 }

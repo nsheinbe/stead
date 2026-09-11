@@ -7,6 +7,7 @@
  */
 import { expect, test, type Page } from "@playwright/test";
 import { confirmBooking, ensureDb, isoDay, seedBookableParty, seedHost } from "./helpers/party";
+import { insertBooking } from "../tests/helpers/db";
 import { SESSION_COOKIE } from "../tests/helpers/session";
 
 async function signIn(page: Page, token: string) {
@@ -297,8 +298,13 @@ test.describe("signed-in cancel from the trip page", () => {
     await page.goto(`/trips/${body.bookingId}`);
     await expect(page.getByText(title)).toBeVisible({ timeout: 15_000 });
     await page.getByRole("button", { name: "Cancel this stay" }).click();
+    // The refund the server would actually pay is shown before the confirm.
+    await expect(page.getByRole("dialog")).toContainText("Refund to the card");
     await page.getByRole("button", { name: "Confirm cancel" }).click();
-    await expect(page.getByText(/canceled by guest/i)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("This stay is canceled.")).toBeVisible({ timeout: 15_000 });
+    // The status reads as a sentence, not as the database's own value.
+    await expect(page.getByText("You canceled this stay.", { exact: false })).toBeVisible();
+    await expect(page.getByText(/canceled_by_guest/)).toHaveCount(0);
   });
 });
 
@@ -428,5 +434,96 @@ test.describe("payout readiness (HOST-03)", () => {
     await expect(page.getByText(/2% network fee/)).toBeVisible();
     // The retired copy claimed a flat rate as a fixed fact of the product.
     await expect(page.getByText(/flat 2%/i)).toHaveCount(0);
+  });
+});
+
+test.describe("stay lifecycle (LIFE-01)", () => {
+  test("an unconfirmed stay says payment is unrecorded, and offers no second checkout", async ({ page }) => {
+    await ensureDb();
+    const { listingId, guestId, token, title } = await seedBookableParty("Unconfirmed cottage");
+    const bookingId = await insertBooking({
+      listingId,
+      guestId,
+      checkIn: isoDay(50),
+      checkOut: isoDay(80),
+      status: "pending_payment",
+    });
+
+    await signIn(page, token);
+    await page.goto(`/trips/${bookingId}`);
+    await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible({ timeout: 15_000 });
+
+    await expect(page.getByText("Not confirmed").first()).toBeVisible();
+    await expect(page.getByText(/haven't recorded payment for this stay/i)).toBeVisible();
+    // A settling payment and an abandoned checkout look the same from here.
+    await expect(page.getByText(/payment failed|declined/i)).toHaveCount(0);
+    // No route back into checkout, which would hold the same dates twice.
+    await expect(page.getByRole("link", { name: /finish paying|retry payment|complete payment/i })).toHaveCount(0);
+    await expect(page.locator(`a[href="/book/${listingId}"]`)).toHaveCount(0);
+  });
+
+  test("an expired hold says the dates were released and nothing was charged", async ({ page }) => {
+    await ensureDb();
+    const { listingId, guestId, token } = await seedBookableParty("Expired cottage");
+    const bookingId = await insertBooking({
+      listingId,
+      guestId,
+      checkIn: isoDay(90),
+      checkOut: isoDay(120),
+      status: "expired",
+    });
+
+    await signIn(page, token);
+    await page.goto(`/trips/${bookingId}`);
+    await expect(page.getByText("Hold expired").first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/Nothing was charged/)).toBeVisible();
+    await expect(page.getByRole("link", { name: "See this home" })).toBeVisible();
+  });
+
+  test("the stays list separates what needs attention from what is settled", async ({ page }) => {
+    await ensureDb();
+    const { listingId, guestId, token } = await seedBookableParty("Grouped cottage");
+    await insertBooking({
+      listingId,
+      guestId,
+      checkIn: isoDay(200),
+      checkOut: isoDay(230),
+      status: "pending_payment",
+    });
+    await insertBooking({
+      listingId,
+      guestId,
+      checkIn: isoDay(300),
+      checkOut: isoDay(330),
+      status: "confirmed",
+    });
+
+    await signIn(page, token);
+    await page.goto("/trips");
+    await expect(page.getByRole("heading", { level: 1, name: "Your stays" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { name: "Not confirmed", level: 2 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Upcoming and current", level: 2 })).toBeVisible();
+    // No raw database value reaches the member.
+    await expect(page.getByText(/pending_payment|canceled_by_guest/)).toHaveCount(0);
+  });
+
+  test("a deposit never reads as released before the server records it", async ({ page, request }) => {
+    await ensureDb();
+    const { listingId, cookie, token } = await seedBookableParty("Deposit wording cottage");
+    const created = await request.post("/api/bookings", {
+      headers: { cookie, "content-type": "application/json" },
+      data: { listingId, checkIn: isoDay(45), checkOut: isoDay(75), guests: 2 },
+    });
+    expect(created.status(), await created.text()).toBe(200);
+    const { bookingId } = (await created.json()) as { bookingId: string };
+    await confirmBooking(bookingId);
+
+    await signIn(page, token);
+    await page.goto(`/trips/${bookingId}`);
+    const deposit = page.getByTestId("deposit-status");
+    await expect(deposit).toBeVisible({ timeout: 15_000 });
+    // Scheduled is not held, and neither is released.
+    await expect(deposit).not.toContainText(/Released/);
+    await expect(deposit).toContainText(/Nothing has been charged|Scheduled/);
   });
 });
