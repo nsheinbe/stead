@@ -95,7 +95,7 @@ export function TrustPassportCard({ passport }: { passport: Passport }) {
           <div className="flex min-w-0 flex-col gap-1">
             <span className="font-display text-[23px] font-semibold leading-none">{displayName}</span>
             {location ? <span className="text-[11.5px] text-ink/70">{location}</span> : null}
-            <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-brass px-2.5 py-1 text-[10.5px] font-bold text-ink">
+            <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-surface-accent px-2.5 py-1 text-[10.5px] font-bold text-brand">
               <ShieldMark />
               Tier {stats.verificationTier} verified
             </span>
