@@ -25,7 +25,7 @@ server/       Hono API — auth, queries, routes. The only thing that touches Po
 api/index.js  Vercel function; vercel.json rewrites /api/* here.
               Loads dist-api/handler.js, which is server/ bundled at build time.
 drizzle/      Append-only SQL migrations. Source of truth for the schema and the policies.
-scripts/      db:migrate, db:seed, db:bootstrap-roles, verify:neon, e2e-server.
+scripts/      db:migrate, db:seed (local/demo only), db:pause-seed-listings, db:bootstrap-roles, verify:neon, e2e-server.
 docs/         deploy pipeline, backup/restore, Playwright.
 ```
 
@@ -113,7 +113,7 @@ docker compose up -d db
 export DATABASE_URL_OWNER=postgres://postgres:postgres@127.0.0.1:5432/stead
 npm run db:migrate         # schema, roles, policies
 npm run db:bootstrap-roles # prints DATABASE_URL and AUTH_DATABASE_URL — paste into .env
-npm run db:seed
+ALLOW_DEMO_SEED=1 npm run db:seed   # local/demo fiction only — never production
 
 # also set AUTH_SECRET in .env: openssl rand -base64 32
 npm run dev                # SPA and API on http://localhost:5173
@@ -179,8 +179,10 @@ Neon Postgres 17. Migrations are append-only SQL under `drizzle/`, applied in fi
 export DATABASE_URL_OWNER='postgresql://<owner>:<pw>@<endpoint>.<region>.aws.neon.tech/neondb?sslmode=require'
 npm run db:migrate          # direct host, owner role
 npm run db:bootstrap-roles  # gives app_user and auth_user a password; prints their URLs once
-npm run db:seed             # 1 host, 6 active listings across timezones, picsum photos
+ALLOW_DEMO_SEED=1 npm run db:seed   # local/demo only: 1 host, 6 listings, picsum photos
 ```
+
+`npm run db:seed` refuses when `NODE_ENV=production`, and refuses unless `ALLOW_DEMO_SEED` is `1` / `true` / `yes`. It writes Slice-1 fiction (fixed UUIDs `1111…`–`6666…`, host `nora@stead.example`). **Do not run it against production.** openstead.app Explore stays empty until real hosts publish; the six seed rows on prod Neon are already paused. Inserts are `ON CONFLICT DO NOTHING`, so a paused row is never flipped back to active. To pause those known ids again: `npm run db:pause-seed-listings`.
 
 Migrations and seeding use the **direct** host; the app uses the **pooled** host (the same endpoint with `-pooler` appended). `postgres.js` runs with `prepare: false` because the pooler is PgBouncer in transaction mode. If a driver rejects `channel_binding=require`, drop it; `sslmode=require` is enough.
 
@@ -198,7 +200,7 @@ Sixteen read-only assertions against a real deployment, covering what a throwawa
 
 ## Deploying to Vercel
 
-The production recipe — Neon branches, the three role URLs, Stripe webhooks, and cron — is [`docs/deploy.md`](docs/deploy.md). Backup and restore (Neon history window, `pg_dump`, the S3 bucket) is [`docs/backup-restore.md`](docs/backup-restore.md).
+The production recipe — Neon branches, the three role URLs, Stripe webhooks, and cron — is [`docs/deploy.md`](docs/deploy.md). Production Explore should be empty until real hosts publish; `db:seed` is local/demo only and is gated off production. Backup and restore (Neon history window, `pg_dump`, the S3 bucket) is [`docs/backup-restore.md`](docs/backup-restore.md).
 
 `vercel.json` builds the SPA to `dist/` and rewrites `/api/*` to the function in `api/`. `npm run build` also emits `dist-api/handler.js` — the Hono app bundled so the serverless function does not import extensionless TypeScript paths (that is what produced `Cannot find module '/var/task/server/app'`).
 
@@ -288,7 +290,7 @@ npm start                 # serves dist/ and the API from one origin on :3000
 
 ## Object storage
 
-Listing photos are picsum URLs for now (real photography is a pre-launch task). Uploads — host photos and claim evidence — land in Slice 3 and target any S3-compatible bucket via the `S3_*` variables in `.env.example`: AWS S3, Cloudflare R2, Backblaze B2, or MinIO locally.
+Local `db:seed` listing photos are picsum URLs. Production listings use host uploads; a home with no photo shows "Photo unavailable", never a stock stand-in. Uploads — host photos and claim evidence — land in Slice 3 and target any S3-compatible bucket via the `S3_*` variables in `.env.example`: AWS S3, Cloudflare R2, Backblaze B2, or MinIO locally.
 
 ```bash
 docker compose --profile storage up -d storage

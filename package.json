@@ -21,6 +21,7 @@
     "test:e2e:stripe": "playwright test --config playwright.stripe.config.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
+    "db:pause-seed-listings": "tsx scripts/pause-seed-listings.ts",
     "db:bootstrap-roles": "tsx scripts/bootstrap-roles.ts",
     "verify:neon": "tsx scripts/verify-neon.ts"
   },

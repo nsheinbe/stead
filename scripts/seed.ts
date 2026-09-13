@@ -1,8 +1,14 @@
 /**
- * Slice 1 seed: 1 host, 6 active listings across timezones, picsum photos,
- * varied policies. Idempotent — re-running it leaves the same rows.
+ * Local/demo seed only: 1 host, 6 listings across timezones, picsum photos,
+ * varied policies. Idempotent on insert — existing rows are left untouched,
+ * including a paused status. This must never run against production
+ * (openstead.app). Prod Explore stays empty until real hosts publish.
  *
- *   DATABASE_URL_OWNER=... npm run db:seed
+ *   ALLOW_DEMO_SEED=1 DATABASE_URL_OWNER=... npm run db:seed
+ *
+ * Refuses when NODE_ENV=production, and refuses unless ALLOW_DEMO_SEED is set
+ * to 1/true/yes. To pause the known Slice-1 rows on a database that already
+ * has them: `npm run db:pause-seed-listings`.
  *
  * Runs as the owner, which bypasses RLS. app_user could not write a listing for
  * a host it is not, which is the point of the policies.
@@ -14,8 +20,37 @@ import { createDb, type Db } from "../server/db/client";
 import { listingBlackouts, listingPhotos, listings, profiles, users } from "../server/db/schema";
 import type { ListingAmenities } from "../src/lib/types";
 
-const HOST_ID = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
-const HOST_EMAIL = "nora@stead.example";
+/** Slice-1 fiction host. Production Neon paused this member's six listings. */
+export const HOST_ID = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
+export const HOST_EMAIL = "nora@stead.example";
+
+const DEMO_SEED_TRUTHY = new Set(["1", "true", "yes", "on"]);
+
+export const DEMO_SEED_REFUSAL = [
+  "Refusing to seed demo listings.",
+  "",
+  "npm run db:seed writes Slice-1 fiction (Picsum photos, nora@stead.example,",
+  "fixed listing UUIDs 1111…–6666…). That catalog must never appear as bookable",
+  "homes on production (openstead.app).",
+  "",
+  "This command is for local and demo databases only.",
+  "  • NODE_ENV must not be \"production\"",
+  "  • Set ALLOW_DEMO_SEED=1 to confirm you are targeting a non-production database",
+  "",
+  "Production Explore should stay empty until real hosts publish.",
+  "If those six seed rows already exist, pause them — do not re-activate:",
+  "  DATABASE_URL_OWNER=... npm run db:pause-seed-listings",
+].join("\n");
+
+export function demoSeedAllowed(env: NodeJS.ProcessEnv = process.env): boolean {
+  if ((env.NODE_ENV ?? "").trim().toLowerCase() === "production") return false;
+  return DEMO_SEED_TRUTHY.has((env.ALLOW_DEMO_SEED ?? "").trim().toLowerCase());
+}
+
+export function assertDemoSeedAllowed(env: NodeJS.ProcessEnv = process.env): void {
+  if (demoSeedAllowed(env)) return;
+  throw new Error(DEMO_SEED_REFUSAL);
+}
 
 type SeedListing = {
   id: string;
@@ -167,7 +202,10 @@ const SEED_LISTINGS: SeedListing[] = [
   },
 ];
 
+export const SEED_LISTING_IDS = SEED_LISTINGS.map((listing) => listing.id);
+
 export async function seed(db: Db): Promise<void> {
+  assertDemoSeedAllowed();
   // The trigger on public.users creates the profile row.
   await db
     .insert(users)
@@ -213,6 +251,7 @@ export async function seed(db: Db): Promise<void> {
         cancellationPolicy: l.cancellationPolicy,
         status: "active",
       })
+      // Never UPDATE on conflict — a paused production row stays paused.
       .onConflictDoNothing({ target: listings.id });
 
     for (const [sortOrder, seedName] of l.photos.entries()) {
@@ -242,6 +281,12 @@ const invokedDirectly =
   process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (invokedDirectly) {
+  try {
+    assertDemoSeedAllowed();
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error);
+    process.exit(1);
+  }
   const url = process.env.DATABASE_URL_OWNER;
   if (!url) {
     console.error(
@@ -251,6 +296,6 @@ if (invokedDirectly) {
     process.exit(1);
   }
   await seed(createDb(url));
-  console.log(`seeded ${SEED_LISTINGS.length} active listings for one host`);
+  console.log(`seeded ${SEED_LISTINGS.length} demo listings for one host (local/demo only)`);
   process.exit(0);
 }

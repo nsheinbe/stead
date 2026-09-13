@@ -33,7 +33,8 @@ If you enable the Neon–Vercel integration it will inject a `DATABASE_URL` for 
    ```bash
    npm run db:migrate
    npm run db:bootstrap-roles   # prints DATABASE_URL and AUTH_DATABASE_URL once
-   npm run db:seed              # optional; skip Santa Monica / other strict-enforcement cities
+   # Do not seed production. Explore stays empty until real hosts publish.
+   # ALLOW_DEMO_SEED=1 npm run db:seed   # local/demo databases only
    ```
 
 3. Create the Vercel project from this repo. Framework: Vite. `vercel.json` already sets the build and the `/api` rewrite.
@@ -87,8 +88,11 @@ Required for the app to boot and serve members:
 | `OPS_ALERT_EMAIL` | yes | optional | Watchdog destination |
 | `S3_*` | yes if hosting photos | MinIO or a preview bucket | See object storage in the backup runbook |
 | `RATE_LIMIT_DISABLED` | no | no | `1` turns the limiter off. Leave unset in production. |
+| `ALLOW_DEMO_SEED` | no | no | Required only for local `npm run db:seed`. Never set on Vercel. |
 
-`DATABASE_URL_OWNER` is for migrations and seed, not the running function. Keep it out of the Production function env if you can run migrations from CI or a laptop; if it must live on Vercel, never copy it into `DATABASE_URL`.
+`DATABASE_URL_OWNER` is for migrations and (local/demo) seed, not the running function. Keep it out of the Production function env if you can run migrations from CI or a laptop; if it must live on Vercel, never copy it into `DATABASE_URL`.
+
+**Production catalog.** openstead.app Explore should be empty until real hosts publish. `npm run db:seed` writes Slice-1 Picsum fiction (fixed UUIDs `1111…`–`6666…`, host `nora@stead.example`) and refuses to run when `NODE_ENV=production` or when `ALLOW_DEMO_SEED` is unset. Do not set `ALLOW_DEMO_SEED` on Vercel. Prod Neon already paused those six listings and canceled their seed bookings — leave them paused. To pause the known ids again: `DATABASE_URL_OWNER=… npm run db:pause-seed-listings` (idempotent; SQL snippet in `scripts/pause-seed-listings.ts`).
 
 Ops must verify **openstead.app** in Postmark, then set Vercel Production `POSTMARK_SERVER_TOKEN` and `AUTH_EMAIL_FROM` (`Stead <noreply@openstead.app>` or `Stead <hello@openstead.app>`). Until both are set, magic links do not send. Do not add a Resend domain for Stead.
 
