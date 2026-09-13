@@ -28,7 +28,7 @@ describe("login context memory", () => {
 
   it("forgets after a day, on bad data, and on clear", () => {
     const storage = memoryStorage();
-    saveLoginContext({ next: "/trips", intent: "renter", source: "header" }, storage);
+    saveLoginContext({ next: "/trips", intent: "renter", source: "header" }, storage, NOW);
     expect(readLoginContext(storage, new Date(NOW.getTime() + 25 * 60 * 60 * 1000))).toBeNull();
     expect(storage.length).toBe(0);
     storage.setItem("stead:login-context", "{oops");
