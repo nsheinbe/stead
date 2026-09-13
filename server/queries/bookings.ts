@@ -21,6 +21,7 @@ import {
   listingPhotos,
   listings,
 } from "../db/schema";
+import { isHiddenSeedListing } from "../lib/seedInventory";
 import type { TripDetail, TripSummary } from "../../src/lib/types";
 import { getCancelableBooking, previewCancellation } from "./cancellations";
 import { getClaimForBooking } from "./claims";
@@ -207,6 +208,7 @@ export async function getTripForParty(
 }
 
 export async function getBookableListing(tx: Tx, listingId: string) {
+  if (isHiddenSeedListing(listingId)) return undefined;
   return tx.query.listings.findFirst({
     where: eq(listings.id, listingId),
     columns: {

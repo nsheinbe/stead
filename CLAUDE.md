@@ -25,7 +25,7 @@ Three connection strings, because the roles are the security boundary:
 * Dev: `npm run dev` — Vite serves the SPA and the Hono API on one origin
 * Typecheck: `npm run typecheck` — run after every code change
 * Tests: `npm run test` (Vitest) — must pass before a slice is complete
-* DB: `npm run db:migrate` · roles: `npm run db:bootstrap-roles` · seed: `npm run db:seed` · new migration: add the next numbered file in `drizzle/`
+* DB: `npm run db:migrate` · roles: `npm run db:bootstrap-roles` · seed: `npm run db:seed` (local/staging only; production hides known seed ids) · new migration: add the next numbered file in `drizzle/`
 * Check a real deployment: `npm run verify:neon`
 * Local Postgres: `docker compose up -d db` · test DB: `docker compose --profile test up -d db_test`
 * Self-host the built app: `npm run build && npm start`

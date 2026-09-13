@@ -1,10 +1,19 @@
-import { afterAll, describe, expect, it } from "vitest";
-import { listActiveListings } from "../server/queries/listings";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { getListingForViewer, listActiveListings } from "../server/queries/listings";
+import { getBookableListing } from "../server/queries/bookings";
+import { SEED_HOST_EMAIL, SEED_HOST_ID, SEED_LISTING_IDS } from "../server/lib/seedInventory";
 import { asMember, closeTestDb, id, insertListing, insertMember, ownerDatabaseUrl } from "./helpers/db";
 
 const describeDb = ownerDatabaseUrl() || process.env.CI ? describe : describe.skip;
 
 describeDb("explore filters on active listings", () => {
+  const savedDemoFlag = process.env.ALLOW_DEMO_LISTINGS;
+
+  afterEach(() => {
+    if (savedDemoFlag === undefined) delete process.env.ALLOW_DEMO_LISTINGS;
+    else process.env.ALLOW_DEMO_LISTINGS = savedDemoFlag;
+  });
+
   afterAll(async () => {
     await closeTestDb();
   });
@@ -72,5 +81,47 @@ describeDb("explore filters on active listings", () => {
     const search = await asMember(null, (tx) => listActiveListings(tx, { q: "lemon" }));
     expect(search.map((l) => l.id)).toContain(lisbon);
     expect(search.map((l) => l.id)).not.toContain(hudson);
+  });
+
+  it("hides known seed listings from the public catalog when demo inventory is off", async () => {
+    const seedId = SEED_LISTING_IDS[0];
+    const realId = id();
+    const realHostId = id();
+    await insertMember(SEED_HOST_ID, SEED_HOST_EMAIL, "Nora", true);
+    await insertMember(realHostId, `host-${realHostId}@stead.example`, "Real host", true);
+    await insertListing({
+      id: seedId,
+      hostId: SEED_HOST_ID,
+      title: "Gable End Cottage",
+      city: "Hudson",
+    });
+    await insertListing({
+      id: realId,
+      hostId: realHostId,
+      title: "A real member home",
+      city: "Hudson",
+    });
+
+    process.env.ALLOW_DEMO_LISTINGS = "0";
+    const hidden = await asMember(null, (tx) => listActiveListings(tx));
+    expect(hidden.map((l) => l.id)).not.toContain(seedId);
+    expect(hidden.map((l) => l.id)).toContain(realId);
+
+    const publicDetail = await asMember(null, (tx) => getListingForViewer(tx, seedId, null));
+    expect(publicDetail).toBeNull();
+
+    const hostDetail = await asMember(SEED_HOST_ID, (tx) =>
+      getListingForViewer(tx, seedId, SEED_HOST_ID),
+    );
+    expect(hostDetail?.id).toBe(seedId);
+
+    const bookable = await asMember(null, (tx) => getBookableListing(tx, seedId));
+    expect(bookable).toBeUndefined();
+
+    process.env.ALLOW_DEMO_LISTINGS = "1";
+    const shown = await asMember(null, (tx) => listActiveListings(tx));
+    expect(shown.map((l) => l.id)).toContain(seedId);
+    const bookableWhenAllowed = await asMember(null, (tx) => getBookableListing(tx, seedId));
+    expect(bookableWhenAllowed?.id).toBe(seedId);
   });
 });

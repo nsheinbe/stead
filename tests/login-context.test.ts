@@ -7,7 +7,7 @@ const NOW = new Date("2026-09-11T12:00:00Z");
 describe("login context memory", () => {
   it("remembers a validated destination and its labels, nothing else", () => {
     const storage = memoryStorage();
-    saveLoginContext({ next: "/host/start", intent: "homeowner", source: "homeowner_hero" }, storage);
+    saveLoginContext({ next: "/host/start", intent: "homeowner", source: "homeowner_hero" }, storage, NOW);
     const raw = storage.getItem("stead:login-context") ?? "";
     expect(Object.keys(JSON.parse(raw)).sort()).toEqual(["intent", "next", "savedAt", "source"]);
     expect(readLoginContext(storage, NOW)).toEqual({
@@ -28,12 +28,12 @@ describe("login context memory", () => {
 
   it("forgets after a day, on bad data, and on clear", () => {
     const storage = memoryStorage();
-    saveLoginContext({ next: "/trips", intent: "renter", source: "header" }, storage);
+    saveLoginContext({ next: "/trips", intent: "renter", source: "header" }, storage, NOW);
     expect(readLoginContext(storage, new Date(NOW.getTime() + 25 * 60 * 60 * 1000))).toBeNull();
     expect(storage.length).toBe(0);
     storage.setItem("stead:login-context", "{oops");
     expect(readLoginContext(storage, NOW)).toBeNull();
-    saveLoginContext({ next: "/trips", intent: "renter", source: "header" }, storage);
+    saveLoginContext({ next: "/trips", intent: "renter", source: "header" }, storage, NOW);
     clearLoginContext(storage);
     expect(readLoginContext(storage, NOW)).toBeNull();
   });

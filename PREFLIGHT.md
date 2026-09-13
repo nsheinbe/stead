@@ -11,7 +11,7 @@ An agent produces its best work when nothing has to be mocked. Every key below m
 ```bash
 npm run db:migrate          # schema, roles, RLS policies
 npm run db:bootstrap-roles  # prints DATABASE_URL and AUTH_DATABASE_URL — paste both into .env
-npm run db:seed
+npm run db:seed             # local/staging demo homes only — do not seed production
 npm run verify:neon         # 16 read-only assertions against the real database
 ```
 
