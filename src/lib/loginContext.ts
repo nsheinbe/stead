@@ -13,9 +13,13 @@ const TTL_MS = 24 * 60 * 60 * 1000;
 
 type Stored = LoginContext & { savedAt: string };
 
-export function saveLoginContext(context: LoginContext, storage: StorageLike | null = defaultStorage()): void {
+export function saveLoginContext(
+  context: LoginContext,
+  storage: StorageLike | null = defaultStorage(),
+  now: Date = new Date(),
+): void {
   if (!storage) return;
-  const record: Stored = { ...context, savedAt: new Date().toISOString() };
+  const record: Stored = { ...context, savedAt: now.toISOString() };
   try {
     storage.setItem(KEY, JSON.stringify(record));
   } catch {
