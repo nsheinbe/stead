@@ -4,10 +4,16 @@
  * The `visible` predicate below mirrors the listings_read_active policy rather
  * than replacing it. The policy is the enforcement; repeating it here keeps the
  * query's intent readable and lets a 404 be a 404 instead of an empty row set.
+ *
+ * Known Slice 1 seed ids are dropped from the public catalog when
+ * `allowDemoListings()` is false (production / Vercel production, unless
+ * ALLOW_DEMO_LISTINGS=1). They stay in the database; they are not sold as
+ * live homes.
  */
-import { and, asc, desc, eq, gte, ilike, lte, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, lte, notInArray, or } from "drizzle-orm";
 import type { Tx } from "../db/client";
 import { appConfig, listingPhotos, listings } from "../db/schema";
+import { allowDemoListings, isHiddenSeedListing, SEED_LISTING_IDS } from "../lib/seedInventory";
 import type { ListingFilters } from "../../src/lib/filters";
 import type {
   ListingDetail,
@@ -22,6 +28,9 @@ function toPhotos(rows: { id: string; storagePath: string; sortOrder: number }[]
 
 function listingFilterWhere(filters: ListingFilters = {}) {
   const parts = [eq(listings.status, "active")];
+  if (!allowDemoListings()) {
+    parts.push(notInArray(listings.id, [...SEED_LISTING_IDS]));
+  }
   if (filters.city) {
     const city = filters.city;
     parts.push(or(ilike(listings.city, city), ilike(listings.region, city))!);
@@ -85,6 +94,8 @@ export async function getListingForViewer(
     },
   });
   if (!row) return null;
+  // Hosts can still open their own demo rows; everyone else sees a 404.
+  if (isHiddenSeedListing(row.id) && viewerId !== row.hostId) return null;
 
   return {
     id: row.id,

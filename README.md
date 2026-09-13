@@ -113,7 +113,7 @@ docker compose up -d db
 export DATABASE_URL_OWNER=postgres://postgres:postgres@127.0.0.1:5432/stead
 npm run db:migrate         # schema, roles, policies
 npm run db:bootstrap-roles # prints DATABASE_URL and AUTH_DATABASE_URL — paste into .env
-npm run db:seed
+npm run db:seed             # local/staging demo homes only — not production
 
 # also set AUTH_SECRET in .env: openssl rand -base64 32
 npm run dev                # SPA and API on http://localhost:5173
@@ -179,8 +179,10 @@ Neon Postgres 17. Migrations are append-only SQL under `drizzle/`, applied in fi
 export DATABASE_URL_OWNER='postgresql://<owner>:<pw>@<endpoint>.<region>.aws.neon.tech/neondb?sslmode=require'
 npm run db:migrate          # direct host, owner role
 npm run db:bootstrap-roles  # gives app_user and auth_user a password; prints their URLs once
-npm run db:seed             # 1 host, 6 active listings across timezones, picsum photos
+npm run db:seed             # local/staging: 1 host, 6 demo listings. Refuses production.
 ```
+
+`npm run db:seed` is local and staging only. It writes Nora (`nora@stead.example`) and six picsum homes with fixed ids. The script refuses when `NODE_ENV` or `VERCEL_ENV` is `production`, or when `APP_URL` / `AUTH_URL` is `openstead.app`, unless you set `ALLOW_DEMO_LISTINGS=1`. Production Explore, listing detail, quote, and create-booking hide those ids even if the rows are already in the database — with zero real hosts the catalog is empty. Preview/local can set `ALLOW_DEMO_LISTINGS=1` to show them. There is no production delete migration (Neon journal history has been unfriendly to one-shot data rewrites).
 
 Migrations and seeding use the **direct** host; the app uses the **pooled** host (the same endpoint with `-pooler` appended). `postgres.js` runs with `prepare: false` because the pooler is PgBouncer in transaction mode. If a driver rejects `channel_binding=require`, drop it; `sslmode=require` is enough.
 
@@ -226,6 +228,7 @@ Required environment variables:
 | `AUTH_EMAIL_FROM` | required once any send key is set; e.g. `Stead <noreply@openstead.app>`. `onboarding@resend.dev` is refused |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `VITE_STRIPE_PUBLISHABLE_KEY` | payments; the booking flow falls back to a mock path when unset |
 | `STRIPE_TEST_CONNECT_ACCOUNT_ID` | optional test `acct_…` stamped on the seed host; live charges fail closed without a host Connect id |
+| `ALLOW_DEMO_LISTINGS` | `1` shows Slice 1 demo homes. Default off when `NODE_ENV=production` or `VERCEL_ENV=production`. Do not set on Production. |
 | `PASSPORT_SIGNING_KEY` | Ed25519 PKCS8 PEM, base64 — `openssl genpkey -algorithm ed25519 \| base64 -w0` |
 | `OPS_ALERT_EMAIL` | watchdog destination when a cron heartbeat is stale or errored |
 

@@ -33,7 +33,8 @@ If you enable the Neon–Vercel integration it will inject a `DATABASE_URL` for 
    ```bash
    npm run db:migrate
    npm run db:bootstrap-roles   # prints DATABASE_URL and AUTH_DATABASE_URL once
-   npm run db:seed              # optional; skip Santa Monica / other strict-enforcement cities
+   # Do not seed production. npm run db:seed is local/staging demo inventory.
+   # Production Explore hides those ids even if the rows already exist.
    ```
 
 3. Create the Vercel project from this repo. Framework: Vite. `vercel.json` already sets the build and the `/api` rewrite.
@@ -59,6 +60,10 @@ Recommended: one long-lived Neon branch named `preview`, cloned from production.
 export DATABASE_URL_OWNER='postgresql://<owner>@<preview-endpoint>.<region>.aws.neon.tech/neondb?sslmode=require'
 npm run db:migrate
 npm run db:bootstrap-roles
+# Optional demo inventory on the preview branch only:
+# ALLOW_DEMO_LISTINGS=1 npm run db:seed
+# Also set ALLOW_DEMO_LISTINGS=1 on the Vercel Preview environment if you want
+# those homes to appear. Leave it unset on Production.
 ```
 
 In Vercel, set Preview (and optionally Development) to the preview-branch `app_user` / `auth_user` / owner URLs. Every PR then shares that database. Isolation is worse than a branch-per-PR; operations are simpler and the privileged-role mistake is harder to make.
@@ -87,6 +92,7 @@ Required for the app to boot and serve members:
 | `OPS_ALERT_EMAIL` | yes | optional | Watchdog destination |
 | `S3_*` | yes if hosting photos | MinIO or a preview bucket | See object storage in the backup runbook |
 | `RATE_LIMIT_DISABLED` | no | no | `1` turns the limiter off. Leave unset in production. |
+| `ALLOW_DEMO_LISTINGS` | no | optional | `1` shows Slice 1 demo homes on preview/staging. Default off in production. Never set on Production. |
 
 `DATABASE_URL_OWNER` is for migrations and seed, not the running function. Keep it out of the Production function env if you can run migrations from CI or a laptop; if it must live on Vercel, never copy it into `DATABASE_URL`.
 
