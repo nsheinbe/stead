@@ -155,6 +155,30 @@ test.describe("public pages", () => {
     await expect(page.getByRole("link", { name: "Choose dates" })).toBeVisible();
     await expect(page.getByText(/Request to book/i)).toHaveCount(0);
   });
+
+  test("Book / Reserve is closed when guest bookings are off", async ({ page }) => {
+    await ensureDb();
+    const { listingId, title } = await seedBookableParty("Closed bookings cottage");
+    await page.route("**/api/config", async (route) => {
+      const res = await route.fetch();
+      const body = (await res.json()) as Record<string, unknown>;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ...body, guestBookingsOpen: false }),
+      });
+    });
+
+    await page.goto(`/listing/${listingId}`);
+    await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
+    await expect(page.getByTestId("bookings-closed")).toContainText("Not open for bookings yet");
+    await expect(page.getByRole("link", { name: "Choose dates" })).toHaveCount(0);
+
+    await page.goto(`/book/${listingId}`);
+    await expect(page.getByTestId("bookings-closed")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Continue to payment" })).toHaveCount(0);
+    await expect(page.getByText(/Card number|Payment Element/i)).toHaveCount(0);
+  });
 });
 
 test.describe("shared shell", () => {

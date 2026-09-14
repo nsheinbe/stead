@@ -31,6 +31,8 @@ process.env.AUTH_SECRET ??= E2E_AUTH_SECRET;
 process.env.CRON_SECRET ??= E2E_CRON_SECRET;
 process.env.PORT = port;
 process.env.APP_URL ??= `http://127.0.0.1:${port}`;
+// Lifecycle and UI specs create bookings. Production Soft Dist leaves this unset.
+process.env.ALLOW_GUEST_BOOKINGS ??= "1";
 if (process.env.STRIPE_E2E !== "1") {
   delete process.env.STRIPE_SECRET_KEY;
   delete process.env.VITE_STRIPE_PUBLISHABLE_KEY;
@@ -53,6 +55,7 @@ if (existsSync("dist/index.html")) {
     CRON_SECRET: process.env.CRON_SECRET ?? E2E_CRON_SECRET,
     PORT: port,
     APP_URL: process.env.APP_URL ?? `http://127.0.0.1:${port}`,
+    ALLOW_GUEST_BOOKINGS: process.env.ALLOW_GUEST_BOOKINGS ?? "1",
   };
   const { createServer } = await import("vite");
   const vite = await createServer({

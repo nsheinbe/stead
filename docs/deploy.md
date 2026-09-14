@@ -98,6 +98,7 @@ Required for the app to boot and serve members:
 | `S3_*` | yes if hosting photos | MinIO or a preview bucket | See object storage in the backup runbook |
 | `RATE_LIMIT_DISABLED` | no | no | `1` turns the limiter off. Leave unset in production. |
 | `ALLOW_DEMO_LISTINGS` | no | optional | `1` shows Slice 1 demo homes on preview/staging. Default off in production. Never set on Production. |
+| `ALLOW_GUEST_BOOKINGS` | no | optional | `1` opens guest create-booking. Unset or `0` refuses fail-closed. Leave unset on Production Soft Dist until Nick is ready (after the required geo-proven home scan). |
 
 `DATABASE_URL_OWNER` is for migrations and seed, not the running function. Keep it out of the Production function env if you can run migrations from CI or a laptop; if it must live on Vercel, never copy it into `DATABASE_URL`.
 

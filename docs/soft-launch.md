@@ -19,8 +19,8 @@ Deploy mechanics: [`docs/deploy.md`](deploy.md). Rollback:
 | --- | --- | --- |
 | **Empty marketplace** (today) | Landing inventory and `/explore` say “No homes are listed right now.” Two actions: **List your home** → `/for-homeowners`, **Start your listing** → `/host/start`. No demo cottages, no invented ratings. | Seed ids are hidden. Zero published real homes. |
 | **First host, draft** | Explore still empty. `/host/listings` shows the draft. Only that member can open it. | `POST /api/listings` wrote `status: draft`. Nothing is bookable. |
-| **First host, published, payouts not ready** | The home appears on Explore. A guest can read it and choose dates. Checkout fails closed without a host Connect `acct_`. | Publishing and payout-ready are different facts. |
-| **First host, published + Connect ready** | Guests can pay. Stay charges are destination charges (host merchant of record). | Requires Nick’s Connect platform profile (below). PAY-02 still blocks a verified deposit SetupIntent in the browser. |
+| **First host, published, payouts not ready** | The home appears on Explore. Book / Reserve stays closed (same kill-switch). Checkout would also fail closed without a host Connect `acct_`. | Publishing and payout-ready are different facts. Bookings stay off until Nick enables them. |
+| **First host, published + Connect ready** | The home is listed. **Book / Reserve stays closed** until Nick sets `ALLOW_GUEST_BOOKINGS=1`. Guests see “Not open for bookings yet” — no Payment Element. | Soft Dist has no live rentals until that flag. Launch criterion after the flag: required geo-proven home scan (separate Phase — not this PR). PAY-02 still held. |
 
 Leftover search params (`/explore?q=Hudson`) on an empty catalog still show the
 host-led empty state, not “No homes match these filters.”
@@ -46,8 +46,10 @@ set `ALLOW_DEMO_LISTINGS`. Do **not** run `db:seed`.
    details → Price and terms → **Save draft and add photos**. Expect a real
    draft id at `/host/listings/:id?setup=photos`. Explore remains empty until
    the host publishes. Photos need S3; they can wait.
-6. **Do not book.** A published home without Connect still cannot take a live
-   stay charge. Do not treat a mock-payment laptop run as Dist checkout.
+6. **Do not book.** Guest create-booking is hard-blocked until Nick sets
+   `ALLOW_GUEST_BOOKINGS=1` on Vercel Production. A published home without
+   Connect still cannot take a live stay charge. Do not treat a mock-payment
+   laptop run as Dist checkout.
 
 Automated coverage for steps 1–3 (empty catalog stubbed, so leftover e2e seed
 rows cannot hide it): `e2e/ui.spec.ts` —
@@ -68,6 +70,7 @@ address, or description). Another device still signs in and lands on
 | --- | --- | --- |
 | **Magic-link session confirm** | SEND smoke PASS (Resend Pro). Waiting on Nick to open the Gmail link and confirm the session cookie. | Without a confirmed session, the first host cannot save a draft. |
 | **Connect platform profile** | Still required for Express Account Links (PREFLIGHT §3). | `/host/payouts` → Continue to Stripe 503s until the Dashboard platform profile exists. Live stay charges already fail closed without a host `acct_`. |
+| **Guest bookings (`ALLOW_GUEST_BOOKINGS`)** | **Off on Production.** Unset or `0` refuses create-booking fail-closed. | Soft Dist has **no live rentals** until Nick flips `ALLOW_GUEST_BOOKINGS=1` on the Vercel Production environment. Quote stays read-only. Book / Reserve shows “Not open for bookings yet” (no Payment Element). **Launch criterion:** required geo-proven home scan ships first (separate Phase — do not build the scan here). Then Nick turns bookings on. |
 | **PAY-02** | **Held. Do not start.** | Connected-account SetupIntent is created and returned; the browser does not complete it. No verified test-mode deposit setup / payment recovery. Do not claim live checkout. |
 | **No seed on production** | By design (`#24`). | Empty inventory is honest. Never set `ALLOW_DEMO_LISTINGS` on Production. `npm run db:seed` refuses `openstead.app`. |
 | **`bookings_min_stay` NOT VALID** | Leftover. | `drizzle/0003_regulatory_min_stay.sql` adds `CHECK (nights >= 30)`. If Neon still shows the constraint `NOT VALID`, validating it is an owner operation on existing rows — Nick-gated. App quote and create-booking already reject `< 30`. **Do not `db:migrate` blindly.** |
@@ -76,6 +79,7 @@ address, or description). Another device still signs in and lands on
 
 ## What this PR does not do
 
+- Geo-proven home scan pipeline (separate Phase; launch criterion only).
 - PAY-02 (held).
 - Any `drizzle/` change or Neon migrate.
 - Reintroducing seed homes as bookable.
