@@ -60,7 +60,7 @@ Add or finish, as needed:
 | `DESIGN_BRIEF.md` | Already framed. Tighten copy, badge wording, and visual rules if the inventory needs them. |
 | `SCREEN-INVENTORY.md` | Flesh every HM-* row: layout, states, empty/error, a11y, desktop vs phone, exact CTA labels. |
 | `JOURNEYS-AND-COPY.md` | **Create.** Host scan journey + guest walk journey. Host and guest disclosures from BUILD-PLAN §4. No banned voice. |
-| `TOKENS.md` or notes in the brief | Reuse Stead tokens (paper / ink / spruce / brass / linen). Brass for honesty/verification marks. Claim red (`#B3402A`) only for claim/dispute — not for “scan failed.” |
+| Color notes in the brief | Reuse Stead paper / ink / spruce / brass / linen. Brass for honesty/verification marks. Claim red (`#B3402A`) only for claim/dispute — not for “scan failed.” |
 
 Optional later: a static HTML prototype under `design/honesty-media/prototype/`
 if it helps. Illustrative only — never present as real inventory.
