@@ -79,7 +79,7 @@ address, or description). Another device still signs in and lands on
 
 ### Next Phase
 
-Honesty media (required geo-proven host scan before a home is bookable): [`docs/honesty-media/BUILD-PLAN.md`](honesty-media/BUILD-PLAN.md).
+Honesty media (required geo-proven host scan before a home is bookable): [`BUILD-PLAN.md`](honesty-media/BUILD-PLAN.md). Claude Code on that branch: [`START-HERE-CLAUDE-CODE.md`](honesty-media/START-HERE-CLAUDE-CODE.md).
 
 ## What this PR does not do
 

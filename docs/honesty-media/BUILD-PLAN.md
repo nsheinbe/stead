@@ -77,8 +77,11 @@ then, a listing without a verified scan stays closed.
 1. Read `CLAUDE.md`, the stack amendment in `BUILD_PROMPT.md`,
    `README.md`, `docs/soft-launch.md`, and this plan. Keep money,
    30-night, Connect host-MOR, RLS, and append-only migration invariants.
-2. This PR is **docs only**. A later implementation branch starts at
-   HM-00. Do not mix honesty-media schema into an unrelated slice.
+2. This handoff branch is **docs + design brief only**. A later
+   implementation branch starts at HM-00. Do not mix honesty-media
+   schema into an unrelated slice. Claude Code: paste
+   `docs/honesty-media/START-HERE-CLAUDE-CODE.md` and fill
+   `design/honesty-media/` before writing app code.
 3. Ticket size is a reviewable slice, not a calendar estimate. Priority
    P0 is a launch-criterion or honesty/security blocker; P1 is required
    for the full Soft Dist product bar.
@@ -404,10 +407,12 @@ product, not a substitute for the scan gate.
 
 ## 10. Out of scope (this phase and this PR)
 
-**This PR (docs only)**
+**This PR (docs + design handoff only)**
 
-- No application code, `drizzle/`, seed, or `.env` changes. Documentation
-  references only.
+- No application code, `drizzle/`, seed, or `.env` changes.
+- New honesty-media design lives in `design/honesty-media/` only.
+  Do not edit `/design/Stead.dc.html`, `/design/DESIGN_HANDOFF.md`, or
+  other immutable design-truth files.
 - No change to `ALLOW_GUEST_BOOKINGS` semantics.
 - No Visual Rails provisioning, accounts, or assigned tickets.
 
@@ -426,7 +431,9 @@ product, not a substitute for the scan gate.
   call).
 - Changing `bookings_min_stay` validation on Neon; `db:migrate` against
   Production without Nick.
-- Edits under `/design`.
+- Edits to immutable `/design` truth files (`Stead.dc.html`,
+  `DESIGN_HANDOFF.md`, scaffolding). Honesty-media specs are
+  `design/honesty-media/` only.
 - Claiming bookings are open.
 
 ---
