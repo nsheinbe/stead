@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { addDays, format, parseISO } from "date-fns";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { BookingsClosed } from "../components/BookingsClosed";
 import { CancellationPolicyCard } from "../components/CancellationPolicyCard";
 import { DepositSequence } from "../components/EscrowTimeline";
 import { DepositNote, PriceBreakdown } from "../components/PriceBreakdown";
@@ -9,11 +10,12 @@ import { Shell } from "../components/Shell";
 import { GuestStepper } from "../components/booking/GuestStepper";
 import { PayStep } from "../components/booking/PayStep";
 import { StayCalendar } from "../components/booking/StayCalendar";
-import { Button, Progress, Skeleton, StatusMessage } from "../components/ui";
+import { Button, ButtonLink, Progress, Skeleton, StatusMessage } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { api } from "../lib/api";
 import { loginHref } from "../lib/continuation";
 import { depositMethodForNights } from "../lib/deposit";
+import { BOOKINGS_CLOSED_COPY, guestBookingsOpen } from "../lib/guestBookings";
 import {
   deleteBookingDraft,
   latestBookingDraftForListing,
@@ -57,6 +59,7 @@ export function BookPage() {
   const configQuery = useQuery({ queryKey: ["config"], queryFn: () => api.config() });
 
   const listing = listingQuery.data;
+  const bookingsOpen = guestBookingsOpen(configQuery.data);
 
   // Server-priced preview for the chosen dates. It reserves nothing, so it is
   // safe before sign-in; creation re-prices independently and its quote is
@@ -198,7 +201,7 @@ export function BookPage() {
   }
 
   async function createBooking(): Promise<CreateBookingResponse | null> {
-    if (!listing || !checkIn || !checkOut || !quote || !user) return null;
+    if (!bookingsOpen || !listing || !checkIn || !checkOut || !quote || !user) return null;
     setCreating(true);
     setSubmitError(null);
     try {
@@ -223,6 +226,7 @@ export function BookPage() {
   }
 
   async function goToPayment() {
+    if (!bookingsOpen) return;
     if (!user) {
       const id = persistSelection();
       navigate(
@@ -245,23 +249,31 @@ export function BookPage() {
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <h1 className="m-0 text-[1.75rem] sm:text-[2rem]">
-                {step === 1 ? "Your stay" : step === 2 ? "Price & terms" : "Payment"}
+                {!bookingsOpen && !configQuery.isPending
+                  ? BOOKINGS_CLOSED_COPY.title
+                  : step === 1
+                    ? "Your stay"
+                    : step === 2
+                      ? "Price & terms"
+                      : "Payment"}
               </h1>
               <p className="m-0 text-sm text-ink-secondary">
                 {listing?.title ?? "Loading…"}
-                {checkIn && checkOut ? ` · ${prettyRange(checkIn, checkOut)}` : ""}
+                {bookingsOpen && checkIn && checkOut ? ` · ${prettyRange(checkIn, checkOut)}` : ""}
               </p>
             </div>
-            {step > 1 && step < 3 ? (
+            {bookingsOpen && step > 1 && step < 3 ? (
               <Button variant="quiet" size="sm" onClick={() => setStep((step - 1) as 1 | 2)}>
                 Back
               </Button>
             ) : null}
           </div>
-          <Progress steps={["Your stay", "Price & terms", "Payment"]} current={step} label="Booking progress" />
+          {bookingsOpen ? (
+            <Progress steps={["Your stay", "Price & terms", "Payment"]} current={step} label="Booking progress" />
+          ) : null}
         </div>
 
-        {listingQuery.isPending || authLoading ? (
+        {listingQuery.isPending || authLoading || configQuery.isPending ? (
           <div aria-busy="true">
             <p role="status" className="sr-only">
               Loading this home
@@ -277,7 +289,16 @@ export function BookPage() {
         {submitError ? <StatusMessage tone="danger" title={submitError} /> : null}
         {restoreNotice ? <RestoreMessage notice={restoreNotice} onDismiss={() => setRestoreNotice(null)} /> : null}
 
-        {listing && step === 1 ? (
+        {listing && !configQuery.isPending && !bookingsOpen ? (
+          <div className="flex flex-1 flex-col gap-4">
+            <BookingsClosed />
+            <ButtonLink to={`/listing/${listing.id}`} variant="secondary" block>
+              Back to the home
+            </ButtonLink>
+          </div>
+        ) : null}
+
+        {listing && bookingsOpen && step === 1 ? (
           <div className="flex flex-1 flex-col gap-4">
             <StayCalendar checkIn={checkIn} checkOut={checkOut} onPick={pickDay} initialMonth={checkIn} />
 
@@ -327,7 +348,7 @@ export function BookPage() {
           </div>
         ) : null}
 
-        {listing && quote && step === 2 ? (
+        {listing && bookingsOpen && quote && step === 2 ? (
           <div className="flex flex-1 flex-col gap-3.5">
             <div className="flex flex-col gap-3 rounded-[14px] border border-linen-tint px-4 py-4">
               <div className="flex items-baseline justify-between gap-3">
@@ -397,7 +418,7 @@ export function BookPage() {
           </div>
         ) : null}
 
-        {listing && step === 3 && created ? (
+        {listing && bookingsOpen && step === 3 && created ? (
           <PayStep
             listing={listing}
             created={created}

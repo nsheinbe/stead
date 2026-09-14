@@ -229,6 +229,7 @@ Required environment variables:
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `VITE_STRIPE_PUBLISHABLE_KEY` | payments; the booking flow falls back to a mock path when unset |
 | `STRIPE_TEST_CONNECT_ACCOUNT_ID` | optional test `acct_…` stamped on the seed host; live charges fail closed without a host Connect id |
 | `ALLOW_DEMO_LISTINGS` | `1` shows Slice 1 demo homes. Default off when `NODE_ENV=production` or `VERCEL_ENV=production`. Do not set on Production. |
+| `ALLOW_GUEST_BOOKINGS` | `1` allows create-booking (and stay payment / setup for new bookings). Unset or `0` refuses fail-closed. Soft Dist Production stays off until Nick flips it on Vercel. |
 | `PASSPORT_SIGNING_KEY` | Ed25519 PKCS8 PEM, base64 — `openssl genpkey -algorithm ed25519 \| base64 -w0` |
 | `OPS_ALERT_EMAIL` | watchdog destination when a cron heartbeat is stale or errored |
 

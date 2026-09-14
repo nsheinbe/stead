@@ -34,6 +34,7 @@ import {
   sendEmail,
 } from "../lib/email";
 import { canCancelStatus } from "../lib/cancellation";
+import { allowGuestBookings, GUEST_BOOKINGS_CLOSED_MESSAGE } from "../lib/guestBookings";
 import { sessionUser, tenantQuery, type AppEnv } from "../lib/http";
 import { RATE_LIMITS, rateLimit } from "../lib/rateLimit";
 import {
@@ -256,6 +257,10 @@ bookingsRoutes.post("/quote", rateLimit(RATE_LIMITS.quotes), async (c) => {
 
 bookingsRoutes.post("/", rateLimit(RATE_LIMITS.bookings), async (c) => {
   const guest = sessionUser(c);
+
+  if (!allowGuestBookings()) {
+    throw new HTTPException(403, { message: GUEST_BOOKINGS_CLOSED_MESSAGE });
+  }
 
   const parsed = createBookingSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) {

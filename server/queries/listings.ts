@@ -13,6 +13,7 @@
 import { and, asc, desc, eq, gte, ilike, lte, notInArray, or } from "drizzle-orm";
 import type { Tx } from "../db/client";
 import { appConfig, listingPhotos, listings } from "../db/schema";
+import { allowGuestBookings } from "../lib/guestBookings";
 import { allowDemoListings, isHiddenSeedListing, SEED_LISTING_IDS } from "../lib/seedInventory";
 import type { ListingFilters } from "../../src/lib/filters";
 import type {
@@ -143,6 +144,7 @@ export function toPublicConfig(map: Record<string, unknown>): PublicConfig {
     checkoutLocalTime: stringFromConfig(map.checkout_local_time, "11:00"),
     claimWindowHours: intFromConfig(map.claim_window_hours, 48),
     pendingPaymentTtlMinutes: intFromConfig(map.pending_payment_ttl_minutes, 30),
+    guestBookingsOpen: allowGuestBookings(),
   };
 }
 

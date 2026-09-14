@@ -56,6 +56,7 @@ export default defineConfig({
             CRON_SECRET: process.env.CRON_SECRET ?? E2E_CRON_SECRET,
             PORT: port,
             APP_URL: baseURL,
+            ALLOW_GUEST_BOOKINGS: process.env.ALLOW_GUEST_BOOKINGS ?? "1",
           },
         }
       : undefined,

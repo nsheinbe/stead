@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { BookingsClosed } from "../components/BookingsClosed";
 import { CancellationPolicyCard } from "../components/CancellationPolicyCard";
 import { ListingPhoto } from "../components/ListingPhoto";
 import { DepositNote, PriceBreakdown } from "../components/PriceBreakdown";
@@ -12,6 +13,7 @@ import { loginHref } from "../lib/continuation";
 import { depositMethodForNights } from "../lib/deposit";
 import { estimateMinimumStay } from "../lib/estimate";
 import { feePercent } from "../lib/fees";
+import { guestBookingsOpen } from "../lib/guestBookings";
 import { formatUsd, MIN_STAY_NIGHTS } from "../lib/money";
 import { POLICY_LABEL, TYPE_LABEL, type ListingDetail } from "../lib/types";
 
@@ -43,6 +45,7 @@ export function ListingDetailPage() {
 
   const listing = listingQuery.data;
   const feeBps = config.data?.networkFeeBps ?? null;
+  const bookingsOpen = guestBookingsOpen(config.data);
   const notFound = listingQuery.error instanceof ApiError && listingQuery.error.status === 404;
   const estimate = listing ? estimateMinimumStay(listing.nightlyRateCents, feeBps) : null;
   const isOwner = Boolean(listing?.host && user && listing.host.id === user.id);
@@ -278,9 +281,13 @@ export function ListingDetailPage() {
                   </ButtonLink>
                 ) : (
                   <>
-                    <ButtonLink to={`/book/${listing.id}`} block>
-                      Choose dates
-                    </ButtonLink>
+                    {config.isPending ? null : bookingsOpen ? (
+                      <ButtonLink to={`/book/${listing.id}`} block>
+                        Choose dates
+                      </ButtonLink>
+                    ) : (
+                      <BookingsClosed />
+                    )}
                     {listing.host ? (
                       <ButtonLink
                         to={
@@ -297,9 +304,11 @@ export function ListingDetailPage() {
                   </>
                 )}
               </div>
-              <p className="m-0 mt-3 text-sm text-ink-secondary">
-                You'll review the exact price for your dates before anything is charged.
-              </p>
+              {bookingsOpen ? (
+                <p className="m-0 mt-3 text-sm text-ink-secondary">
+                  You'll review the exact price for your dates before anything is charged.
+                </p>
+              ) : null}
             </Card>
 
             <Surface padding="sm" className="mt-4">

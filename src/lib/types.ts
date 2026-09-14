@@ -168,6 +168,8 @@ export type PublicConfig = {
   checkoutLocalTime: string;
   claimWindowHours: number;
   pendingPaymentTtlMinutes: number;
+  /** False until Nick sets ALLOW_GUEST_BOOKINGS=1. Create-booking refuses when off. */
+  guestBookingsOpen: boolean;
 };
 
 export type SessionResponse = {

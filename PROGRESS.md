@@ -36,6 +36,7 @@ Live. Catalog is empty by design: no real hosts, seed ids hidden. Soft Dist is h
 
 | Item | Status |
 | --- | --- |
+| **Guest bookings** | **Off.** `ALLOW_GUEST_BOOKINGS` unset on Production — create-booking refuses. Nick flips it on Vercel when ready (after required geo-proven scan). |
 | **PAY-02** | **Held.** Connected-account SetupIntent not completed in the browser. Do not start. |
 | **Connect platform profile** | Still required before Express Account Links work (PREFLIGHT §3). |
 | **Magic-link session confirm** | Send passed; Nick Gmail click outstanding. |
