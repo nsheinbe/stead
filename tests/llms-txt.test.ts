@@ -39,7 +39,7 @@ describe("public /llms.txt", () => {
 
   it("treats an empty host-led catalog as honest", () => {
     expect(llms.toLowerCase()).toMatch(/empty/);
-    expect(llms).not.toMatch(/Santa Monica/i);
+    expect(llms).toMatch(/Do not invent seed inventory/i);
   });
 });
 
