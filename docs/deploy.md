@@ -25,6 +25,11 @@ Build the tenant URLs from the branch endpoint after `npm run db:bootstrap-roles
 
 If you enable the Neon–Vercel integration it will inject a `DATABASE_URL` for the branch owner. **Overwrite it.** Leave that value in `DATABASE_URL` and every tenant query is a silent cross-member read until `assertTenantRole` 503s. Prefer setting the three variables yourself in the Vercel project.
 
+Soft Dist on **openstead.app** is host-led and ships with an empty catalog.
+First-user smoke, empty vs first-host states, and Nick-gates:
+[`docs/soft-launch.md`](soft-launch.md). Do not seed Production. Do not run
+`npm run db:migrate` against Neon without Nick.
+
 ## First production deploy
 
 1. Create the Neon project (`stead`). Do not create `app_user` in the console — those roles are `neon_superuser` members. The migration creates ordinary roles.

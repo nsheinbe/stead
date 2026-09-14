@@ -1,10 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
+import { CatalogEmptyActions, CATALOG_EMPTY_COPY } from "../components/CatalogEmpty";
 import { ExploreFilters, filtersFromSearch } from "../components/ExploreFilters";
 import { ListingCard, ListingCardSkeleton } from "../components/ListingCard";
 import { Shell } from "../components/Shell";
-import { Button, ButtonLink, EmptyState, PageHeader, StatusMessage } from "../components/ui";
+import { Button, EmptyState, PageHeader, StatusMessage } from "../components/ui";
 import { api } from "../lib/api";
+import { exploreResultsView } from "../lib/exploreEmpty";
 import { listingFiltersKey } from "../lib/filters";
 import { MIN_STAY_NIGHTS } from "../lib/money";
 
@@ -38,6 +40,14 @@ export function ExplorePage() {
   const feeBps = config.data?.networkFeeBps ?? null;
   const results = listings.data;
   const refreshing = listings.isFetching && !listings.isPending;
+  const view = exploreResultsView({
+    listingsPending: listings.isPending,
+    listingsError: listings.isError,
+    resultCount: results?.length,
+    catalogPending: catalog.isPending,
+    catalogCount: catalog.data?.length,
+    hasFilters,
+  });
 
   return (
     <Shell title="Find a home">
@@ -47,14 +57,16 @@ export function ExplorePage() {
           description={`Stays of ${MIN_STAY_NIGHTS} nights or more.`}
         />
 
-        <ExploreFilters
-          listings={catalog.data ?? []}
-          filters={filters}
-          resultCount={results?.length}
-          busy={refreshing}
-        />
+        {view !== "catalog_empty" ? (
+          <ExploreFilters
+            listings={catalog.data ?? []}
+            filters={filters}
+            resultCount={results?.length}
+            busy={refreshing}
+          />
+        ) : null}
 
-        {listings.isPending ? (
+        {view === "loading" ? (
           <>
             <p role="status" className="sr-only">
               Loading homes
@@ -67,7 +79,7 @@ export function ExplorePage() {
               ))}
             </ul>
           </>
-        ) : listings.isError ? (
+        ) : view === "error" ? (
           <StatusMessage
             tone="danger"
             title="We couldn't load homes. Please try again."
@@ -79,26 +91,25 @@ export function ExplorePage() {
           >
             <p>Your filters are still here.</p>
           </StatusMessage>
-        ) : results && results.length === 0 ? (
-          hasFilters ? (
-            <EmptyState
-              title="No homes match these filters."
-              action={
-                <Button variant="secondary" onClick={() => setSearchParams(new URLSearchParams())}>
-                  Clear filters
-                </Button>
-              }
-            >
-              <p>Try another location or adjust your filters.</p>
-            </EmptyState>
-          ) : (
-            <EmptyState
-              title="No homes are listed right now."
-              action={<ButtonLink to="/for-homeowners">List your home</ButtonLink>}
-            >
-              <p>Check back for new homes. If you have a place to share, you can create a listing today.</p>
-            </EmptyState>
-          )
+        ) : view === "filters_empty" ? (
+          <EmptyState
+            title="No homes match these filters."
+            action={
+              <Button variant="secondary" onClick={() => setSearchParams(new URLSearchParams())}>
+                Clear filters
+              </Button>
+            }
+          >
+            <p>Try another location or adjust your filters.</p>
+          </EmptyState>
+        ) : view === "catalog_empty" ? (
+          <EmptyState
+            title={CATALOG_EMPTY_COPY.title}
+            testId="explore-empty-catalog"
+            action={<CatalogEmptyActions />}
+          >
+            <p>{CATALOG_EMPTY_COPY.body}</p>
+          </EmptyState>
         ) : (
           <ul
             className={`m-0 grid list-none gap-6 p-0 sm:grid-cols-2 lg:grid-cols-3 ${
