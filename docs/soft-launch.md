@@ -70,16 +70,20 @@ address, or description). Another device still signs in and lands on
 | --- | --- | --- |
 | **Magic-link session confirm** | SEND smoke PASS (Resend Pro). Waiting on Nick to open the Gmail link and confirm the session cookie. | Without a confirmed session, the first host cannot save a draft. |
 | **Connect platform profile** | Still required for Express Account Links (PREFLIGHT §3). | `/host/payouts` → Continue to Stripe 503s until the Dashboard platform profile exists. Live stay charges already fail closed without a host `acct_`. |
-| **Guest bookings (`ALLOW_GUEST_BOOKINGS`)** | **Off on Production.** Unset or `0` refuses create-booking fail-closed. | Soft Dist has **no live rentals** until Nick flips `ALLOW_GUEST_BOOKINGS=1` on the Vercel Production environment. Quote stays read-only. Book / Reserve shows “Not open for bookings yet” (no Payment Element). **Launch criterion:** required geo-proven home scan ships first (separate Phase — do not build the scan here). Then Nick turns bookings on. |
+| **Guest bookings (`ALLOW_GUEST_BOOKINGS`)** | **Off on Production.** Unset or `0` refuses create-booking fail-closed. | Soft Dist has **no live rentals** until Nick flips `ALLOW_GUEST_BOOKINGS=1` on the Vercel Production environment. Quote stays read-only. Book / Reserve shows “Not open for bookings yet” (no Payment Element). **Launch criterion:** required geo-proven home scan ships first (Next Phase — plan only, no scan code here). Then Nick turns bookings on. |
 | **PAY-02** | **Held. Do not start.** | Connected-account SetupIntent is created and returned; the browser does not complete it. No verified test-mode deposit setup / payment recovery. Do not claim live checkout. |
 | **No seed on production** | By design (`#24`). | Empty inventory is honest. Never set `ALLOW_DEMO_LISTINGS` on Production. `npm run db:seed` refuses `openstead.app`. |
 | **`bookings_min_stay` NOT VALID** | Leftover. | `drizzle/0003_regulatory_min_stay.sql` adds `CHECK (nights >= 30)`. If Neon still shows the constraint `NOT VALID`, validating it is an owner operation on existing rows — Nick-gated. App quote and create-booking already reject `< 30`. **Do not `db:migrate` blindly.** |
 | **Manual QA matrix** | Not performed. | Screen reader, real devices, measured contrast, photo upload, Connect onboarding, reduced motion: [`docs/redesign/QA-01-verification.md`](redesign/QA-01-verification.md) §4. |
 | **Cron on Hobby** | Unchanged. | `expire-pending` is not in `vercel.json`. Production needs an external scheduler (`docs/deploy.md`). |
 
+### Next Phase
+
+Honesty media (required geo-proven host scan before a home is bookable): [`docs/honesty-media/BUILD-PLAN.md`](honesty-media/BUILD-PLAN.md).
+
 ## What this PR does not do
 
-- Geo-proven home scan pipeline (separate Phase; launch criterion only).
+- Geo-proven home scan pipeline (Next Phase; launch criterion only — [`BUILD-PLAN.md`](honesty-media/BUILD-PLAN.md)).
 - PAY-02 (held).
 - Any `drizzle/` change or Neon migrate.
 - Reintroducing seed homes as bookable.
