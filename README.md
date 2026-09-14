@@ -6,7 +6,7 @@ Apache-2.0. Copyright 2026 Stead contributors.
 
 Slices 1–8 are on this tree — the full BUILD_PROMPT plan. Guest booking, escrow, host surface, claims, reviews and the Trust Passport, the landing, messaging and cancellations, Identity and ops, then production readiness (Playwright, rate limits, Vercel + Neon deploy docs, backup/restore). Spec of record: `BUILD_PROMPT.md` (see the stack amendment at the top of it). Design truth: `/design` (do not edit). Slice status: `PROGRESS.md`.
 
-Deploy: [`docs/deploy.md`](docs/deploy.md). Backup/restore: [`docs/backup-restore.md`](docs/backup-restore.md). Playwright: [`docs/e2e.md`](docs/e2e.md).
+Deploy: [`docs/deploy.md`](docs/deploy.md). Soft Dist first-user path and Nick-gates: [`docs/soft-launch.md`](docs/soft-launch.md). Backup/restore: [`docs/backup-restore.md`](docs/backup-restore.md). Playwright: [`docs/e2e.md`](docs/e2e.md).
 
 ## Stack
 
@@ -26,7 +26,7 @@ api/index.js  Vercel function; vercel.json rewrites /api/* here.
               Loads dist-api/handler.js, which is server/ bundled at build time.
 drizzle/      Append-only SQL migrations. Source of truth for the schema and the policies.
 scripts/      db:migrate, db:seed, db:bootstrap-roles, verify:neon, e2e-server.
-docs/         deploy pipeline, backup/restore, Playwright.
+docs/         deploy pipeline, soft-launch Dist smoke, backup/restore, Playwright.
 ```
 
 ## Row-level security

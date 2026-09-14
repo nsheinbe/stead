@@ -84,6 +84,67 @@ test.describe("public pages", () => {
     await expect(page).not.toHaveURL(/q=/);
   });
 
+  test("empty explore offers a host-led first-user path, even with leftover search params", async ({
+    page,
+  }) => {
+    // Soft Dist has no published homes. Stub the catalog so leftover seed rows
+    // on a shared e2e database cannot hide the empty-marketplace path.
+    await page.route("**/api/listings**", async (route) => {
+      const url = new URL(route.request().url());
+      if (url.pathname === "/api/listings") {
+        await route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
+        return;
+      }
+      await route.continue();
+    });
+
+    await page.goto("/explore?q=Hudson");
+    const empty = page.getByTestId("explore-empty-catalog");
+    await expect(empty.getByRole("heading", { name: "No homes are listed right now." })).toBeVisible();
+    await expect(page.getByText("No homes match these filters.")).toHaveCount(0);
+    await expect(empty.getByRole("link", { name: "List your home" })).toHaveAttribute(
+      "href",
+      "/for-homeowners",
+    );
+    await expect(empty.getByRole("link", { name: "Start your listing" })).toHaveAttribute(
+      "href",
+      "/host/start",
+    );
+
+    await empty.getByRole("link", { name: "List your home" }).click();
+    await expect(page).toHaveURL(/\/for-homeowners$/);
+    await page.getByRole("link", { name: "Start your listing" }).first().click();
+    await expect(page).toHaveURL(/\/host\/start$/);
+    await expect(page.getByRole("heading", { level: 1, name: "Start your listing" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Continue with your email" })).toHaveAttribute(
+      "href",
+      "/login?next=%2Fhost%2Fstart&intent=homeowner&source=homeowner_hero",
+    );
+  });
+
+  test("landing empty inventory points homeowners to list", async ({ page }) => {
+    await page.route("**/api/listings**", async (route) => {
+      const url = new URL(route.request().url());
+      if (url.pathname === "/api/listings") {
+        await route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
+        return;
+      }
+      await route.continue();
+    });
+
+    await page.goto("/");
+    const empty = page.getByTestId("landing-empty-catalog");
+    await expect(empty.getByRole("heading", { name: "No homes are listed right now." })).toBeVisible();
+    await expect(empty.getByRole("link", { name: "List your home" })).toHaveAttribute(
+      "href",
+      "/for-homeowners",
+    );
+    await expect(empty.getByRole("link", { name: "Start your listing" })).toHaveAttribute(
+      "href",
+      "/host/start",
+    );
+  });
+
   test("a home page prices the minimum stay and offers dates", async ({ page }) => {
     await ensureDb();
     const { listingId, title } = await seedBookableParty("Detail cottage");

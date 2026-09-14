@@ -5,6 +5,9 @@ This is the honest inventory for the phase-3 redesign branch
 not actually run is recorded as not run rather than described in a way that
 reads like a pass.
 
+Soft Dist known issues and Nick-gates live in [`docs/soft-launch.md`](../soft-launch.md).
+This file remains the redesign QA record. PAY-02 is still held.
+
 ## 1. Automated suites
 
 | Suite | Command | Scope |

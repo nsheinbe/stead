@@ -6,7 +6,7 @@ Two paths the spec asked for, plus a browser smoke, plus a **gated** live Stripe
 | --- | --- | --- |
 | book → check-in → checkout → deposit release | `e2e/lifecycle.spec.ts` | HTTP against the running app; mock Stripe; crons drive the escrow machine |
 | cancel-with-refund | `e2e/cancel.spec.ts` | HTTP; flexible policy, more than 24h out |
-| landing / explore / cancel from `/trips/:id` | `e2e/ui.spec.ts` | Chromium |
+| landing / explore / cancel from `/trips/:id` | `e2e/ui.spec.ts` | Chromium; includes empty-catalog → List your home / `/host/start` |
 | live destination charge | `e2e/stripe.live.spec.ts` | **gated** — `npm run test:e2e:stripe` with `STRIPE_E2E=1` and your own `sk_test_` keys |
 
 The default e2e server **unsets** Stripe keys so create-booking always takes the mock-payment path. That is why CI is stable without secrets. Do not put `sk_live_` keys, webhook secrets, or anyone else's test keys in the repo or in CI.

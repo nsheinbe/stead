@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { CatalogEmptyActions, CATALOG_EMPTY_COPY } from "../components/CatalogEmpty";
 import { ListingCard, ListingCardSkeleton } from "../components/ListingCard";
 import { Shell } from "../components/Shell";
 import { Button, ButtonLink, Card, DataList, DataRow, StatusMessage, Surface, TextInput } from "../components/ui";
@@ -168,13 +169,11 @@ export function LandingPage() {
                 }
               />
             ) : preview.length === 0 ? (
-              <Surface>
-                <h3 className="m-0 text-card-title">No homes are listed right now.</h3>
-                <p className="mb-0 mt-2 max-w-reading text-ink-secondary">
-                  Check back for new homes. If you have a place to share, you can create a listing today.
-                </p>
+              <Surface data-testid="landing-empty-catalog">
+                <h3 className="m-0 text-card-title">{CATALOG_EMPTY_COPY.title}</h3>
+                <p className="mb-0 mt-2 max-w-reading text-ink-secondary">{CATALOG_EMPTY_COPY.body}</p>
                 <div className="mt-5 flex flex-wrap gap-3">
-                  <ButtonLink to="/for-homeowners">List your home</ButtonLink>
+                  <CatalogEmptyActions />
                 </div>
               </Surface>
             ) : (
