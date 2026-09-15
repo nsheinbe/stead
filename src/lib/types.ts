@@ -571,6 +571,32 @@ export type ScanThresholds = {
   maxWalkMinutes: number;
 };
 
+/** One declared part of the walk's video, as the server has it. */
+export type HostScanUploadPart = {
+  seq: number;
+  bytes: number;
+  confirmed: boolean;
+};
+
+/** The upload as the server has it: declared parts and which ones it has seen. */
+export type HostScanUpload = {
+  mimeType: string;
+  durationMs: number | null;
+  partCount: number;
+  parts: HostScanUploadPart[];
+  totalBytes: number;
+  confirmedBytes: number;
+  startedAt: string | null;
+  uploadedAt: string | null;
+};
+
+/** Size caps the server applies to a declared package. */
+export type ScanUploadLimits = {
+  maxUploadBytes: number;
+  maxPartBytes: number;
+  maxParts: number;
+};
+
 /** A scan as its owner sees it. Every verdict field is the server's word. */
 export type HostScanRow = {
   id: string;
@@ -587,6 +613,8 @@ export type HostScanRow = {
   revokedAt: string | null;
   revokedReason: string | null;
   createdAt: string;
+  /** Null until a package is declared (HM-02). */
+  upload: HostScanUpload | null;
 };
 
 /** `GET /api/listings/:id/scan` — the scan hub, owner-only. */
@@ -602,8 +630,31 @@ export type HostScan = {
   policyVersion: string;
   /** Thresholds a new walk would be judged against (current config). */
   thresholds: ScanThresholds;
+  uploadLimits: ScanUploadLimits;
+  /** False when this deployment has no S3_* bucket; uploads are refused with a 503. */
+  storageConfigured: boolean;
   /** The newest scan for this listing, or null when none was ever started. */
   scan: HostScanRow | null;
+};
+
+export type ScanUploadDeclareRequest = {
+  mimeType: string;
+  durationMs: number;
+  clientEnvironment: Record<string, string | number | boolean>;
+  parts: { seq: number; bytes: number }[];
+};
+
+export type ScanUploadDeclareResponse = {
+  parts: HostScanUploadPart[];
+  limits: ScanUploadLimits;
+};
+
+export type ScanUploadPresignResponse = {
+  uploads: { seq: number; uploadUrl: string; contentType: string; expiresInSeconds: number }[];
+};
+
+export type ScanUploadConfirmResponse = {
+  results: { seq: number; confirmed: boolean; bytes: number | null }[];
 };
 
 export type StartScanRequest = {

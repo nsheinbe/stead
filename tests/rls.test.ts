@@ -1224,3 +1224,130 @@ describeDb("honesty scans are the owner's to read and never theirs to judge", ()
     expect(await del(hostB, judged)).toBe(0);
   });
 });
+
+describeDb("upload parts are the owner's to read and never anyone's to write (HM-02)", () => {
+  afterAll(async () => {
+    await closeTestDb();
+  });
+
+  /** A located walk with two declared parts, written as the owner. */
+  async function declaredWalk(hostId: string, listingId: string): Promise<string> {
+    const [scan] = (await asOwner((db) =>
+      db.execute(sql`
+        INSERT INTO public.listing_scans (
+          listing_id, host_id, policy_version, pin_lat, pin_lng,
+          accuracy_max_meters, geofence_radius_meters, indoor_tolerance_meters,
+          min_samples, bookend_min_samples, max_gap_seconds, max_walk_minutes,
+          geofence, sample_count, video_mime_type, video_part_count
+        ) VALUES (
+          ${listingId}::uuid, ${hostId}::uuid, '1', 40.7128, -74.006,
+          25, 60, 500, 20, 3, 45, 20,
+          'passed'::public.scan_geofence, 50, 'video/webm', 2
+        )
+        RETURNING id
+      `),
+    )) as unknown as { id: string }[];
+    const scanId = scan!.id;
+    await asOwner((db) =>
+      db.execute(sql`
+        INSERT INTO public.scan_upload_parts (scan_id, seq, object_key, content_type, expected_bytes)
+        VALUES (${scanId}::uuid, 0, ${`listings/${listingId}/scans/${scanId}/video/part-00000.webm`}, 'video/webm', 5000),
+               (${scanId}::uuid, 1, ${`listings/${listingId}/scans/${scanId}/video/part-00001.webm`}, 'video/webm', 3000)
+      `),
+    );
+    return scanId;
+  }
+
+  it("shows a host their own parts and nobody else's", async () => {
+    const hostA = id();
+    const hostB = id();
+    const listingA = id();
+    await insertMember(hostA, `host-a-${hostA}@stead.example`, "Host A", true);
+    await insertMember(hostB, `host-b-${hostB}@stead.example`, "Host B", true);
+    await insertListing({ id: listingA, hostId: hostA, title: "Parts probe", status: "draft" });
+    const scanId = await declaredWalk(hostA, listingA);
+
+    const read = (viewer: string | null) =>
+      rawAsMember(viewer, (tx) => tx`SELECT seq FROM public.scan_upload_parts WHERE scan_id = ${scanId}::uuid`);
+    expect((await read(hostA)).length).toBe(2);
+    expect((await read(hostB)).length).toBe(0);
+    expect((await read(null)).length).toBe(0);
+  });
+
+  it("refuses every direct write, including the owner's, and every receipt a client would forge", async () => {
+    const hostA = id();
+    const hostB = id();
+    const listingA = id();
+    await insertMember(hostA, `host-a-${hostA}@stead.example`, "Host A", true);
+    await insertMember(hostB, `host-b-${hostB}@stead.example`, "Host B", true);
+    await insertListing({ id: listingA, hostId: hostA, title: "Parts write probe", status: "draft" });
+    const scanId = await declaredWalk(hostA, listingA);
+
+    const outcome = <T,>(promise: Promise<T>) =>
+      promise.then(
+        (rows) => (Array.isArray(rows) ? rows.length : 0),
+        () => "refused" as const,
+      );
+
+    // No INSERT, UPDATE or DELETE grant: the owner cannot write a receipt or change a size.
+    expect(
+      await outcome(
+        rawAsMember(hostA, (tx) => tx`
+          INSERT INTO public.scan_upload_parts (scan_id, seq, object_key, content_type, expected_bytes)
+          VALUES (${scanId}::uuid, 2, 'anything', 'video/webm', 1) RETURNING seq`),
+      ),
+    ).toBe("refused");
+    expect(
+      await outcome(
+        rawAsMember(hostA, (tx) => tx`
+          UPDATE public.scan_upload_parts SET confirmed_at = now(), confirmed_bytes = expected_bytes
+          WHERE scan_id = ${scanId}::uuid RETURNING seq`),
+      ),
+    ).toBe("refused");
+    expect(
+      await outcome(
+        rawAsMember(hostA, (tx) => tx`
+          UPDATE public.scan_upload_parts SET expected_bytes = 1 WHERE scan_id = ${scanId}::uuid RETURNING seq`),
+      ),
+    ).toBe("refused");
+    expect(
+      await outcome(rawAsMember(hostA, (tx) => tx`DELETE FROM public.scan_upload_parts WHERE scan_id = ${scanId}::uuid RETURNING seq`)),
+    ).toBe("refused");
+    // Nor can the owner move the scan to uploaded by hand.
+    expect(
+      await outcome(
+        rawAsMember(hostA, (tx) => tx`UPDATE public.listing_scans SET state = 'uploaded' WHERE id = ${scanId}::uuid RETURNING id`),
+      ),
+    ).toBe("refused");
+
+    // The functions answer a stranger and nobody with false, and never a partial package with true.
+    const confirmAs = async (viewer: string | null, bytes: number) => {
+      const [row] = (await rawAsMember(viewer, (tx) => tx`SELECT app.confirm_scan_part(${scanId}::uuid, 0, ${bytes}::bigint) AS ok`)) as unknown as { ok: boolean }[];
+      return row?.ok;
+    };
+    expect(await confirmAs(hostB, 5000)).toBe(false);
+    expect(await confirmAs(null, 5000)).toBe(false);
+    expect(await confirmAs(hostA, 4999)).toBe(false);
+    expect(await confirmAs(hostA, 5000)).toBe(true);
+
+    const completeAs = async (viewer: string | null) => {
+      const [row] = (await rawAsMember(viewer, (tx) => tx`SELECT app.complete_scan_upload(${scanId}::uuid, 'm.json') AS ok`)) as unknown as { ok: boolean }[];
+      return row?.ok;
+    };
+    expect(await completeAs(hostA)).toBe(false);
+    expect(await completeAs(hostB)).toBe(false);
+    const [second] = (await rawAsMember(hostA, (tx) => tx`SELECT app.confirm_scan_part(${scanId}::uuid, 1, 3000::bigint) AS ok`)) as unknown as { ok: boolean }[];
+    expect(second?.ok).toBe(true);
+    expect(await completeAs(hostB)).toBe(false);
+    expect(await completeAs(null)).toBe(false);
+    expect(await completeAs(hostA)).toBe(true);
+
+    const [state] = (await rawAsMember(hostA, (tx) => tx`SELECT state::text, video_bytes::int AS bytes FROM public.listing_scans WHERE id = ${scanId}::uuid`)) as unknown as { state: string; bytes: number }[];
+    expect(state).toEqual({ state: "uploaded", bytes: 8000 });
+
+    // A stranger cannot declare over it either.
+    const [declared] = (await rawAsMember(hostB, (tx) => tx`
+      SELECT app.declare_scan_upload(${scanId}::uuid, 'video/webm', 1, '{}'::jsonb, '[{"seq":0,"bytes":1,"key":"k","contentType":"video/webm"}]'::jsonb) AS ok`)) as unknown as { ok: boolean }[];
+    expect(declared?.ok).toBe(false);
+  });
+});

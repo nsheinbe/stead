@@ -4,7 +4,11 @@ import {
   extensionForImageType,
   listingPhotoKey,
   publicUrlForKey,
+  scanManifestKey,
+  scanPrefix,
+  scanVideoPartKey,
   StorageError,
+  videoBaseType,
 } from "../server/lib/storage";
 
 beforeAll(() => {
@@ -51,5 +55,37 @@ describe("upload keys", () => {
 
   it("builds a public URL without doubling the separator", () => {
     expect(publicUrlForKey("listings/a/b.jpg")).toBe("https://cdn.example.test/stead/listings/a/b.jpg");
+  });
+});
+
+describe("honesty scan keys (HM-02)", () => {
+  const listingId = "3f1e0c9a-1111-4111-8111-111111111111";
+  const scanId = "9b7d0c9a-3333-4333-8333-333333333333";
+
+  it("takes the base video type and refuses anything else", () => {
+    expect(videoBaseType("video/webm;codecs=vp9,opus")).toBe("video/webm");
+    expect(videoBaseType("VIDEO/MP4; codecs=avc1")).toBe("video/mp4");
+    expect(() => videoBaseType("video/x-matroska")).toThrow(StorageError);
+    expect(() => videoBaseType("image/jpeg")).toThrow(StorageError);
+    expect(() => videoBaseType("text/html")).toThrow(StorageError);
+    expect(() => videoBaseType("")).toThrow(StorageError);
+  });
+
+  it("puts every scan object under the scan's own private prefix, in order", () => {
+    expect(scanPrefix(listingId, scanId)).toBe(`listings/${listingId}/scans/${scanId}/`);
+    expect(scanVideoPartKey(listingId, scanId, 0, "video/webm;codecs=vp9")).toBe(
+      `listings/${listingId}/scans/${scanId}/video/part-00000.webm`,
+    );
+    expect(scanVideoPartKey(listingId, scanId, 1234, "video/mp4")).toBe(
+      `listings/${listingId}/scans/${scanId}/video/part-01234.mp4`,
+    );
+    expect(scanManifestKey(listingId, scanId)).toBe(`listings/${listingId}/scans/${scanId}/manifest.json`);
+    // Deterministic: a resumed upload targets the same object.
+    expect(scanVideoPartKey(listingId, scanId, 3, "video/webm")).toBe(scanVideoPartKey(listingId, scanId, 3, "video/webm"));
+  });
+
+  it("refuses a sequence that is not a whole number", () => {
+    expect(() => scanVideoPartKey(listingId, scanId, -1, "video/webm")).toThrow(StorageError);
+    expect(() => scanVideoPartKey(listingId, scanId, 1.5, "video/webm")).toThrow(StorageError);
   });
 });

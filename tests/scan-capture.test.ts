@@ -114,11 +114,14 @@ function hub(overrides: { hasPin?: boolean; scan?: Partial<HostScanRow> | null }
     revokedAt: null,
     revokedReason: null,
     createdAt: "2026-09-15T14:00:00.000Z",
+    upload: null,
   };
   return {
     listing: { id: "l1", title: "Gatehouse", type: "entire_home", status: "draft", hasPin: overrides.hasPin ?? true },
     policyVersion: "1",
     thresholds: base.thresholds,
+    uploadLimits: { maxUploadBytes: 1_500_000_000, maxPartBytes: 67_108_864, maxParts: 2000 },
+    storageConfigured: true,
     scan: overrides.scan === null ? null : { ...base, ...overrides.scan },
   };
 }
@@ -136,6 +139,8 @@ describe("the hub reads only the server's state", () => {
     expect(hubKind(hub({ scan: { state: "rejected", geofence: "failed", rejectReason: "geofence" } }))).toBe("rejected");
     expect(scanStatePill(hub({ scan: { state: "rejected", geofence: "failed", rejectReason: "geofence" } })).tone).toBe("warning");
     expect(hubKind(hub({ scan: { state: "revoked", revokedReason: "pin_changed" } }))).toBe("revoked");
+    expect(hubKind(hub({ scan: { state: "uploaded", geofence: "passed" } }))).toBe("queued");
+    expect(scanStatePill(hub({ scan: { state: "uploaded", geofence: "passed" } }))).toEqual({ label: HM["hm.scan.state.queued"], tone: "neutral" });
     expect(hubKind(hub({ scan: { state: "verified", geofence: "passed" } }))).toBe("later");
     expect(scanStatePill(hub({ scan: { state: "verified", geofence: "passed" } })).tone).toBe("brand");
   });

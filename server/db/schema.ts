@@ -6,6 +6,7 @@
  */
 import { relations, sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   date,
   doublePrecision,
@@ -252,11 +253,43 @@ export const listingScans = pgTable(
     revokedReason: text("revoked_reason"),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull().defaultNow(),
+    // --- HM-02 (drizzle/0016): the upload. Written by the declare/complete functions only.
+    uploadStartedAt: timestamp("upload_started_at", { mode: "date", withTimezone: true }),
+    uploadedAt: timestamp("uploaded_at", { mode: "date", withTimezone: true }),
+    videoMimeType: text("video_mime_type"),
+    videoPartCount: integer("video_part_count"),
+    videoBytes: bigint("video_bytes", { mode: "number" }),
+    durationMs: integer("duration_ms"),
+    manifestKey: text("manifest_key"),
+    clientEnvironment: jsonb("client_environment").$type<Record<string, unknown>>(),
   },
   (table) => [
     index("listing_scans_listing_created_idx").on(table.listingId, table.createdAt),
     index("listing_scans_host_idx").on(table.hostId),
   ],
+);
+
+/**
+ * One declared part of a walk's video (drizzle/0016). Keys are the server's;
+ * receipts are written only by app.confirm_scan_part after a HEAD on the
+ * object. app_user reads its own rows and never writes one.
+ */
+export const scanUploadParts = pgTable(
+  "scan_upload_parts",
+  {
+    scanId: uuid("scan_id")
+      .notNull()
+      .references(() => listingScans.id, { onDelete: "cascade" }),
+    seq: integer("seq").notNull(),
+    objectKey: text("object_key").notNull().unique(),
+    contentType: text("content_type").notNull(),
+    expectedBytes: bigint("expected_bytes", { mode: "number" }).notNull(),
+    confirmedBytes: bigint("confirmed_bytes", { mode: "number" }),
+    declaredAt: timestamp("declared_at", { mode: "date", withTimezone: true }).notNull().defaultNow(),
+    presignedAt: timestamp("presigned_at", { mode: "date", withTimezone: true }),
+    confirmedAt: timestamp("confirmed_at", { mode: "date", withTimezone: true }),
+  },
+  (table) => [primaryKey({ columns: [table.scanId, table.seq] })],
 );
 
 /** The location record behind a verdict. No member can read or write it. */
@@ -567,8 +600,13 @@ export const listingBlackoutsRelations = relations(listingBlackouts, ({ one }) =
   listing: one(listings, { fields: [listingBlackouts.listingId], references: [listings.id] }),
 }));
 
-export const listingScansRelations = relations(listingScans, ({ one }) => ({
+export const listingScansRelations = relations(listingScans, ({ one, many }) => ({
   listing: one(listings, { fields: [listingScans.listingId], references: [listings.id] }),
+  uploadParts: many(scanUploadParts),
+}));
+
+export const scanUploadPartsRelations = relations(scanUploadParts, ({ one }) => ({
+  scan: one(listingScans, { fields: [scanUploadParts.scanId], references: [listingScans.id] }),
 }));
 
 export const bookingsRelations = relations(bookings, ({ one }) => ({
