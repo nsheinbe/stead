@@ -68,7 +68,7 @@ with HM-05; the strings are locked now.
 | Gate | Set by | This phase |
 | --- | --- | --- |
 | Platform kill-switch `ALLOW_GUEST_BOOKINGS` | Nick, on Vercel Production, exact string `1` | Untouched. Unset, `0`, `true`, `yes` all refuse create-booking. |
-| Listing scan-verified | Server / worker | HM-08 enforces it before publish and bookable. HM-01 only records the location verdict. |
+| Listing scan-verified | Server / worker | HM-08 enforces it before publish and bookable. HM-01 records the location verdict; HM-02 records the complete upload. Neither verifies. |
 | Payout-ready | Stripe | Unchanged. |
 
 A verified scan never opens bookings. Publishing never verifies a scan.
@@ -93,5 +93,30 @@ missing or out of order), `accuracy` (bookends present but too rough),
 `geofence` (a sample beyond reach). EXIF is never consulted. Network or IP
 geolocation is never used, for the pin or the walk. The browser never
 displays a verdict it computed.
+
+## 7. What HM-02 enforces today
+
+The recording leaves the phone only after the location check passed, and
+only to the bucket: the browser PUTs video parts on presigned URLs for keys
+the server chose under `listings/<listing>/scans/<scan>/`, a private prefix
+that never gets a public URL. The server's receipt for a part is a HEAD on
+the object compared to the declared size; a client's word about bytes is
+never a receipt. The scan becomes `uploaded` only when every declared part
+is confirmed at its declared size (`app.complete_scan_upload`), and a
+confirmed part fixes the package's shape. The manifest the worker will read
+is written by the server from what the server recorded; the location record
+stays in the database and is not copied into it.
+
+Caps, from `app_config`:
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `scan_max_upload_bytes` | 1,500,000,000 | The whole package. Over it the declaration is refused (`hm.upload.tooLarge.*`). |
+| `scan_max_part_bytes` | 67,108,864 | One part. The browser sends about 8 MB parts. |
+| `scan_max_parts` | 2000 | Parts per package. |
+
+`uploaded` is a queue, not a result: the hub says reconstruction isn't
+switched on yet (`hm.build.notYet`). Moving the front door pin takes an
+uploaded walk down like any judged one.
 
 Copyright 2026 Stead contributors.

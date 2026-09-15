@@ -100,14 +100,14 @@ async function main(): Promise<void> {
          AND c.relname IN ('app_config','profiles','listings','listing_photos','listing_blackouts',
                            'bookings','escrow_deposits','escrow_audit','stripe_events','cron_heartbeats',
                            'refunds','payouts','claims','claim_evidence',
-                           'listing_scans','scan_geo_samples')
+                           'listing_scans','scan_geo_samples','scan_upload_parts')
        ORDER BY c.relname
     `;
     const unprotected = tables.filter((t) => !t.relrowsecurity).map((t) => t.relname);
     const forced = tables.filter((t) => t.relforcerowsecurity).map((t) => t.relname);
     record(
       "RLS is enabled on tenant tables",
-      tables.length === 16 && unprotected.length === 0,
+      tables.length === 17 && unprotected.length === 0,
       unprotected.length ? `no RLS on ${unprotected.join(", ")}` : `${tables.length} tables`,
     );
     record("RLS is not forced", forced.length === 0, forced.length ? forced.join(", ") : "owner can migrate");

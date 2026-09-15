@@ -295,6 +295,20 @@ Route metadata for `src/lib/routes.ts`: `/host/listings/:id/scan*` → title
    Never proxy video bytes through the API. Never let a host attach an
    object outside their own listing prefix (the server refuses; the client
    never constructs keys).
+9. **Built (HM-02).** As specified, with these adjustments from the
+   HM-01 order of events: the location check happens *before* the upload
+   (a walk that fails it never leaves the phone), so the Checking / Located
+   / Not verified states above belong to the hub’s located flow, and the
+   Uploading card ends at `hm.upload.done` → the Queued card (HM-D04,
+   `hm.build.queued.title` + `hm.build.notYet`). The card starts on its own
+   when the hub finds the recording in this browser; on any other device
+   the hub shows `hm.hub.located.*` instead. Parts are ~8 MB groups of
+   recorder chunks; “n of m parts” moves only on the server’s receipt (a
+   HEAD on the object at the declared size), the bar moves with bytes in
+   flight. Added copy: `hm.upload.preparing`, `.paused`, `.offline`,
+   `.completing`, `.group.location.done`, `.group.details.pending`,
+   `.unconfigured.*`, `.mismatch.*`. Pause/Resume is one toggle; offline
+   resumes on the browser’s `online` event.
 
 ---
 

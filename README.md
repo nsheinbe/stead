@@ -45,7 +45,7 @@ The owner has `BYPASSRLS` and owns every table, so none of the policies apply to
 
 **Neon makes that the likely mistake rather than a theoretical one.** A project hands you exactly one connection string, for a role that is a `neon_superuser` member with `BYPASSRLS`. Pasting it into `DATABASE_URL` turns the entire security model off — nothing errors, no policy is violated, queries simply return every member's rows. So the app checks: before it serves a single tenant query it confirms the connection role is ordinary, testing all three routes to bypassing RLS (the `BYPASSRLS` attribute, `SUPERUSER`, and table ownership) plus `row_security_active` as the ground truth. One memoized round trip per process; a privileged role gets a 503 and a loud log line instead of silent cross-member reads.
 
-State transitions are closed to `app_user` entirely. It has no `UPDATE` grant on `bookings` or `claims`, no grant that can write `reviews.published_at`, no `INSERT` or `UPDATE` grant on `listing_scans` (a host can read their own honesty scans and delete an unfinished one, never write a verdict), and no grant at all on `stripe_events`, `cron_heartbeats` or `scan_geo_samples`; the enumerated `SECURITY DEFINER` functions in `app` are the complete list of state changes the API can make. That is narrower than what it replaces — the Supabase service role could write any row on any table.
+State transitions are closed to `app_user` entirely. It has no `UPDATE` grant on `bookings` or `claims`, no grant that can write `reviews.published_at`, no `INSERT` or `UPDATE` grant on `listing_scans` or `scan_upload_parts` (a host can read their own honesty scans and upload parts and delete an unfinished walk, never write a verdict or a receipt), and no grant at all on `stripe_events`, `cron_heartbeats` or `scan_geo_samples`; the enumerated `SECURITY DEFINER` functions in `app` are the complete list of state changes the API can make. That is narrower than what it replaces — the Supabase service role could write any row on any table.
 
 ## Routes
 
@@ -63,7 +63,7 @@ State transitions are closed to `app_user` entirely. It has no `UPDATE` grant on
 | `/ops` | Minimal ops view — disputes, stale heartbeats, frozen payouts. Gated by `is_ops`. |
 | `/host/start` | Canonical entry to listing creation; signed-out visitors get a contextual sign-in that returns here |
 | `/host/listings` · `/host/payouts` · `/host/claims` | Host surface |
-| `/host/listings/:id/scan` · `/scan/capture` | Honesty scan hub and phone viewfinder (HM-01): start a walk, record a continuous location record, get the server's geofence verdict. Video stays on the phone until HM-02. |
+| `/host/listings/:id/scan` · `/scan/capture` | Honesty scan hub and phone viewfinder (HM-01, HM-02): start a walk, record a continuous location record, get the server's geofence verdict, then upload the recording from the phone that made it straight to the bucket. |
 | `/host/claims/:id` | Claim detail, evidence, arbiter resolution |
 | `/login` | Magic-link email. Google OAuth is deferred. |
 | anything else | Deliberate not-found view with a way back |
@@ -82,6 +82,9 @@ The landing fee slider uses `quoteStay` for Stead's column so it cannot disagree
 | `GET`/`POST` | `/api/listings/:id/scan` | owner — honesty scan hub / start a walk (needs a front door pin and the current policy version) |
 | `POST` | `/api/listings/:id/scan/:scanId/location` | owner — the walk's location record; the server judges it (`server/lib/geofence.ts`) and stores the verdict |
 | `DELETE` | `/api/listings/:id/scan/:scanId` | owner — discard an unfinished walk (RLS refuses a judged one) |
+| `POST` | `/api/listings/:id/scan/:scanId/upload` | owner — declare the recording's parts for a located walk; the server chooses every object key and caps sizes from `app_config` |
+| `POST` | `/api/listings/:id/scan/:scanId/upload/presign` · `/upload/confirm` | owner — short-lived PUT URLs for declared parts; receipts by a server-side HEAD against the declared size. Both 503 without `S3_*` |
+| `POST` | `/api/listings/:id/scan/:scanId/upload/complete` | owner — writes the manifest and moves the scan to `uploaded` only when every part is confirmed |
 | `GET` | `/api/trips` · `/api/trips/:id` | signed-in guest; `/:id` also the listing host |
 | `GET`/`POST` | `/api/trips/:id/cancellation` · `/cancel` | stay parties — preview / cancel-booking. Cancel is rate-limited. |
 | `GET`/`POST` | `/api/messages` · `/unread` · `/:listingId/:guestId` | participants — threads, send-message (rate-limited), mark-read |
@@ -312,6 +315,8 @@ S3_SECRET_ACCESS_KEY=minioadmin
 S3_FORCE_PATH_STYLE=true
 S3_PUBLIC_URL=http://127.0.0.1:9000/stead
 ```
+
+Honesty scan recordings (HM-02) go into the same bucket under `listings/<listingId>/scans/<scanId>/`, uploaded by the phone on presigned PUT URLs. That prefix is private: nothing under it ever gets a public URL. Photos sit directly under `listings/<listingId>/`, so a bucket policy that makes `listings/*` public-read for them must carry an explicit deny on `listings/*/scans/*`, or grant read only on the top-level objects of each listing prefix, never the whole listing prefix. The bucket's CORS rules must allow `PUT` with a `Content-Type` header from the app's origin for the upload to work at all.
 
 ## Tests that need Postgres
 
