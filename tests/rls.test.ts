@@ -1100,3 +1100,127 @@ describeDb("cross-role isolation matrix", () => {
     expect(opsArbiter).toBe("refused");
   });
 });
+
+describeDb("honesty scans are the owner's to read and never theirs to judge", () => {
+  afterAll(async () => {
+    await closeTestDb();
+  });
+
+  async function scanFor(hostId: string, listingId: string, judged: boolean): Promise<string> {
+    const [row] = (await asOwner((db) =>
+      db.execute(sql`
+        INSERT INTO public.listing_scans (
+          listing_id, host_id, policy_version, pin_lat, pin_lng,
+          accuracy_max_meters, geofence_radius_meters, indoor_tolerance_meters,
+          min_samples, bookend_min_samples, max_gap_seconds, max_walk_minutes,
+          geofence, sample_count
+        ) VALUES (
+          ${listingId}::uuid, ${hostId}::uuid, '1', 40.7128, -74.006,
+          25, 60, 500, 20, 3, 45, 20,
+          ${judged ? "passed" : "pending"}::public.scan_geofence, ${judged ? 50 : null}
+        )
+        RETURNING id
+      `),
+    )) as unknown as { id: string }[];
+    return row!.id;
+  }
+
+  it("shows a host their own scans and nobody else's", async () => {
+    const hostA = id();
+    const hostB = id();
+    const listingA = id();
+    await insertMember(hostA, `host-a-${hostA}@stead.example`, "Host A", true);
+    await insertMember(hostB, `host-b-${hostB}@stead.example`, "Host B", true);
+    await insertListing({ id: listingA, hostId: hostA, title: "Scan probe", status: "draft" });
+    const scanId = await scanFor(hostA, listingA, false);
+
+    const read = (viewer: string | null) =>
+      rawAsMember(viewer, (tx) => tx`SELECT id FROM public.listing_scans WHERE id = ${scanId}::uuid`);
+    expect((await read(hostA)).length).toBe(1);
+    expect((await read(hostB)).length).toBe(0);
+    expect((await read(null)).length).toBe(0);
+  });
+
+  it("refuses every direct write, including from the owner", async () => {
+    const hostA = id();
+    const listingA = id();
+    await insertMember(hostA, `host-a-${hostA}@stead.example`, "Host A", true);
+    await insertListing({ id: listingA, hostId: hostA, title: "Scan write probe", status: "draft" });
+    const scanId = await scanFor(hostA, listingA, false);
+
+    const outcome = <T,>(promise: Promise<T>) =>
+      promise.then(
+        (rows) => (Array.isArray(rows) ? rows.length : 0),
+        () => "refused" as const,
+      );
+
+    // No INSERT grant.
+    expect(
+      await outcome(
+        rawAsMember(hostA, (tx) => tx`
+          INSERT INTO public.listing_scans (
+            listing_id, host_id, policy_version, pin_lat, pin_lng,
+            accuracy_max_meters, geofence_radius_meters, indoor_tolerance_meters,
+            min_samples, bookend_min_samples, max_gap_seconds, max_walk_minutes
+          ) VALUES (${listingA}::uuid, ${hostA}::uuid, '1', 0, 0, 25, 60, 500, 20, 3, 45, 20)
+          RETURNING id`),
+      ),
+    ).toBe("refused");
+
+    // No UPDATE grant: a host cannot mark their own walk located or verified.
+    expect(
+      await outcome(
+        rawAsMember(hostA, (tx) => tx`UPDATE public.listing_scans SET geofence = 'passed' WHERE id = ${scanId}::uuid RETURNING id`),
+      ),
+    ).toBe("refused");
+    expect(
+      await outcome(
+        rawAsMember(hostA, (tx) => tx`UPDATE public.listing_scans SET state = 'verified' WHERE id = ${scanId}::uuid RETURNING id`),
+      ),
+    ).toBe("refused");
+
+    // The location record is not readable, even by its owner.
+    expect(
+      await outcome(rawAsMember(hostA, (tx) => tx`SELECT scan_id FROM public.scan_geo_samples WHERE scan_id = ${scanId}::uuid`)),
+    ).toBe("refused");
+    expect(
+      await outcome(
+        rawAsMember(hostA, (tx) => tx`
+          INSERT INTO public.scan_geo_samples (scan_id, seq, recorded_at, lat, lng, accuracy_meters, phase)
+          VALUES (${scanId}::uuid, 1, now(), 0, 0, 5, 'indoor') RETURNING scan_id`),
+      ),
+    ).toBe("refused");
+
+    // The functions answer only the owner, and only about the owner's listing.
+    const hostB = id();
+    await insertMember(hostB, `host-b-${hostB}@stead.example`, "Host B", true);
+    const [asStranger] = (await rawAsMember(hostB, (tx) => tx`SELECT app.start_listing_scan(${listingA}::uuid, '1') AS id`)) as unknown as { id: string | null }[];
+    expect(asStranger?.id).toBeNull();
+    const [asNobody] = (await rawAsMember(null, (tx) => tx`SELECT app.start_listing_scan(${listingA}::uuid, '1') AS id`)) as unknown as { id: string | null }[];
+    expect(asNobody?.id).toBeNull();
+    const [recorded] = (await rawAsMember(hostB, (tx) => tx`
+      SELECT app.record_scan_location(${scanId}::uuid, '[]'::jsonb, true, NULL, 0, 0, NULL, NULL) AS ok`)) as unknown as { ok: boolean }[];
+    expect(recorded?.ok).toBe(false);
+  });
+
+  it("lets a host delete only an unfinished walk", async () => {
+    const hostA = id();
+    const listingA = id();
+    await insertMember(hostA, `host-a-${hostA}@stead.example`, "Host A", true);
+    await insertListing({ id: listingA, hostId: hostA, title: "Scan delete probe", status: "draft" });
+    const unfinished = await scanFor(hostA, listingA, false);
+    const judged = await scanFor(hostA, listingA, true);
+
+    const del = (viewer: string, scanId: string) =>
+      rawAsMember(viewer, (tx) => tx`DELETE FROM public.listing_scans WHERE id = ${scanId}::uuid RETURNING id`).then(
+        (rows) => (rows as unknown as { id: string }[]).length,
+        () => "refused" as const,
+      );
+    expect(await del(hostA, judged)).toBe(0);
+    expect(await del(hostA, unfinished)).toBe(1);
+
+    const hostB = id();
+    await insertMember(hostB, `host-b-${hostB}@stead.example`, "Host B", true);
+    expect(await del(hostB, judged)).toBe(0);
+  });
+});

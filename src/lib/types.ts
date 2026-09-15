@@ -69,11 +69,21 @@ export type ListingSummary = {
   photos: ListingPhoto[];
 };
 
+/** The front door pin. Owner-only on the wire; the public listing never carries it. */
+export type ListingCoordinates = { lat: number; lng: number };
+
 export type ListingDetail = ListingSummary & {
   description: string;
   addressLine: string;
   status: ListingStatus;
   host: HostSummary | null;
+  /**
+   * Present only when the viewer owns the listing: `null` until a pin is set.
+   * Absent entirely for everyone else, so a guest cannot read the door from
+   * the public page (HM-01; the public map is HM-06's, with the host's
+   * precision choice).
+   */
+  coordinates?: ListingCoordinates | null;
 };
 
 export type TripListing = {
@@ -345,6 +355,12 @@ export type ListingInput = {
   region?: string;
   country: string;
   timezone: string;
+  /**
+   * The front door pin, both or neither. `null` clears it. The server refuses
+   * one without the other and the database enforces the pair.
+   */
+  lat?: number | null;
+  lng?: number | null;
   nightlyRateCents: number;
   depositCents: number;
   maxGuests: number;
@@ -516,6 +532,94 @@ export const HOST_REVIEW_TAGS = [
   "On-time checkout",
   "Would host again",
 ] as const;
+
+// --- Honesty scans (HM-01) ------------------------------------------------------
+
+export type ScanState =
+  | "capturing"
+  | "uploaded"
+  | "reconstructing"
+  | "needs_mask"
+  | "verified"
+  | "rejected"
+  | "failed"
+  | "revoked";
+
+export type ScanGeofence = "pending" | "passed" | "failed";
+
+export type ScanRejectReason = "geofence" | "samples" | "accuracy" | "bookends";
+
+export type ScanSamplePhase = "outdoor_start" | "indoor" | "outdoor_end";
+
+/** One reading from the phone while recording. Whole metres; ISO time. */
+export type ScanLocationSample = {
+  recordedAt: string;
+  lat: number;
+  lng: number;
+  accuracyMeters: number;
+  phase: ScanSamplePhase;
+};
+
+/** Thresholds the walk is judged against, frozen on the scan when it starts. */
+export type ScanThresholds = {
+  accuracyMaxMeters: number;
+  geofenceRadiusMeters: number;
+  indoorToleranceMeters: number;
+  minSamples: number;
+  bookendMinSamples: number;
+  maxGapSeconds: number;
+  maxWalkMinutes: number;
+};
+
+/** A scan as its owner sees it. Every verdict field is the server's word. */
+export type HostScanRow = {
+  id: string;
+  state: ScanState;
+  geofence: ScanGeofence;
+  rejectReason: ScanRejectReason | null;
+  policyVersion: string;
+  thresholds: ScanThresholds;
+  sampleCount: number | null;
+  maxDistanceMeters: number | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  locationCheckedAt: string | null;
+  revokedAt: string | null;
+  revokedReason: string | null;
+  createdAt: string;
+};
+
+/** `GET /api/listings/:id/scan` — the scan hub, owner-only. */
+export type HostScan = {
+  listing: {
+    id: string;
+    title: string;
+    type: ListingType;
+    status: ListingStatus;
+    hasPin: boolean;
+  };
+  /** The policy version a new walk would acknowledge. */
+  policyVersion: string;
+  /** Thresholds a new walk would be judged against (current config). */
+  thresholds: ScanThresholds;
+  /** The newest scan for this listing, or null when none was ever started. */
+  scan: HostScanRow | null;
+};
+
+export type StartScanRequest = {
+  policyVersion: string;
+  acknowledged: true;
+};
+
+export type StartScanResponse = {
+  scanId: string;
+  policyVersion: string;
+  thresholds: ScanThresholds;
+};
+
+export type ScanLocationRequest = {
+  samples: ScanLocationSample[];
+};
 
 export const CLAIM_STATE_LABEL: Record<ClaimState, string> = {
   open: "Open",

@@ -119,6 +119,14 @@ export async function getListingForViewer(
     host: row.host
       ? { id: row.host.id, displayName: row.host.displayName, avatarUrl: row.host.avatarUrl }
       : null,
+    // The front door pin travels only to its owner. Everyone else gets no key
+    // at all, so nothing on the public page can read the door (HM-01).
+    ...(viewerId !== null && viewerId === row.hostId
+      ? {
+          coordinates:
+            row.lat !== null && row.lng !== null ? { lat: row.lat, lng: row.lng } : null,
+        }
+      : {}),
   };
 }
 

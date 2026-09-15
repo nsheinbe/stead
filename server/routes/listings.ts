@@ -20,8 +20,12 @@ import {
   StorageError,
   storageConfigured,
 } from "../lib/storage";
+import { scanRoutes } from "./scans";
 
 export const listingsRoutes = new Hono<AppEnv>();
+
+// Honesty scan hub, start, location record, discard — all under /:id/scan.
+listingsRoutes.route("/", scanRoutes);
 
 /**
  * Timezone is load-bearing, not cosmetic: the escrow crons convert check-in
@@ -105,6 +109,11 @@ listingsRoutes.get("/mine", async (c) => {
 listingsRoutes.post("/", async (c) => {
   const host = sessionUser(c);
   const input = await parse(c, listingSchema);
+  const latMissing = input.lat === undefined || input.lat === null;
+  const lngMissing = input.lng === undefined || input.lng === null;
+  if (latMissing !== lngMissing) {
+    throw new HTTPException(400, { message: "Send latitude and longitude together, or clear both." });
+  }
   const id = await tenantQuery(c, (tx) => createListing(tx, host.id, input));
   return c.json({ id }, 201);
 });
@@ -112,6 +121,12 @@ listingsRoutes.post("/", async (c) => {
 listingsRoutes.patch("/:id", async (c) => {
   const host = sessionUser(c);
   const input = await parse(c, listingSchema.partial());
+  // The front door pin is both coordinates or neither. The database enforces
+  // the pair too (listings_pin_both_or_neither); this turns it into a 400
+  // with a sentence instead of a constraint error.
+  if (("lat" in input) !== ("lng" in input) || (input.lat === null) !== (input.lng === null)) {
+    throw new HTTPException(400, { message: "Send latitude and longitude together, or clear both." });
+  }
   const ok = await tenantQuery(c, (tx) => updateListing(tx, host.id, c.req.param("id"), input));
   if (!ok) throw new HTTPException(404, { message: "No listing of yours here" });
   return c.json({ ok: true });

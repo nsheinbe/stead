@@ -63,6 +63,21 @@ export const claimState = pgEnum("claim_state", [
 ]);
 export const reviewDirection = pgEnum("review_direction", ["guest_reviews_host", "host_reviews_guest"]);
 
+// --- Honesty scans (HM-01) ------------------------------------------------------
+export const scanState = pgEnum("scan_state", [
+  "capturing",
+  "uploaded",
+  "reconstructing",
+  "needs_mask",
+  "verified",
+  "rejected",
+  "failed",
+  "revoked",
+]);
+export const scanGeofence = pgEnum("scan_geofence", ["pending", "passed", "failed"]);
+export const scanRejectReason = pgEnum("scan_reject_reason", ["geofence", "samples", "accuracy", "bookends"]);
+export const scanSamplePhase = pgEnum("scan_sample_phase", ["outdoor_start", "indoor", "outdoor_end"]);
+
 // --- Identity: written by Auth.js through the Drizzle adapter -----------------
 
 export const users = pgTable("users", {
@@ -197,6 +212,68 @@ export const listingBlackouts = pgTable(
     endDate: date("end_date").notNull(),
   },
   (table) => [index("listing_blackouts_listing_idx").on(table.listingId)],
+);
+
+/**
+ * One capture session of an honesty scan (drizzle/0015). The pin and the
+ * thresholds are frozen at start; the verdict columns are written only by
+ * app.record_scan_location. app_user reads its own rows and may delete an
+ * unfinished one; it never inserts or updates.
+ */
+export const listingScans = pgTable(
+  "listing_scans",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    listingId: uuid("listing_id")
+      .notNull()
+      .references(() => listings.id, { onDelete: "cascade" }),
+    hostId: uuid("host_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "restrict" }),
+    state: scanState("state").notNull().default("capturing"),
+    geofence: scanGeofence("geofence").notNull().default("pending"),
+    rejectReason: scanRejectReason("reject_reason"),
+    policyVersion: text("policy_version").notNull(),
+    pinLat: doublePrecision("pin_lat").notNull(),
+    pinLng: doublePrecision("pin_lng").notNull(),
+    accuracyMaxMeters: integer("accuracy_max_meters").notNull(),
+    geofenceRadiusMeters: integer("geofence_radius_meters").notNull(),
+    indoorToleranceMeters: integer("indoor_tolerance_meters").notNull(),
+    minSamples: integer("min_samples").notNull(),
+    bookendMinSamples: integer("bookend_min_samples").notNull(),
+    maxGapSeconds: integer("max_gap_seconds").notNull(),
+    maxWalkMinutes: integer("max_walk_minutes").notNull(),
+    sampleCount: integer("sample_count"),
+    maxDistanceMeters: integer("max_distance_meters"),
+    startedAt: timestamp("started_at", { mode: "date", withTimezone: true }),
+    finishedAt: timestamp("finished_at", { mode: "date", withTimezone: true }),
+    locationCheckedAt: timestamp("location_checked_at", { mode: "date", withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { mode: "date", withTimezone: true }),
+    revokedReason: text("revoked_reason"),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("listing_scans_listing_created_idx").on(table.listingId, table.createdAt),
+    index("listing_scans_host_idx").on(table.hostId),
+  ],
+);
+
+/** The location record behind a verdict. No member can read or write it. */
+export const scanGeoSamples = pgTable(
+  "scan_geo_samples",
+  {
+    scanId: uuid("scan_id")
+      .notNull()
+      .references(() => listingScans.id, { onDelete: "cascade" }),
+    seq: integer("seq").notNull(),
+    recordedAt: timestamp("recorded_at", { mode: "date", withTimezone: true }).notNull(),
+    lat: doublePrecision("lat").notNull(),
+    lng: doublePrecision("lng").notNull(),
+    accuracyMeters: integer("accuracy_meters").notNull(),
+    phase: scanSamplePhase("phase").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.scanId, table.seq] })],
 );
 
 /** `stay` (generated daterange) and bookings_no_overlap live in SQL only. */
@@ -488,6 +565,10 @@ export const listingPhotosRelations = relations(listingPhotos, ({ one }) => ({
 
 export const listingBlackoutsRelations = relations(listingBlackouts, ({ one }) => ({
   listing: one(listings, { fields: [listingBlackouts.listingId], references: [listings.id] }),
+}));
+
+export const listingScansRelations = relations(listingScans, ({ one }) => ({
+  listing: one(listings, { fields: [listingScans.listingId], references: [listings.id] }),
 }));
 
 export const bookingsRelations = relations(bookings, ({ one }) => ({
