@@ -11,5 +11,8 @@
     "api/index.js": {
       "includeFiles": "dist-api/**"
     }
-  }
+  },
+  "crons": [
+    { "path": "/api/cron/release-stale-scan-jobs", "schedule": "30 * * * *" }
+  ]
 }

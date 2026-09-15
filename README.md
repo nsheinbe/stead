@@ -273,7 +273,7 @@ curl -H "Authorization: Bearer $CRON_SECRET" https://your-host/api/cron/watchdog
 curl -H "Authorization: Bearer $CRON_SECRET" https://your-host/api/cron/release-stale-scan-jobs
 ```
 
-Deliberately **not** in `vercel.json`: Vercel Cron on the Hobby plan fires at most once a day, and a deployment is rejected outright if the expression asks for more, which makes it both unusable here and a confusing build failure. On Pro, add them back:
+`vercel.json` schedules `release-stale-scan-jobs` only. The rest are deliberately **not** there: Vercel Cron on the Hobby plan fires at most once a day, and a deployment is rejected outright if the expression asks for more, which makes it both unusable there and a confusing build failure. This project's team is on Pro, so the rest can be added back whenever their jobs are wanted — note that several of them email guests and hosts, so switching one on is a product decision, not just an ops one:
 
 ```json
 "crons": [
@@ -283,10 +283,11 @@ Deliberately **not** in `vercel.json`: Vercel Cron on the Hobby plan fires at mo
   { "path": "/api/cron/release-deposits", "schedule": "0 * * * *" },
   { "path": "/api/cron/publish-reviews",  "schedule": "0 * * * *" },
   { "path": "/api/cron/review-reminders", "schedule": "0 15 * * *" },
-  { "path": "/api/cron/watchdog",         "schedule": "0 16 * * *" },
-  { "path": "/api/cron/release-stale-scan-jobs", "schedule": "30 * * * *" }
+  { "path": "/api/cron/watchdog",         "schedule": "0 16 * * *" }
 ]
 ```
+
+Vercel Cron sends `Authorization: Bearer $CRON_SECRET` only when `CRON_SECRET` is set on the deployment; without it every tick is a 500 from `assertCronCaller` and the job never runs, which `cron_heartbeats` will show as a job that has never had a `last_ok`.
 
 Otherwise point any external scheduler at the URL — a cron host, a GitHub Actions `schedule` workflow, or a systemd timer.
 
