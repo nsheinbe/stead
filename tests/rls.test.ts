@@ -1100,3 +1100,122 @@ describeDb("cross-role isolation matrix", () => {
     expect(opsArbiter).toBe("refused");
   });
 });
+
+describeDb("HM-01: listing_scans is owner-read, capturing-insert only", () => {
+  afterAll(async () => {
+    await closeTestDb();
+  });
+
+  const DOOR = { lat: 42.2529, lng: -73.791 };
+
+  async function confirmedListing(hostId: string): Promise<string> {
+    const listingId = id();
+    await insertListing({ id: listingId, hostId, title: "Scan RLS cottage", status: "draft" });
+    await asOwner(async (db) => {
+      await db.execute(
+        sql`UPDATE public.listings SET lat = ${DOOR.lat}, lng = ${DOOR.lng}, coordinates_confirmed_at = now() WHERE id = ${listingId}::uuid`,
+      );
+    });
+    return listingId;
+  }
+
+  const insertScan = (viewer: string | null, listingId: string, hostId: string, state = "capturing") =>
+    rawAsMember(
+      viewer,
+      (tx) => tx`
+        INSERT INTO public.listing_scans (
+          listing_id, host_id, state, honesty_policy_version,
+          accuracy_max_m, geofence_radius_m, bookend_window_seconds, bookend_min_samples,
+          min_indoor_seconds, max_seconds, target_lat, target_lng
+        ) VALUES (
+          ${listingId}::uuid, ${hostId}::uuid, ${state}::public.scan_state, 1,
+          35, 100, 90, 15, 60, 600, ${DOOR.lat}, ${DOOR.lng}
+        ) RETURNING id
+      `,
+    );
+
+  it("the owner can start a capture; nobody else can, and no other state can be inserted", async () => {
+    const hostId = id();
+    const otherHost = id();
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    await insertMember(otherHost, `host-${otherHost}@stead.example`, "Other host", true);
+    const listingId = await confirmedListing(hostId);
+
+    const mine = await insertScan(hostId, listingId, hostId);
+    expect(mine).toHaveLength(1);
+
+    // Another host: neither as themselves nor by forging the owner's host_id.
+    await expect(insertScan(otherHost, listingId, otherHost)).rejects.toThrow(/row-level security/);
+    await expect(insertScan(otherHost, listingId, hostId)).rejects.toThrow(/row-level security/);
+    await expect(insertScan(null, listingId, hostId)).rejects.toThrow(/row-level security/);
+
+    // The owner cannot insert a verdict.
+    await expect(insertScan(hostId, listingId, hostId, "verified")).rejects.toThrow(/row-level security/);
+    await expect(insertScan(hostId, listingId, hostId, "uploaded")).rejects.toThrow(/row-level security/);
+  });
+
+  it("no capture before the front door is confirmed", async () => {
+    const hostId = id();
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    const listingId = id();
+    await insertListing({ id: listingId, hostId, title: "Unconfirmed cottage", status: "draft" });
+    await expect(insertScan(hostId, listingId, hostId)).rejects.toThrow(/row-level security/);
+  });
+
+  it("scan rows are visible to their host only, and app_user cannot change state or delete", async () => {
+    const hostId = id();
+    const otherHost = id();
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    await insertMember(otherHost, `host-${otherHost}@stead.example`, "Other host", true);
+    const listingId = await confirmedListing(hostId);
+    const [row] = await insertScan(hostId, listingId, hostId);
+    const scanId = (row as { id: string }).id;
+
+    const read = (viewer: string | null) =>
+      rawAsMember(viewer, (tx) => tx`SELECT id FROM public.listing_scans WHERE id = ${scanId}::uuid`);
+    expect(await read(hostId)).toHaveLength(1);
+    expect(await read(otherHost)).toHaveLength(0);
+    expect(await read(null)).toHaveLength(0);
+
+    // No UPDATE or DELETE grant at all: even the owner is refused by Postgres.
+    await expect(
+      rawAsMember(hostId, (tx) => tx`UPDATE public.listing_scans SET state = 'verified' WHERE id = ${scanId}::uuid`),
+    ).rejects.toThrow(/permission denied/);
+    await expect(
+      rawAsMember(hostId, (tx) => tx`UPDATE public.listing_scans SET verified_at = now() WHERE id = ${scanId}::uuid`),
+    ).rejects.toThrow(/permission denied/);
+    await expect(
+      rawAsMember(hostId, (tx) => tx`DELETE FROM public.listing_scans WHERE id = ${scanId}::uuid`),
+    ).rejects.toThrow(/permission denied/);
+  });
+
+  it("a confirmation cannot exist without a point, and moving the point clears it", async () => {
+    const hostId = id();
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    const listingId = id();
+    await insertListing({ id: listingId, hostId, title: "Door cottage", status: "draft" });
+
+    await expect(
+      rawAsMember(hostId, (tx) => tx`UPDATE public.listings SET coordinates_confirmed_at = now() WHERE id = ${listingId}::uuid`),
+    ).rejects.toThrow(/listings_confirmed_point_needs_lat_lng/);
+
+    await rawAsMember(
+      hostId,
+      (tx) =>
+        tx`UPDATE public.listings SET lat = ${DOOR.lat}, lng = ${DOOR.lng}, coordinates_confirmed_at = now() WHERE id = ${listingId}::uuid`,
+    );
+    const confirmed = await rawAsMember(
+      hostId,
+      (tx) => tx`SELECT coordinates_confirmed_at FROM public.listings WHERE id = ${listingId}::uuid`,
+    );
+    expect((confirmed[0] as { coordinates_confirmed_at: Date | null }).coordinates_confirmed_at).not.toBeNull();
+
+    await rawAsMember(hostId, (tx) => tx`UPDATE public.listings SET lat = ${DOOR.lat + 0.001} WHERE id = ${listingId}::uuid`);
+    const cleared = await rawAsMember(
+      hostId,
+      (tx) => tx`SELECT coordinates_confirmed_at FROM public.listings WHERE id = ${listingId}::uuid`,
+    );
+    expect((cleared[0] as { coordinates_confirmed_at: Date | null }).coordinates_confirmed_at).toBeNull();
+  });
+});
+

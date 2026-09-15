@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { formatInTimeZone } from "date-fns-tz";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { HostSubnav } from "../components/HostSubnav";
 import { ListingPhoto } from "../components/ListingPhoto";
@@ -26,6 +27,8 @@ import {
 } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { api, ApiError } from "../lib/api";
+import { formatCoordinate, validateCoordinates } from "../lib/coordinates";
+import { LOCATION_READOUT } from "../lib/honestyCopy";
 import {
   diffListingInput,
   LISTING_FIELD_ORDER,
@@ -76,6 +79,25 @@ const STATUS_LABEL: Record<ListingDetail["status"], string> = {
 };
 
 /**
+ * HM-01. The front door has its own small form, apart from the listing diff:
+ * confirming is a recorded action that sends lat, lng and the confirmation in
+ * one PATCH, and "Save changes" must never confirm a point by accident.
+ */
+type DoorForm = { lat: string; lng: string; confirm: boolean };
+type DoorErrors = { lat?: string; lng?: string; confirm?: string };
+
+const DOOR_NOT_SET = "Not set. Guests can't book a home without a confirmed location and a verified scan.";
+const DOOR_MOVED =
+  "Changing the location will need a new confirmation — and a new scan if one is verified.";
+const DOOR_LOCATION_OFF = "Location: off. Allow location for this site, or type the coordinates.";
+const DOOR_NO_FIX = "We couldn't get a fix from your phone. Try again outside, or type the coordinates.";
+
+function doorFromListing(listing: ListingDetail): DoorForm {
+  const c = listing.coordinates ?? null;
+  return { lat: c ? formatCoordinate(c.lat) : "", lng: c ? formatCoordinate(c.lng) : "", confirm: false };
+}
+
+/**
  * Edit one home.
  *
  * Hydration reads `GET /api/listings/:id`, not the dashboard summary. The
@@ -109,6 +131,10 @@ export function HostListingEditPage() {
   const [errors, setErrors] = useState<ListingFormErrors>({});
   const [saved, setSaved] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [door, setDoor] = useState<DoorForm | null>(null);
+  const [doorErrors, setDoorErrors] = useState<DoorErrors>({});
+  const [doorStatus, setDoorStatus] = useState<string | null>(null);
+  const [locating, setLocating] = useState(false);
 
   const listingQuery = useQuery({
     queryKey: ["listing", listingId],
@@ -120,6 +146,16 @@ export function HostListingEditPage() {
   const listing = listingQuery.data;
   const isOwner = Boolean(listing?.host && user && listing.host.id === user.id);
 
+  // The accuracy gate for "Use my location here" is the server's, read from
+  // the same endpoint the capture page uses. The default only covers the
+  // moment before it arrives.
+  const scanStatus = useQuery({
+    queryKey: ["listing-scan", listingId],
+    enabled: Boolean(listingId) && isOwner,
+    queryFn: () => api.listingScan(listingId as string),
+  });
+  const accuracyMaxM = scanStatus.data?.thresholds.accuracyMaxM ?? 35;
+
   // Seed once, and only from a listing this member owns. Later edits are not
   // clobbered by a background refetch.
   useEffect(() => {
@@ -128,6 +164,7 @@ export function HostListingEditPage() {
     const hydrated = listingFormToInput(values);
     setForm(values);
     setBaseline(hydrated.ok ? hydrated.input : null);
+    setDoor(doorFromListing(listing));
   }, [listing, isOwner, form]);
 
   const invalidate = async () => {
@@ -175,6 +212,86 @@ export function HostListingEditPage() {
     mutationFn: (photoId: string) => api.deletePhoto(photoId),
     onSuccess: invalidate,
   });
+
+  const confirmDoor = useMutation({
+    mutationFn: (point: { lat: number; lng: number }) =>
+      api.updateListing(listingId as string, { lat: point.lat, lng: point.lng, confirmCoordinates: true }),
+    onSuccess: async (_result, point) => {
+      setDoorErrors({});
+      setDoorStatus(null);
+      // Normalise what was typed to what was saved, so "42.25290" and the
+      // server's 42.2529 read as the same, confirmed point.
+      setDoor((previous) =>
+        previous
+          ? { ...previous, lat: formatCoordinate(point.lat), lng: formatCoordinate(point.lng), confirm: false }
+          : previous,
+      );
+      await invalidate();
+      await queryClient.invalidateQueries({ queryKey: ["listing-scan", listingId] });
+    },
+  });
+
+  function updateDoor<K extends keyof DoorForm>(field: K, value: DoorForm[K]) {
+    setDoor((previous) => (previous ? { ...previous, [field]: value } : previous));
+    setDoorErrors((previous) => {
+      if (!previous[field as keyof DoorErrors]) return previous;
+      const next = { ...previous };
+      delete next[field as keyof DoorErrors];
+      return next;
+    });
+  }
+
+  function submitDoor() {
+    if (!door) return;
+    const result = validateCoordinates(door.lat, door.lng);
+    const errors: DoorErrors = result.ok ? {} : { ...result.errors };
+    if (!door.confirm) errors.confirm = "Tick the box to confirm this is the front door.";
+    if (!result.ok || Object.keys(errors).length > 0) {
+      setDoorErrors(errors);
+      return;
+    }
+    setDoorErrors({});
+    confirmDoor.mutate({ lat: result.lat, lng: result.lng });
+  }
+
+  /**
+   * Fill the fields from the phone, only when the fix is within the accuracy
+   * gate. A rough fix is reported, never written: the host can wait for a
+   * better one or type the point. Nothing here confirms anything.
+   */
+  function locateFromPhone() {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setDoorStatus(DOOR_LOCATION_OFF);
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocating(false);
+        const acc = position.coords.accuracy;
+        if (acc <= accuracyMaxM) {
+          setDoor((previous) =>
+            previous
+              ? {
+                  ...previous,
+                  lat: formatCoordinate(position.coords.latitude),
+                  lng: formatCoordinate(position.coords.longitude),
+                }
+              : previous,
+          );
+          setDoorErrors({});
+          setDoorStatus(`From your phone, about ${Math.max(5, Math.round(acc / 5) * 5)} m accuracy.`);
+        } else {
+          setDoorStatus(`${LOCATION_READOUT.rough(acc)} Or type the coordinates.`);
+        }
+      },
+      (error) => {
+        setLocating(false);
+        setDoorStatus(error.code === error.PERMISSION_DENIED ? DOOR_LOCATION_OFF : DOOR_NO_FIX);
+      },
+      { enableHighAccuracy: true, timeout: 20_000, maximumAge: 0 },
+    );
+  }
 
   function update<K extends ListingFormField>(field: K, value: ListingFormValues[K]) {
     setForm((previous) => (previous ? { ...previous, [field]: value } : previous));
@@ -337,7 +454,7 @@ export function HostListingEditPage() {
                 </div>
               </Card>
 
-              <Card as="section" aria-labelledby="where-heading">
+              <Card as="section" id="where" aria-labelledby="where-heading">
                 <h2 id="where-heading" className="m-0 text-card-title">
                   Where it is
                 </h2>
@@ -388,6 +505,27 @@ export function HostListingEditPage() {
                     />
                   </div>
                 </div>
+
+                {door ? (
+                  <FrontDoorSection
+                    listing={listing}
+                    door={door}
+                    errors={doorErrors}
+                    status={doorStatus}
+                    locating={locating}
+                    confirming={confirmDoor.isPending}
+                    failure={
+                      confirmDoor.isError
+                        ? confirmDoor.error instanceof ApiError
+                          ? confirmDoor.error.message
+                          : "Nothing was changed. Please try again."
+                        : null
+                    }
+                    onChange={updateDoor}
+                    onUseMyLocation={locateFromPhone}
+                    onConfirm={submitDoor}
+                  />
+                ) : null}
               </Card>
 
               <Card as="section" aria-labelledby="price-heading">
@@ -724,3 +862,140 @@ function ReviewStep({
     </section>
   );
 }
+
+/**
+ * HM-01 — the front door (HM-D02).
+ *
+ * Its own form inside "Where it is": two decimal-degree fields, a button that
+ * fills them from the phone only when the fix is within the gate, a checkbox
+ * that says what the host is asserting, and the one button that records it.
+ * The pill reads the server's `confirmedAt`; editing a field after a
+ * confirmation shows what will happen, and the trigger in 0015 makes it so.
+ */
+function FrontDoorSection({
+  listing,
+  door,
+  errors,
+  status,
+  locating,
+  confirming,
+  failure,
+  onChange,
+  onUseMyLocation,
+  onConfirm,
+}: {
+  listing: ListingDetail;
+  door: DoorForm;
+  errors: DoorErrors;
+  status: string | null;
+  locating: boolean;
+  confirming: boolean;
+  failure: string | null;
+  onChange: <K extends keyof DoorForm>(field: K, value: DoorForm[K]) => void;
+  onUseMyLocation: () => void;
+  onConfirm: () => void;
+}) {
+  const saved = listing.coordinates ?? null;
+  const savedLat = saved ? formatCoordinate(saved.lat) : "";
+  const savedLng = saved ? formatCoordinate(saved.lng) : "";
+  const moved = door.lat.trim() !== savedLat || door.lng.trim() !== savedLng;
+  const confirmedAt = saved?.confirmedAt ?? null;
+  const confirmedOn = confirmedAt ? formatInTimeZone(confirmedAt, listing.timezone, "d MMM yyyy") : null;
+
+  const line = !saved && !moved ? DOOR_NOT_SET : moved && confirmedAt ? DOOR_MOVED : null;
+
+  return (
+    <div className="mt-6 border-t border-divider pt-5">
+      <h3 className="m-0 text-base font-semibold">Front door location</h3>
+      <p className="mb-0 mt-1 text-sm text-ink-secondary">
+        Your scan is checked against this point. Pick the front door, not the middle of the block.
+      </p>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {confirmedOn && !moved ? (
+          <StatusPill tone="brand" testId="door-confirmed">
+            Confirmed {confirmedOn}
+          </StatusPill>
+        ) : saved && !moved ? (
+          <StatusPill tone="warning">Needs confirmation</StatusPill>
+        ) : null}
+      </div>
+
+      <div className="mt-4 flex flex-col gap-4">
+        <div className="order-1 flex flex-wrap items-center gap-3 sm:order-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            busy={locating}
+            busyLabel="Finding your phone…"
+            onClick={onUseMyLocation}
+          >
+            Use my location here
+          </Button>
+          <p role="status" className="m-0 text-sm text-ink-secondary">
+            {status ?? line ?? ""}
+          </p>
+        </div>
+        <div className="order-2 grid gap-5 sm:order-1 sm:grid-cols-2">
+          <TextInput
+            id="listing-lat"
+            label="Latitude"
+            hint="Decimal degrees, such as 45.5231"
+            inputMode="decimal"
+            autoComplete="off"
+            value={door.lat}
+            error={errors.lat}
+            onChange={(e) => onChange("lat", e.target.value)}
+          />
+          <TextInput
+            id="listing-lng"
+            label="Longitude"
+            hint="Decimal degrees, such as -122.6765"
+            inputMode="decimal"
+            autoComplete="off"
+            value={door.lng}
+            error={errors.lng}
+            onChange={(e) => onChange("lng", e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <Checkbox
+          id="listing-door-confirm"
+          label="This is the front door of the home"
+          hint="Confirming records that you checked this point."
+          checked={door.confirm}
+          error={errors.confirm}
+          onChange={(e) => onChange("confirm", e.target.checked)}
+        />
+      </div>
+
+      {failure ? (
+        <div className="mt-4">
+          <StatusMessage
+            tone="danger"
+            title="We couldn't confirm the location."
+            action={
+              <Button variant="secondary" size="sm" onClick={onConfirm}>
+                Try again
+              </Button>
+            }
+          >
+            <p>{failure}</p>
+          </StatusMessage>
+        </div>
+      ) : null}
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <Button size="sm" busy={confirming} busyLabel="Confirming…" onClick={onConfirm}>
+          Confirm the home's location
+        </Button>
+        <p className="m-0 text-sm text-ink-secondary">
+          Only you see these coordinates. Guests see the city and region, as they do today.
+        </p>
+      </div>
+    </div>
+  );
+}
+

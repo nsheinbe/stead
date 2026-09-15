@@ -93,8 +93,10 @@ fields; nothing else changes.
 
 ## 9. Tests
 
-- `tests/listing-form.test.ts`: round-trip includes `lat` / `lng`;
-  omitting them sends nothing (diff-save).
+- As built in HM-01: the front door is its own small form beside the
+  listing diff (`src/lib/coordinates.ts`, `tests/coordinates.test.ts`), so
+  "Save changes" can never confirm a point by accident and the listing
+  diff never carries `lat` / `lng`.
 - HTTP: `confirmCoordinates` without both values is a 400; a change to
   `lat` clears `coordinates_confirmed_at`.
 - Playwright: confirm with typed values; the pill; editing clears it.

@@ -169,8 +169,62 @@ export const listings = pgTable(
     status: listingStatus("status").notNull().default("draft"),
     /** Unused at launch — nullable, never required for booking. */
     permitNumber: text("permit_number"),
+    /**
+     * HM-01: the host's recorded "this is the front door". A trigger clears it
+     * whenever lat / lng move unless the same UPDATE re-confirms; a CHECK
+     * refuses a confirmation without a point.
+     */
+    coordinatesConfirmedAt: timestamp("coordinates_confirmed_at", { mode: "date", withTimezone: true }),
   },
   (table) => [index("listings_status_idx").on(table.status)],
+);
+
+export const scanState = pgEnum("scan_state", [
+  "capturing",
+  "uploaded",
+  "reconstructing",
+  "needs_mask",
+  "verified",
+  "rejected",
+  "failed",
+]);
+
+/**
+ * HM-01: one row per walk-scan. app_user may insert `capturing` for an owned,
+ * door-confirmed listing and read its own rows; every later state is a
+ * SECURITY DEFINER transition (HM-02 onward). Thresholds, target point and
+ * policy version are frozen here at creation.
+ */
+export const listingScans = pgTable(
+  "listing_scans",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    listingId: uuid("listing_id")
+      .notNull()
+      .references(() => listings.id, { onDelete: "cascade" }),
+    hostId: uuid("host_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "restrict" }),
+    state: scanState("state").notNull().default("capturing"),
+    reason: text("reason"),
+    honestyPolicyVersion: integer("honesty_policy_version").notNull(),
+    accuracyMaxM: integer("accuracy_max_m").notNull(),
+    geofenceRadiusM: integer("geofence_radius_m").notNull(),
+    bookendWindowSeconds: integer("bookend_window_seconds").notNull(),
+    bookendMinSamples: integer("bookend_min_samples").notNull(),
+    minIndoorSeconds: integer("min_indoor_seconds").notNull(),
+    maxSeconds: integer("max_seconds").notNull(),
+    targetLat: doublePrecision("target_lat").notNull(),
+    targetLng: doublePrecision("target_lng").notNull(),
+    capturedOn: date("captured_on"),
+    verifiedAt: timestamp("verified_at", { mode: "date", withTimezone: true }),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("listing_scans_listing_idx").on(table.listingId, table.createdAt),
+    index("listing_scans_host_idx").on(table.hostId),
+  ],
 );
 
 export const listingPhotos = pgTable(
@@ -480,6 +534,11 @@ export const listingsRelations = relations(listings, ({ one, many }) => ({
   photos: many(listingPhotos),
   blackouts: many(listingBlackouts),
   bookings: many(bookings),
+  scans: many(listingScans),
+}));
+
+export const listingScansRelations = relations(listingScans, ({ one }) => ({
+  listing: one(listings, { fields: [listingScans.listingId], references: [listings.id] }),
 }));
 
 export const listingPhotosRelations = relations(listingPhotos, ({ one }) => ({

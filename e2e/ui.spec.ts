@@ -491,6 +491,93 @@ test.describe("listing creation (HOST-02)", () => {
   });
 });
 
+test.describe("front door and scan (HM-01)", () => {
+  test("the editor confirms the front door and the scan page refuses before it", async ({ page, request }) => {
+    await ensureDb();
+    const owner = await seedHost();
+    await signIn(page, owner.token);
+
+    const created = await request.post("/api/listings", {
+      headers: { cookie: owner.cookie, "content-type": "application/json" },
+      data: {
+        title: `Door cottage ${Date.now()}`,
+        type: "entire_home",
+        city: "Hudson",
+        country: "US",
+        timezone: "America/New_York",
+        nightlyRateCents: 20_000,
+        depositCents: 30_000,
+        maxGuests: 2,
+      },
+    });
+    expect(created.status()).toBe(201);
+    const { id: listingId } = (await created.json()) as { id: string };
+
+    // Before the door is confirmed the scan page stops at the door, not the camera.
+    await page.goto(`/host/listings/${listingId}/scan`);
+    await expect(page.getByRole("heading", { level: 1, name: /Scan Door cottage/ })).toBeVisible();
+    await expect(page.getByTestId("scan-needs-door")).toBeVisible();
+    await page.getByRole("link", { name: "Confirm the home's location" }).click();
+    await expect(page).toHaveURL(new RegExp(`/host/listings/${listingId}#where$`));
+
+    // Confirm it in the editor: values, the checkbox, the one button.
+    await expect(page.getByRole("heading", { name: "Front door location" })).toBeVisible();
+    await expect(page.getByText(/Not set\. Guests can't book a home without a confirmed location/)).toBeVisible();
+    await page.getByLabel("Latitude").fill("42.2529");
+    await page.getByLabel("Longitude").fill("-73.791");
+    // The checkbox is the assertion; without it nothing is recorded.
+    await page.getByRole("button", { name: "Confirm the home's location" }).click();
+    await expect(page.getByText("Tick the box to confirm this is the front door.")).toBeVisible();
+    await page.getByLabel("This is the front door of the home").check();
+    await page.getByRole("button", { name: "Confirm the home's location" }).click();
+    await expect(page.getByTestId("door-confirmed")).toHaveText(/Confirmed \d{1,2} \w{3} \d{4}/);
+
+    // The server holds the confirmation; a guest read carries no coordinates.
+    const mine = await request.get(`/api/listings/${listingId}`, { headers: { cookie: owner.cookie } });
+    const asOwner = (await mine.json()) as { coordinates?: { confirmedAt: string | null } | null };
+    expect(asOwner.coordinates?.confirmedAt).toBeTruthy();
+
+    // Moving a value shows what will happen, and the pill goes.
+    await page.getByLabel("Longitude").fill("-73.792");
+    await expect(page.getByText(/Changing the location will need a new confirmation/)).toBeVisible();
+    await expect(page.getByTestId("door-confirmed")).toHaveCount(0);
+  });
+
+  test("on a device without a camera the scan page says to open it on a phone", async ({ page, request }) => {
+    await ensureDb();
+    const owner = await seedHost();
+    await signIn(page, owner.token);
+    const created = await request.post("/api/listings", {
+      headers: { cookie: owner.cookie, "content-type": "application/json" },
+      data: {
+        title: "Phone cottage",
+        type: "apartment",
+        city: "Hudson",
+        country: "US",
+        timezone: "America/New_York",
+        nightlyRateCents: 20_000,
+        depositCents: 0,
+        maxGuests: 2,
+        lat: 42.2529,
+        lng: -73.791,
+        confirmCoordinates: true,
+      },
+    });
+    expect(created.status()).toBe(201);
+    const { id: listingId } = (await created.json()) as { id: string };
+
+    await page.goto(`/host/listings/${listingId}/scan`);
+    // Headless Chromium reports no video input here, and the e2e server has
+    // no object storage: whichever the page checks first, it never opens a
+    // camera. Without storage the honest answer is that scans are not
+    // configured on this deployment.
+    await expect(
+      page.getByTestId("scan-open-on-phone").or(page.getByText("Scans aren't configured on this deployment.")),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Start the walk" })).toHaveCount(0);
+  });
+});
+
 test.describe("payout readiness (HOST-03)", () => {
   test("a return from Stripe never claims the account is live", async ({ page }) => {
     await ensureDb();

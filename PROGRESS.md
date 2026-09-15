@@ -17,6 +17,7 @@ Spec of record: `BUILD_PROMPT.md` (stack amendment at the top). One slice at a t
 | REL-01 Soft-launch readiness | This branch | Dist first-user path, `docs/soft-launch.md`, Nick-gates. **PAY-02 not started.** |
 | Honesty media — design fill (HM-D00…D13) | `codex/claude-code-handoff-2026-09-14` | Docs only: `design/honesty-media/` screens, locked copy, decisions. No app code; implementation starts at HM-00 on a new branch when Nick asks. |
 | HM-00 Honesty policy + copy | `claude/hm-00-honesty-policy` | `src/lib/honestyCopy.ts` locked strings, ban-list test, `docs/honesty-media/POLICY.md`, one-line mentions on `/for-homeowners` and `/host/start`. No schema, no scan code, kill-switch untouched. |
+| HM-01 Capture + geo + geofence | `claude/hm-01-capture-geofence` | `drizzle/0015`: `coordinates_confirmed_at` + `listing_scans` (RLS, capturing-insert only). Front-door confirmation in the editor, `/host/listings/:id/scan` capture page (unlinked until HM-02 can upload), `server/lib/geofence.ts` verdict helper + tests. No upload, no verdict written, kill-switch untouched. |
 
 ## Production (`openstead.app`)
 

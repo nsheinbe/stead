@@ -97,6 +97,7 @@ export async function getListingForViewer(
   if (!row) return null;
   // Hosts can still open their own demo rows; everyone else sees a 404.
   if (isHiddenSeedListing(row.id) && viewerId !== row.hostId) return null;
+  const owner = viewerId !== null && viewerId === row.hostId;
 
   return {
     id: row.id,
@@ -119,6 +120,20 @@ export async function getListingForViewer(
     host: row.host
       ? { id: row.host.id, displayName: row.host.displayName, avatarUrl: row.host.avatarUrl }
       : null,
+    // The front door is the owner's to see. A public read carries no key at
+    // all, so the precise point never leaves in a guest's JSON.
+    ...(owner
+      ? {
+          coordinates:
+            row.lat !== null && row.lng !== null
+              ? {
+                  lat: row.lat,
+                  lng: row.lng,
+                  confirmedAt: row.coordinatesConfirmedAt ? row.coordinatesConfirmedAt.toISOString() : null,
+                }
+              : null,
+        }
+      : {}),
   };
 }
 
