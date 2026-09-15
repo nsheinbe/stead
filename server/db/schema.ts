@@ -6,6 +6,7 @@
  */
 import { relations, sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   date,
   doublePrecision,
@@ -20,7 +21,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { ListingAmenities } from "../../src/lib/types";
+import type { GeofenceStatsJson, ListingAmenities } from "../../src/lib/types";
 
 export const listingType = pgEnum("listing_type", ["entire_home", "apartment", "private_room"]);
 export const cancellationPolicy = pgEnum("cancellation_policy", ["flexible", "moderate", "strict"]);
@@ -220,11 +221,64 @@ export const listingScans = pgTable(
     verifiedAt: timestamp("verified_at", { mode: "date", withTimezone: true }),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull().defaultNow(),
+    /** HM-02: the server's geofence stats at completion. */
+    geofenceStats: jsonb("geofence_stats").$type<GeofenceStatsJson>(),
+    completedAt: timestamp("completed_at", { mode: "date", withTimezone: true }),
   },
   (table) => [
     index("listing_scans_listing_idx").on(table.listingId, table.createdAt),
     index("listing_scans_host_idx").on(table.hostId),
   ],
+);
+
+export const scanArtifactKind = pgEnum("scan_artifact_kind", [
+  "video",
+  "attestation",
+  "notes",
+  "frames",
+  "cameras",
+  "splat",
+  "splat_compressed",
+  "stills",
+  "approach",
+]);
+
+/** HM-02: object keys the server or worker recorded. Host reads own; no client writes. */
+export const scanArtifacts = pgTable(
+  "scan_artifacts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    scanId: uuid("scan_id")
+      .notNull()
+      .references(() => listingScans.id, { onDelete: "cascade" }),
+    kind: scanArtifactKind("kind").notNull(),
+    objectKey: text("object_key").notNull(),
+    contentType: text("content_type").notNull(),
+    sizeBytes: bigint("size_bytes", { mode: "number" }).notNull(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("scan_artifacts_scan_idx").on(table.scanId, table.kind)],
+);
+
+/**
+ * HM-02: the location record with the server's per-sample judgement. No
+ * grant to app_user at all — breadcrumbs are never served to a member.
+ */
+export const scanGeoSamples = pgTable(
+  "scan_geo_samples",
+  {
+    scanId: uuid("scan_id")
+      .notNull()
+      .references(() => listingScans.id, { onDelete: "cascade" }),
+    seq: integer("seq").notNull(),
+    tMs: integer("t_ms").notNull(),
+    lat: doublePrecision("lat").notNull(),
+    lng: doublePrecision("lng").notNull(),
+    accuracyM: integer("accuracy_m").notNull(),
+    accurate: boolean("accurate").notNull(),
+    distanceM: integer("distance_m").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.scanId, table.seq] })],
 );
 
 export const listingPhotos = pgTable(
@@ -537,8 +591,13 @@ export const listingsRelations = relations(listings, ({ one, many }) => ({
   scans: many(listingScans),
 }));
 
-export const listingScansRelations = relations(listingScans, ({ one }) => ({
+export const listingScansRelations = relations(listingScans, ({ one, many }) => ({
   listing: one(listings, { fields: [listingScans.listingId], references: [listings.id] }),
+  artifacts: many(scanArtifacts),
+}));
+
+export const scanArtifactsRelations = relations(scanArtifacts, ({ one }) => ({
+  scan: one(listingScans, { fields: [scanArtifacts.scanId], references: [listingScans.id] }),
 }));
 
 export const listingPhotosRelations = relations(listingPhotos, ({ one }) => ({

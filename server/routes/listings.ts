@@ -10,6 +10,7 @@ import { pgCode } from "../lib/pgError";
 import { isHiddenSeedListing } from "../lib/seedInventory";
 import { getConfigMap, getListingForViewer, listActiveListings } from "../queries/listings";
 import { createScan, getScanTarget, latestScanForOwner } from "../queries/scans";
+import { scanRoutes } from "./scans";
 import {
   addListingPhoto,
   createListing,
@@ -28,6 +29,10 @@ import {
 } from "../lib/storage";
 
 export const listingsRoutes = new Hono<AppEnv>();
+
+// HM-02: the upload package lives on its own module; the paths start with
+// /:id/scans/:scanId so they never collide with /:id.
+listingsRoutes.route("/", scanRoutes);
 
 /**
  * Timezone is load-bearing, not cosmetic: the escrow crons convert check-in

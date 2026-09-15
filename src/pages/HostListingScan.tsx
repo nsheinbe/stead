@@ -18,7 +18,7 @@ import {
 } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { api, ApiError } from "../lib/api";
-import { HONESTY_HOST_SHEET, HONESTY_REFUSALS } from "../lib/honestyCopy";
+import { HONESTY_HOST_SHEET, HONESTY_REFUSALS, SCAN_REASON_COPY } from "../lib/honestyCopy";
 import {
   bookendMeter,
   captureSupport,
@@ -30,7 +30,15 @@ import {
   type CaptureSample,
   type LocationPermission,
 } from "../lib/scanCapture";
-import type { ListingDetail, ListingScanStatus, ScanThresholds } from "../lib/types";
+import {
+  uploadWalk,
+  UploadError,
+  type UploadPhase,
+  type UploadProgress,
+  type UploadSession,
+  type UploadTransport,
+} from "../lib/scanUpload";
+import type { ListingDetail, ListingScan, ListingScanStatus, ScanThresholds, ScanUploadKind } from "../lib/types";
 
 /**
  * HM-01 — the capture page (HM-D01).
@@ -39,8 +47,8 @@ import type { ListingDetail, ListingScanStatus, ScanThresholds } from "../lib/ty
  * decide: which readout to show, whether the on-device meter thinks the
  * start bookend is met, whether Finish is enabled. What it may never decide:
  * the verdict. Samples are recorded with the recording clock and judged on
- * the server after upload (HM-02). This release stops at Finish: the walk
- * stays on the phone, and the page says so in plain words.
+ * the server after upload (HM-02): Finish hands the recording to the upload
+ * step, which sends the three objects and asks for the verdict.
  */
 export function HostListingScanPage() {
   const { listingId } = useParams<{ listingId: string }>();
@@ -158,10 +166,14 @@ type Blocker = { title: string; body: string };
 type Recording = {
   blob: Blob | null;
   mimeType: string;
+  /** Wall clock at the first frame, for the listing-local "Captured {date}". */
+  startedAt: string;
   durationMs: number;
   samples: CaptureSample[];
   pauses: { fromMs: number; toMs: number }[];
   meter: BookendMeter;
+  videoWidth: number | null;
+  videoHeight: number | null;
 };
 
 const CAMERA_DENIED: Blocker = {
@@ -240,6 +252,8 @@ function Capture({ listing, status }: { listing: ListingDetail; status: ListingS
   const permissionRef = useRef<LocationPermission>("prompt");
   const wakeLockRef = useRef<{ release: () => Promise<void> } | null>(null);
   const mimeTypeRef = useRef("");
+  const startedAtRef = useRef("");
+  const scanRef = useRef<ListingScan | null>(null);
 
   function setPhaseBoth(next: Phase) {
     phaseRef.current = next;
@@ -383,7 +397,7 @@ function Capture({ listing, status }: { listing: ListingDetail; status: ListingS
     setRecording(null);
     setPhaseBoth("starting");
     try {
-      await api.startScan(listing.id);
+      scanRef.current = await api.startScan(listing.id);
     } catch (err) {
       setPhaseBoth("idle");
       setBlocker({
@@ -447,6 +461,7 @@ function Capture({ listing, status }: { listing: ListingDetail; status: ListingS
     bufferRef.current = new SampleBuffer();
     pausesRef.current = [];
     clockRef.current = { accumulatedMs: 0, segmentStartedAt: performance.now() };
+    startedAtRef.current = new Date().toISOString();
     setElapsedMs(0);
     setPhaseBoth("recording");
     void requestWakeLock();
@@ -467,13 +482,17 @@ function Capture({ listing, status }: { listing: ListingDetail; status: ListingS
     await stopped;
     const samples = bufferRef.current.toArray();
     const mimeType = mimeTypeRef.current || "video/webm";
+    const track = streamRef.current?.getVideoTracks()[0]?.getSettings();
     setRecording({
       blob: chunksRef.current.length > 0 ? new Blob(chunksRef.current, { type: mimeType }) : null,
       mimeType,
+      startedAt: startedAtRef.current || new Date().toISOString(),
       durationMs,
       samples,
       pauses: [...pausesRef.current],
       meter: bookendMeter(samples, durationMs, thresholds),
+      videoWidth: track?.width ?? null,
+      videoHeight: track?.height ?? null,
     });
     setPhaseBoth("finished");
   }
@@ -600,7 +619,14 @@ function Capture({ listing, status }: { listing: ListingDetail; status: ListingS
       ) : null}
 
       {phase === "finished" && recording ? (
-        <Recorded recording={recording} thresholds={thresholds} listingId={listing.id} onWalkAgain={walkAgain} />
+        <UploadStep
+          listing={listing}
+          scan={scanRef.current}
+          policyVersion={status.policyVersion}
+          recording={recording}
+          thresholds={thresholds}
+          onWalkAgain={walkAgain}
+        />
       ) : (
         <>
           <div className="relative overflow-hidden rounded-surface bg-surface" style={{ aspectRatio: "3 / 4" }}>
@@ -724,61 +750,282 @@ function OpenOnPhone({ title }: { title: string }) {
   );
 }
 
+type UploadOutcome =
+  | { kind: "idle" }
+  | { kind: "running"; phase: UploadPhase }
+  | { kind: "failed"; message: string; resumable: boolean; walkAgain: boolean }
+  | { kind: "done"; scan: ListingScan };
+
+const ROW_LABEL: Record<ScanUploadKind, string> = {
+  video: "Video",
+  attestation: "Location record",
+  notes: "Camera notes",
+};
+
+function megabytes(bytes: number): string {
+  return `${Math.max(0, Math.round(bytes / 100_000) / 10).toLocaleString("en-US", { maximumFractionDigits: 1 })} MB`;
+}
+
+function transportFor(listingId: string, scanId: string): UploadTransport {
+  return {
+    target: (kind, contentType) => api.scanUploadTarget(listingId, scanId, { kind, contentType }),
+    partUrl: (key, uploadId, partNumber) => api.scanUploadPartUrl(listingId, scanId, { key, uploadId, partNumber }),
+    uploadedParts: async (key, uploadId) => (await api.scanUploadedParts(listingId, scanId, key, uploadId)).parts,
+    put: (url, body, contentType) => api.putToBucket(url, body, contentType),
+    finish: (key, uploadId) => api.finishScanUpload(listingId, scanId, { key, uploadId }),
+    complete: (videoKey) => api.completeScan(listingId, scanId, { videoKey }),
+  };
+}
+
+/**
+ * HM-02 — the upload step (HM-D03).
+ *
+ * Runs the upload as soon as the walk is finished, one row per object with
+ * its own progress, and never says "verified" or "queued" from its own
+ * state: the receipt is whatever the server answered. A dropped connection
+ * leaves the session in place, and Finish uploading resumes from the parts
+ * the bucket already holds.
+ */
+function UploadStep({
+  listing,
+  scan,
+  policyVersion,
+  recording,
+  thresholds,
+  onWalkAgain,
+}: {
+  listing: ListingDetail;
+  scan: ListingScan | null;
+  policyVersion: number;
+  recording: Recording;
+  thresholds: ScanThresholds;
+  onWalkAgain: () => void;
+}) {
+  const [rows, setRows] = useState<UploadProgress[]>([]);
+  const [outcome, setOutcome] = useState<UploadOutcome>({ kind: "idle" });
+  const sessionRef = useRef<UploadSession>({});
+  const startedRef = useRef(false);
+
+  const run = useCallback(async () => {
+    if (!scan || !recording.blob) return;
+    setOutcome({ kind: "running", phase: "uploading" });
+    try {
+      const result = await uploadWalk(
+        transportFor(listing.id, scan.id),
+        {
+          scanId: scan.id,
+          listingId: listing.id,
+          policyVersion,
+          blob: recording.blob,
+          mimeType: recording.mimeType,
+          startedAt: recording.startedAt,
+          durationMs: recording.durationMs,
+          samples: recording.samples,
+          pauses: recording.pauses,
+          client: {
+            userAgent: navigator.userAgent,
+            platform: (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ?? null,
+            videoWidth: recording.videoWidth ?? undefined,
+            videoHeight: recording.videoHeight ?? undefined,
+          },
+        },
+        {
+          session: sessionRef.current,
+          onProgress: (next, phase) => {
+            setRows(next.map((row) => ({ ...row })));
+            setOutcome((current) => (current.kind === "running" ? { kind: "running", phase } : current));
+          },
+        },
+      );
+      sessionRef.current = result.session;
+      setOutcome({ kind: "done", scan: result.scan });
+    } catch (err) {
+      if (err instanceof UploadError) {
+        setOutcome({ kind: "failed", message: err.message, resumable: true, walkAgain: false });
+        return;
+      }
+      if (err instanceof ApiError) {
+        const walkAgain =
+          err.message === HONESTY_REFUSALS.uploadTooLarge ||
+          err.message === HONESTY_REFUSALS.attestationUnreadable ||
+          err.message === HONESTY_REFUSALS.alreadySubmitted;
+        setOutcome({ kind: "failed", message: err.message, resumable: !walkAgain, walkAgain });
+        return;
+      }
+      setOutcome({ kind: "failed", message: "The upload lost connection.", resumable: true, walkAgain: false });
+    }
+  }, [listing.id, policyVersion, recording, scan]);
+
+  useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+    void run();
+  }, [run]);
+
+  const noRecording = !scan || !recording.blob;
+
+  return (
+    <>
+      <Card>
+        <h2 className="m-0 text-card-title">Uploading your walk</h2>
+        {noRecording ? (
+          <div className="mt-4">
+            <StatusMessage tone="warning" title="There's nothing to upload." live={false}>
+              <p>The recording didn't reach this page. Walk again to try once more.</p>
+            </StatusMessage>
+          </div>
+        ) : (
+          <ul className="m-0 mt-4 flex list-none flex-col gap-3 p-0">
+            {(["video", "attestation", "notes"] as const).map((kind) => {
+              const row = rows.find((r) => r.kind === kind) ?? {
+                kind,
+                status: "waiting" as const,
+                doneBytes: 0,
+                totalBytes: kind === "video" ? (recording.blob?.size ?? 0) : 0,
+              };
+              const percent = row.totalBytes > 0 ? Math.round((row.doneBytes / row.totalBytes) * 100) : row.status === "done" ? 100 : 0;
+              const word =
+                row.status === "done"
+                  ? "Uploaded"
+                  : row.status === "failed"
+                    ? "Didn't finish"
+                    : row.status === "preparing"
+                      ? "Preparing…"
+                      : row.status === "uploading"
+                        ? `${megabytes(row.doneBytes)} of ${megabytes(row.totalBytes)}`
+                        : "Waiting";
+              return (
+                <li key={kind} className="flex flex-col gap-1">
+                  <div className="flex items-baseline justify-between gap-3 text-sm">
+                    <span className="font-semibold">{ROW_LABEL[kind]}</span>
+                    <span className="money text-ink-secondary">{word}</span>
+                  </div>
+                  <div
+                    role="progressbar"
+                    aria-label={ROW_LABEL[kind]}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={percent}
+                    className="h-2 w-full overflow-hidden rounded-full bg-surface"
+                  >
+                    <div className="h-full bg-brand transition-[width] motion-reduce:transition-none" style={{ width: `${percent}%` }} />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <p className="mb-0 mt-4 text-sm text-ink-secondary">Keep this page open until the upload finishes.</p>
+      </Card>
+
+      {outcome.kind === "running" ? (
+        <p role="status" className="m-0 text-sm font-semibold">
+          {outcome.phase === "checking" ? "Checking the package…" : "Uploading…"}
+        </p>
+      ) : null}
+
+      {outcome.kind === "failed" ? (
+        <StatusMessage
+          tone="warning"
+          title={outcome.message}
+          action={
+            outcome.resumable ? (
+              <Button variant="secondary" size="sm" onClick={() => void run()}>
+                Finish uploading
+              </Button>
+            ) : outcome.walkAgain ? (
+              <Button variant="secondary" size="sm" onClick={onWalkAgain}>
+                Walk again
+              </Button>
+            ) : undefined
+          }
+        />
+      ) : null}
+
+      {outcome.kind === "done" ? <Receipt scan={outcome.scan} listingId={listing.id} onWalkAgain={onWalkAgain} /> : null}
+
+      <WhatThePhoneSaw recording={recording} thresholds={thresholds} />
+
+      {outcome.kind !== "running" ? (
+        <div className="flex flex-wrap gap-3">
+          {outcome.kind !== "done" ? (
+            <Button variant="secondary" onClick={onWalkAgain}>
+              Walk again
+            </Button>
+          ) : null}
+          <ButtonLink to={`/host/listings/${listing.id}`} variant="secondary">
+            Back to the home
+          </ButtonLink>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+/** The server's answer, verbatim. Uploaded means queued for processing; rejected carries its reason. */
+function Receipt({ scan, listingId, onWalkAgain }: { scan: ListingScan; listingId: string; onWalkAgain: () => void }) {
+  if (scan.state === "uploaded") {
+    return (
+      <StatusMessage tone="success" title="Uploaded. Location confirmed — queued for processing." testId="scan-receipt">
+        <p>Processing can take a while — often hours. We'll email you when it's done.</p>
+      </StatusMessage>
+    );
+  }
+  if (scan.state === "rejected") {
+    return (
+      <StatusMessage
+        tone="warning"
+        title="Uploaded, but we couldn't confirm the location."
+        testId="scan-receipt"
+        action={
+          <>
+            <Button variant="secondary" size="sm" onClick={onWalkAgain}>
+              Walk again
+            </Button>
+            {scan.reason === "location_mismatch" ? (
+              <ButtonLink to={`/host/listings/${listingId}#where`} variant="secondary" size="sm">
+                Check the home's location
+              </ButtonLink>
+            ) : null}
+          </>
+        }
+      >
+        <p>{scan.reason ? SCAN_REASON_COPY[scan.reason] : ""}</p>
+      </StatusMessage>
+    );
+  }
+  return (
+    <StatusMessage tone="info" title="Uploaded." testId="scan-receipt">
+      <p>The server recorded the walk.</p>
+    </StatusMessage>
+  );
+}
+
 /**
  * What the phone recorded, stated as what the phone saw. The two bookend
  * lines mirror the on-device meter; they are not a verdict, and the copy
- * says so. Upload and the server's judgement are HM-02.
+ * says so.
  */
-function Recorded({
-  recording,
-  thresholds,
-  listingId,
-  onWalkAgain,
-}: {
-  recording: Recording;
-  thresholds: ScanThresholds;
-  listingId: string;
-  onWalkAgain: () => void;
-}) {
+function WhatThePhoneSaw({ recording, thresholds }: { recording: Recording; thresholds: ScanThresholds }) {
   const { meter } = recording;
   return (
-    <>
-      <StatusMessage tone="success" title="Walk recorded." testId="scan-recorded">
-        <p>
-          {formatElapsed(recording.durationMs)} of video and {recording.samples.length} location readings, all still
-          on your phone.
-        </p>
-        <p>
-          Uploading and the location check are the next step. They aren't switched on in this release yet, so
-          nothing has been sent and nothing has been judged.
-        </p>
-      </StatusMessage>
-      <Card>
-        <DataList>
-          <DataRow label="Video length" value={formatElapsed(recording.durationMs)} />
-          <DataRow label="Location readings" value={String(recording.samples.length)} />
-          <DataRow
-            label="Outdoor fix at the start"
-            value={meter.startMet ? `Yes (${meter.startCount} readings)` : `Not yet (${meter.startCount} of ${thresholds.bookendMinSamples})`}
-          />
-          <DataRow
-            label="Outdoor fix at the end"
-            value={meter.endMet ? `Yes (${meter.endCount} readings)` : `Not yet (${meter.endCount} of ${thresholds.bookendMinSamples})`}
-          />
-          <DataRow label="Paused" value={`${recording.pauses.length} ${recording.pauses.length === 1 ? "time" : "times"}`} />
-        </DataList>
-        <p className="mb-0 mt-4 text-sm text-ink-secondary">
-          These are what your phone saw. Whether the walk is verified is decided after upload, never here.
-        </p>
-      </Card>
-      <div className="flex flex-wrap gap-3">
-        <Button variant="secondary" onClick={onWalkAgain}>
-          Walk again
-        </Button>
-        <ButtonLink to={`/host/listings/${listingId}`} variant="secondary">
-          Back to the home
-        </ButtonLink>
-      </div>
-    </>
+    <Card>
+      <DataList>
+        <DataRow label="Video length" value={formatElapsed(recording.durationMs)} />
+        <DataRow label="Location readings" value={String(recording.samples.length)} />
+        <DataRow
+          label="Outdoor fix at the start"
+          value={meter.startMet ? `Yes (${meter.startCount} readings)` : `Not yet (${meter.startCount} of ${thresholds.bookendMinSamples})`}
+        />
+        <DataRow
+          label="Outdoor fix at the end"
+          value={meter.endMet ? `Yes (${meter.endCount} readings)` : `Not yet (${meter.endCount} of ${thresholds.bookendMinSamples})`}
+        />
+        <DataRow label="Paused" value={`${recording.pauses.length} ${recording.pauses.length === 1 ? "time" : "times"}`} />
+      </DataList>
+      <p className="mb-0 mt-4 text-sm text-ink-secondary">
+        These are what your phone saw. Whether the walk is verified is decided by the server after upload, never here.
+      </p>
+    </Card>
   );
 }

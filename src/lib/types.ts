@@ -116,6 +116,24 @@ export type ScanThresholds = {
   maxSeconds: number;
 };
 
+/** HM-02: what the server measured at completion, as stored on the scan row. */
+export type GeofenceStatsJson = {
+  sampleCount: number;
+  accurateCount: number;
+  durationSeconds: number;
+  startAccurate: number;
+  endAccurate: number;
+  medianDistanceM: number | null;
+  startDistanceM: number | null;
+  endDistanceM: number | null;
+};
+
+/** The three objects a walk uploads. Later kinds are the worker's (HM-03+). */
+export type ScanUploadKind = "video" | "attestation" | "notes";
+
+/** Which of the package's parts the server has recorded. */
+export type ScanUploads = Record<ScanUploadKind, boolean>;
+
 /** One walk-scan as its host sees it. State and reason are the server's. */
 export type ListingScan = {
   id: string;
@@ -126,6 +144,45 @@ export type ListingScan = {
   capturedOn: string | null;
   verifiedAt: string | null;
   createdAt: string;
+  /** HM-02: recorded at completion; all false while capturing. */
+  uploads: ScanUploads;
+  stats: GeofenceStatsJson | null;
+  completedAt: string | null;
+};
+
+/** POST /api/listings/:id/scans/:scanId/uploads — where one part of the package goes. */
+export type ScanUploadTarget =
+  | {
+      kind: "video";
+      key: string;
+      uploadId: string;
+      partSizeBytes: number;
+      maxParts: number;
+      maxBytes: number;
+    }
+  | {
+      kind: "attestation" | "notes";
+      key: string;
+      uploadUrl: string;
+      expiresInSeconds: number;
+      maxBytes: number;
+    };
+
+export type ScanUploadedPart = { partNumber: number; sizeBytes: number };
+
+/**
+ * The location record the phone uploads. Samples and clocks only — never a
+ * verdict. The server judges it; anything else in the JSON is dropped.
+ */
+export type ScanAttestation = {
+  version: 1;
+  scanId: string;
+  listingId: string;
+  policyVersion: number;
+  recording: { startedAt: string; durationMs: number; mimeType: string };
+  samples: { t: number; lat: number; lng: number; acc: number }[];
+  pauses: { fromMs: number; toMs: number }[];
+  client: { userAgent: string; platform: string | null };
 };
 
 /** GET /api/listings/:id/scan — owner only. */

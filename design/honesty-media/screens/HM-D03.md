@@ -87,7 +87,23 @@ walk." because the recording lives on that device.
   as authoritative.
 - Never let one listing's completion attach objects from another prefix.
 
-## 9. Tests
+## 9. As built (HM-02)
+
+- Keys are deterministic per scan (`listings/:listingId/scans/:scanId/video.<ext>`,
+  `attestation.json`, `notes.json`) rather than random segments: the scan
+  id is server-issued, so completion knows exactly which three objects to
+  look for and a client cannot land an object anywhere else.
+- The video is an S3 multipart upload the server completes from its own
+  `ListParts`, so the browser never reads an ETag header and the bucket
+  needs no extra CORS exposure beyond PUT.
+- Resume within the page: a second run lists the parts already held and
+  sends only the rest. A closed page loses the recording (it lives in
+  memory), and the honest path is **Walk again**.
+- Camera notes are device facts only (resolution, mime type, duration,
+  user agent); the location record is samples and clocks; any other key a
+  client adds is dropped by the server's parser.
+
+## 10. Tests
 
 - `tests/storage.test.ts`: scan keys, allowlist, part numbering.
 - HTTP: completion refuses a missing part, a foreign prefix, an

@@ -294,6 +294,8 @@ npm start                 # serves dist/ and the API from one origin on :3000
 
 Listing photos are picsum URLs for now (real photography is a pre-launch task). Uploads — host photos and claim evidence — land in Slice 3 and target any S3-compatible bucket via the `S3_*` variables in `.env.example`: AWS S3, Cloudflare R2, Backblaze B2, or MinIO locally.
 
+Honesty-media walk-scans (HM-02) use the same bucket under `listings/:listingId/scans/:scanId/`: the video goes up as an S3 multipart upload that the server completes from its own part list, and the location record and camera notes as single presigned PUTs. The bucket's CORS policy must allow `PUT` from the app origin (as it already must for photos); no response headers need exposing. Size caps are enforced at completion, not by the presigned URL.
+
 ```bash
 docker compose --profile storage up -d storage
 # console http://127.0.0.1:9001 — minioadmin / minioadmin, create the "stead" bucket
