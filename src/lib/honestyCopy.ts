@@ -184,6 +184,12 @@ export const HONESTY_REFUSALS = {
   coordinatesUnconfirmed: "Confirm where the home is before you scan it.",
   /** 409 from completing an upload with a missing part (HM-02). */
   uploadIncomplete: "Some of the walk didn't finish uploading. Finish uploading, then try again.",
+  /** 400 when the uploaded location record cannot be read (HM-02). */
+  attestationUnreadable: "The location record from your phone couldn't be read. Walk again.",
+  /** 409 when an object is over the size cap at completion (HM-02). */
+  uploadTooLarge: "That recording is bigger than we can process. Walk again and keep it shorter.",
+  /** 409 when a walk is completed twice or after it was already judged (HM-02). */
+  alreadySubmitted: "This walk was already submitted. Start a new walk to scan again.",
   /** 503 when object storage is not configured. */
   storageNotConfigured: "Scans aren't configured on this deployment.",
   /** 409 from starting a scan on a hidden demo listing. */

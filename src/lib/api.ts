@@ -15,6 +15,9 @@ import type {
   ListingScan,
   ListingScanStatus,
   ListingSummary,
+  ScanUploadKind,
+  ScanUploadTarget,
+  ScanUploadedPart,
   Passport,
   PassportExport,
   PresignedUpload,
@@ -166,6 +169,55 @@ export const api = {
   /** HM-01. Start a walk-scan: one `capturing` row. 409 before the door is confirmed. */
   startScan: (listingId: string) =>
     request<ListingScan>(`/api/listings/${listingId}/scan`, { method: "POST" }),
+
+  // --- HM-02: the upload package ------------------------------------------
+  scanUploadTarget: (listingId: string, scanId: string, body: { kind: ScanUploadKind; contentType: string }) =>
+    request<ScanUploadTarget>(`/api/listings/${listingId}/scans/${scanId}/uploads`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+
+  scanUploadPartUrl: (
+    listingId: string,
+    scanId: string,
+    body: { key: string; uploadId: string; partNumber: number },
+  ) =>
+    request<{ uploadUrl: string; expiresInSeconds: number }>(
+      `/api/listings/${listingId}/scans/${scanId}/uploads/parts`,
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
+    ),
+
+  scanUploadedParts: (listingId: string, scanId: string, key: string, uploadId: string) =>
+    request<{ parts: ScanUploadedPart[] }>(
+      `/api/listings/${listingId}/scans/${scanId}/uploads/parts?key=${encodeURIComponent(key)}&uploadId=${encodeURIComponent(uploadId)}`,
+    ),
+
+  finishScanUpload: (listingId: string, scanId: string, body: { key: string; uploadId: string }) =>
+    request<{ key: string; sizeBytes: number }>(`/api/listings/${listingId}/scans/${scanId}/uploads/finish`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+
+  completeScan: (listingId: string, scanId: string, body: { videoKey: string }) =>
+    request<ListingScan>(`/api/listings/${listingId}/scans/${scanId}/complete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+
+  /** PUT a blob to a presigned URL. A content type is sent only when the signature carries one. */
+  async putToBucket(uploadUrl: string, body: Blob, contentType?: string): Promise<void> {
+    const response = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: contentType ? { "Content-Type": contentType } : undefined,
+      body,
+    });
+    if (!response.ok) {
+      throw new ApiError(response.status, "The upload was refused. Try again.");
+    }
+  },
 
   connectStatus: () => request<ConnectStatus>("/api/connect/status"),
 

@@ -31,6 +31,11 @@ export function storageConfigured(): boolean {
 
 let client: S3Client | undefined;
 
+/** The shared client, for sibling modules that sign other operations (HM-02 multipart). */
+export function getStorageClient(): S3Client {
+  return getClient();
+}
+
 function getClient(): S3Client {
   if (client) return client;
   if (!storageConfigured()) {

@@ -1219,3 +1219,110 @@ describeDb("HM-01: listing_scans is owner-read, capturing-insert only", () => {
   });
 });
 
+describeDb("HM-02: artifacts are owner-read, samples are nobody's, completion is host-only and once", () => {
+  afterAll(async () => {
+    await closeTestDb();
+  });
+
+  const DOOR = { lat: 42.2529, lng: -73.791 };
+
+  async function capturing(hostId: string): Promise<{ listingId: string; scanId: string }> {
+    const listingId = id();
+    await insertListing({ id: listingId, hostId, title: "Upload RLS cottage", status: "draft" });
+    await asOwner(async (db) => {
+      await db.execute(
+        sql`UPDATE public.listings SET lat = ${DOOR.lat}, lng = ${DOOR.lng}, coordinates_confirmed_at = now() WHERE id = ${listingId}::uuid`,
+      );
+    });
+    const [row] = await rawAsMember(
+      hostId,
+      (tx) => tx`
+        INSERT INTO public.listing_scans (
+          listing_id, host_id, state, honesty_policy_version,
+          accuracy_max_m, geofence_radius_m, bookend_window_seconds, bookend_min_samples,
+          min_indoor_seconds, max_seconds, target_lat, target_lng
+        ) VALUES (
+          ${listingId}::uuid, ${hostId}::uuid, 'capturing', 1, 35, 100, 90, 15, 60, 600, ${DOOR.lat}, ${DOOR.lng}
+        ) RETURNING id
+      `,
+    );
+    return { listingId, scanId: (row as { id: string }).id };
+  }
+
+  const complete = (viewer: string | null, scanId: string, ok = true) =>
+    rawAsMember(
+      viewer,
+      (tx) => tx`
+        SELECT app.complete_scan_upload(
+          ${scanId}::uuid, ${ok}, ${ok ? null : "location_mismatch"}, '2026-09-14'::date,
+          '{"sampleCount":1}'::jsonb,
+          ${tx.json([{ kind: "video", object_key: `k/${scanId}/video.mp4`, content_type: "video/mp4", size_bytes: 10 }])}::jsonb,
+          ${tx.json([{ seq: 0, t_ms: 0, lat: DOOR.lat, lng: DOOR.lng, accuracy_m: 5, accurate: true, distance_m: 0 }])}::jsonb
+        ) AS done
+      `,
+    );
+
+  it("only the host can complete, and only once", async () => {
+    const hostId = id();
+    const otherHost = id();
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    await insertMember(otherHost, `host-${otherHost}@stead.example`, "Other host", true);
+    const { scanId } = await capturing(hostId);
+
+    expect((await complete(otherHost, scanId))[0]).toEqual({ done: false });
+    expect((await complete(null, scanId))[0]).toEqual({ done: false });
+    const stateAfterStranger = await rawAsMember(hostId, (tx) => tx`SELECT state::text FROM public.listing_scans WHERE id = ${scanId}::uuid`);
+    expect((stateAfterStranger[0] as { state: string }).state).toBe("capturing");
+
+    expect((await complete(hostId, scanId))[0]).toEqual({ done: true });
+    expect((await complete(hostId, scanId))[0]).toEqual({ done: false });
+    const stateAfter = await rawAsMember(hostId, (tx) => tx`SELECT state::text, reason FROM public.listing_scans WHERE id = ${scanId}::uuid`);
+    expect(stateAfter[0]).toEqual({ state: "uploaded", reason: null });
+  });
+
+  it("a rejection needs a reason and an acceptance refuses one", async () => {
+    const hostId = id();
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    const { scanId } = await capturing(hostId);
+    await expect(
+      rawAsMember(hostId, (tx) => tx`SELECT app.complete_scan_upload(${scanId}::uuid, false, NULL, '2026-09-14'::date, '{}'::jsonb, '[]'::jsonb, '[]'::jsonb)`),
+    ).rejects.toThrow(/needs a reason/);
+    await expect(
+      rawAsMember(hostId, (tx) => tx`SELECT app.complete_scan_upload(${scanId}::uuid, true, 'x', '2026-09-14'::date, '{}'::jsonb, '[]'::jsonb, '[]'::jsonb)`),
+    ).rejects.toThrow(/carries no reason/);
+    expect((await complete(hostId, scanId, false))[0]).toEqual({ done: true });
+    const after = await rawAsMember(hostId, (tx) => tx`SELECT state::text, reason FROM public.listing_scans WHERE id = ${scanId}::uuid`);
+    expect(after[0]).toEqual({ state: "rejected", reason: "location_mismatch" });
+  });
+
+  it("artifacts are readable by their host only; samples by no member; neither is writable", async () => {
+    const hostId = id();
+    const otherHost = id();
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    await insertMember(otherHost, `host-${otherHost}@stead.example`, "Other host", true);
+    const { scanId } = await capturing(hostId);
+    expect((await complete(hostId, scanId))[0]).toEqual({ done: true });
+
+    const artifacts = (viewer: string | null) =>
+      rawAsMember(viewer, (tx) => tx`SELECT id FROM public.scan_artifacts WHERE scan_id = ${scanId}::uuid`);
+    expect(await artifacts(hostId)).toHaveLength(1);
+    expect(await artifacts(otherHost)).toHaveLength(0);
+    expect(await artifacts(null)).toHaveLength(0);
+
+    for (const viewer of [hostId, otherHost, null]) {
+      await expect(
+        rawAsMember(viewer, (tx) => tx`SELECT seq FROM public.scan_geo_samples WHERE scan_id = ${scanId}::uuid`),
+      ).rejects.toThrow(/permission denied/);
+    }
+    await expect(
+      rawAsMember(hostId, (tx) => tx`INSERT INTO public.scan_artifacts (scan_id, kind, object_key, content_type, size_bytes) VALUES (${scanId}::uuid, 'splat', 'x', 'y', 1)`),
+    ).rejects.toThrow(/permission denied/);
+    await expect(
+      rawAsMember(hostId, (tx) => tx`DELETE FROM public.scan_artifacts WHERE scan_id = ${scanId}::uuid`),
+    ).rejects.toThrow(/permission denied/);
+    await expect(
+      rawAsMember(hostId, (tx) => tx`INSERT INTO public.scan_geo_samples (scan_id, seq, t_ms, lat, lng, accuracy_m, accurate, distance_m) VALUES (${scanId}::uuid, 99, 0, 0, 0, 1, true, 0)`),
+    ).rejects.toThrow(/permission denied/);
+  });
+});
+
