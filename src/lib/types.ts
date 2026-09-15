@@ -156,26 +156,57 @@ export type ListingScan = {
   updatedAt: string;
   /** HM-03: which worker outputs exist. */
   outputs: Record<ScanWorkerArtifactKind, boolean>;
+  /** HM-04: which pipeline the scan is queued for, and what the host has marked. */
+  job: ScanJobKind;
+  mask: ScanMask | null;
+  /** Whether this listing type may answer "the whole walk is the rental" (D11). */
+  wholeHomeAllowed: boolean;
 };
 
 /** What the worker may record (HM-03). The raw kinds are recorded at upload. */
 export type ScanWorkerArtifactKind = "frames" | "cameras" | "splat" | "splat_compressed" | "stills";
 
+/** HM-04: the two kinds of work the same worker does on a scan. */
+export type ScanJobKind = "reconstruct" | "crop";
+
+/** One private stretch of the walk, in milliseconds on the recording clock. */
+export type MaskSegment = { fromMs: number; toMs: number };
+
+/** HM-04: the host's answer to "what may guests walk through?". */
+export type ScanMask = {
+  segments: MaskSegment[];
+  wholeHomeConfirmedAt: string | null;
+  updatedAt: string;
+};
+
+/** POST /api/listings/:id/scans/:scanId/mask */
+export type ScanMaskInput =
+  | { wholeHomeConfirmed: true }
+  | { wholeHomeConfirmed?: false; segments: MaskSegment[] };
+
 /** GET /api/listings/:id/scans/:scanId/stills — short-lived signed URLs to real frames. */
 export type ScanStills = {
-  stills: { index: number; url: string }[];
+  /** `atMs` is where the frame sits on the recording clock (HM-04's scrubber). */
+  stills: { index: number; url: string; atMs: number }[];
   expiresInSeconds: number;
+  durationMs: number;
 };
 
 /** A claimed reconstruction job as the worker sees it (POST /api/scan-worker/jobs/claim). */
 export type ScanJob = {
   scanId: string;
   listingId: string;
+  /** HM-04: `reconstruct` builds the walkthrough, `crop` rebuilds it without the host's private frames. */
+  job: ScanJobKind;
   attempt: number;
   timezone: string;
   target: { lat: number; lng: number };
   thresholds: { accuracyMaxM: number; geofenceRadiusM: number };
   inputs: { videoKey: string; videoContentType: string; attestationKey: string; notesKey: string };
+  /** Ranges the worker must drop before it trains. Empty for a reconstruct job. */
+  maskSegments: MaskSegment[];
+  /** How long the walk ran, so the worker can place a frame on the host's clock. */
+  durationMs: number;
   /** Where the worker writes its outputs. */
   outputPrefix: string;
 };
@@ -190,6 +221,7 @@ export type ScanJobArtifact = {
 /** POST /api/scan-worker/jobs/:scanId/finish */
 export type ScanJobFinish =
   | { attempt: number; outcome: "needs_mask"; artifacts: ScanJobArtifact[] }
+  | { attempt: number; outcome: "verified"; artifacts: ScanJobArtifact[] }
   | { attempt: number; outcome: "failed"; reason: "reconstruction_failed"; artifacts: ScanJobArtifact[] };
 
 /** POST /api/listings/:id/scans/:scanId/uploads — where one part of the package goes. */

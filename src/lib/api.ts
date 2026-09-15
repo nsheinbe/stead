@@ -15,6 +15,8 @@ import type {
   ListingScan,
   ListingScanStatus,
   ListingSummary,
+  ScanMask,
+  ScanMaskInput,
   ScanStills,
   ScanUploadKind,
   ScanUploadTarget,
@@ -216,6 +218,19 @@ export const api = {
   /** Short-lived signed URLs to real frames from the walk, for the failed-state page. */
   scanStills: (listingId: string, scanId: string) =>
     request<ScanStills>(`/api/listings/${listingId}/scans/${scanId}/stills`),
+
+  // --- HM-04: what guests may walk through ----------------------------------
+  /** Save the host's marks, or their whole-home confirmation. Normalised server-side. */
+  saveScanMask: (listingId: string, scanId: string, body: ScanMaskInput) =>
+    request<ScanMask>(`/api/listings/${listingId}/scans/${scanId}/mask`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+
+  /** Send it: verified when nothing needs cutting, a crop job when it does. */
+  sendScanForVerification: (listingId: string, scanId: string) =>
+    request<ListingScan>(`/api/listings/${listingId}/scans/${scanId}/send`, { method: "POST" }),
 
   /** PUT a blob to a presigned URL. A content type is sent only when the signature carries one. */
   async putToBucket(uploadUrl: string, body: Blob, contentType?: string): Promise<void> {

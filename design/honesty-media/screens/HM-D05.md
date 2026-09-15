@@ -1,7 +1,8 @@
 # HM-D05 — Rental vs private mask (HM-04)
 
 **Ticket:** HM-04 · **Route:** `/host/listings/:listingId/scan/mask` ·
-**Surface today:** none. **Status:** specified.
+**Surface today:** `src/pages/HostListingScanMask.tsx` (HM-04).
+**Status:** built, with the deviations in §10.
 
 ## 1. Purpose and primary action
 
@@ -107,5 +108,32 @@ by the worker, and the verified artifact is what guests get.
 - RLS: another host cannot read or write the mask row.
 - Playwright: timeline marking with a stubbed frame strip; whole-home
   path; re-mask banner.
+
+## 10. As built (HM-04)
+
+- **Timeline only.** The desktop 3D crop panel is not built: it needs the
+  viewer (HM-05) and a confirmed headless crop, and §3 already says the
+  timeline alone is enough to verify. The panel stays specified.
+- **Re-mask on a `verified` scan is not open yet.** The page is reachable
+  only from `needs_mask`; any other state shows "The scan isn't ready to
+  mark yet." Keeping a live walkthrough up while a new one verifies needs
+  the code that serves one, so it ships with HM-05 / HM-08 together with
+  the banner in §4. Until then nothing is served to guests, so nothing is
+  at risk.
+- **Whole home does not run a job.** With nothing marked private there are
+  no frames to drop, so `app.send_scan_for_verification` verifies the walk
+  the host just reviewed rather than burning a GPU run to rebuild the same
+  splat. §6's rule still holds where it matters: the browser never sets
+  `verified`, a `SECURITY DEFINER` function does.
+- **Segments are integer milliseconds**, not seconds — the same clock
+  `scan_geo_samples.t_ms` uses, so a frame's moment is exact rather than
+  rounded.
+- **A crop job is a second kind of work on the same queue** (`listing_scans.job`).
+  A dead or failed crop returns to `needs_mask` with the host's marks
+  intact, so sending again is one tap, and a build job can never finish
+  `verified` nor a crop job `needs_mask`.
+- **The frame strip is the worker's stills** (up to 8, evenly spaced), and
+  `GET …/stills` now carries each frame's moment. A scan whose worker saved
+  no stills says so and still offers the whole-home answer.
 
 Copyright 2026 Stead contributors.

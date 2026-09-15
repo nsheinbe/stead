@@ -43,6 +43,7 @@ export const ROUTE_NAMES = [
   "host_listing_edit",
   "host_listing_scan",
   "host_listing_scan_status",
+  "host_listing_scan_mask",
   "host_payouts",
   "host_claims",
   "host_claim_detail",
@@ -228,6 +229,7 @@ export function routeNameFor(pathname: string): RouteName {
   if (/^\/host\/listings\/[^/]+$/.test(clean)) return "host_listing_edit";
   if (/^\/host\/listings\/[^/]+\/scan$/.test(clean)) return "host_listing_scan";
   if (/^\/host\/listings\/[^/]+\/scan\/status$/.test(clean)) return "host_listing_scan_status";
+  if (/^\/host\/listings\/[^/]+\/scan\/mask$/.test(clean)) return "host_listing_scan_mask";
   if (/^\/host\/claims\/[^/]+$/.test(clean)) return "host_claim_detail";
   return "not_found";
 }

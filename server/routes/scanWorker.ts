@@ -18,9 +18,15 @@ import { timingSafeEqual } from "node:crypto";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
-import { SCAN_REASON_COPY } from "../../src/lib/honestyCopy";
+import { MASK_COPY, SCAN_REASON_COPY } from "../../src/lib/honestyCopy";
 import type { ScanJob, ScanWorkerArtifactKind } from "../../src/lib/types";
-import { scanFailedEmail, scanReadyToCheckEmail, scanStatusUrl, sendEmail } from "../lib/email";
+import {
+  scanFailedEmail,
+  scanReadyToCheckEmail,
+  scanStatusUrl,
+  scanVerifiedEmail,
+  sendEmail,
+} from "../lib/email";
 import { tenantQuery, type AppEnv } from "../lib/http";
 import { pgCode, pgMessage } from "../lib/pgError";
 import { WORKER_ARTIFACT_KINDS } from "../lib/scanStorage";
@@ -61,6 +67,12 @@ const finishSchema = z.discriminatedUnion("outcome", [
   z.object({
     attempt: z.number().int().positive(),
     outcome: z.literal("needs_mask"),
+    artifacts: z.array(artifactSchema).max(200),
+  }),
+  // HM-04: only a crop job may finish verified, which the function re-checks.
+  z.object({
+    attempt: z.number().int().positive(),
+    outcome: z.literal("verified"),
     artifacts: z.array(artifactSchema).max(200),
   }),
   z.object({
@@ -136,11 +148,17 @@ scanWorkerRoutes.post("/jobs/:scanId/finish", async (c) => {
   const mail =
     body.outcome === "needs_mask"
       ? scanReadyToCheckEmail({ listingTitle: finished.listingTitle, statusUrl })
-      : scanFailedEmail({
-          listingTitle: finished.listingTitle,
-          statusUrl,
-          reason: SCAN_REASON_COPY.reconstruction_failed,
-        });
+      : body.outcome === "verified"
+        ? scanVerifiedEmail({
+            listingTitle: finished.listingTitle,
+            statusUrl,
+            coverage: MASK_COPY.verifiedCoverageCropped,
+          })
+        : scanFailedEmail({
+            listingTitle: finished.listingTitle,
+            statusUrl,
+            reason: SCAN_REASON_COPY.reconstruction_failed,
+          });
   const notified = await sendEmail({ to: finished.hostEmail, ...mail });
   return c.json({ scanId, state: finished.state, notified });
 });

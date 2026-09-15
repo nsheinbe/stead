@@ -274,6 +274,23 @@ export function scanFailedEmail(input: { listingTitle: string; statusUrl: string
   ]);
 }
 
+/**
+ * HM-04: the walkthrough is verified. Deliberately says what a guest will and
+ * will not see, because that is the thing the host just decided.
+ */
+export function scanVerifiedEmail(input: {
+  listingTitle: string;
+  statusUrl: string;
+  /** What the host answered, in one sentence from the locked copy. */
+  coverage: string;
+}): Omit<Message, "to"> {
+  return mail(SCAN_EMAIL_SUBJECTS.verified(input.listingTitle), "Honesty scan", "Your walkthrough is verified", [
+    `The walk you filmed at ${input.listingTitle} is verified.`,
+    input.coverage,
+    `See it here: ${input.statusUrl}`,
+  ]);
+}
+
 export function scanRejectedEmail(input: { listingTitle: string; statusUrl: string; reason: string }): Omit<Message, "to"> {
   return mail(SCAN_EMAIL_SUBJECTS.rejected(input.listingTitle), "Honesty scan", "We couldn't confirm the location", [
     `The walk you filmed at ${input.listingTitle} was uploaded, but its location readings didn't confirm it was at the home.`,

@@ -57,6 +57,9 @@ const done: ListingScan = {
   claimedAt: null,
   updatedAt: "2026-09-14T23:40:00.000Z",
   outputs: { frames: false, cameras: false, splat: false, splat_compressed: false, stills: false },
+  job: "reconstruct",
+  mask: null,
+  wholeHomeAllowed: true,
 };
 
 type Call = string;

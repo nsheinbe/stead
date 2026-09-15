@@ -92,6 +92,7 @@ const adapters: Adapters = {
   },
   readText: (path) => readFile(path, "utf8"),
   writeText: (path, text) => writeFile(path, text, "utf8"),
+  remove: (path) => rm(path, { force: true }),
   log,
 };
 
