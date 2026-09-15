@@ -241,6 +241,7 @@ function Progress({
 
   const capturePath = `/host/listings/${listing.id}/scan`;
   const wherePath = `/host/listings/${listing.id}#where`;
+  const maskPath = `/host/listings/${listing.id}/scan/mask`;
 
   const reasonLine = scan?.reason ? SCAN_REASON_COPY[scan.reason] : null;
 
@@ -260,7 +261,6 @@ function Progress({
             {reasonLine}
           </p>
         ) : null}
-        {key === "needs_mask" ? <p className="mb-0 mt-2 text-sm text-ink-secondary">{SCAN_STATUS_COPY.maskNotYet}</p> : null}
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
           {key === "not_started" ? <ButtonLink to={capturePath}>{entry.action}</ButtonLink> : null}
@@ -271,6 +271,7 @@ function Progress({
               Check again
             </Button>
           ) : null}
+          {key === "needs_mask" ? <ButtonLink to={maskPath}>{entry.action}</ButtonLink> : null}
           {key === "verified" ? (
             <ButtonLink to={`/listing/${listing.id}`} variant="secondary">
               View this home

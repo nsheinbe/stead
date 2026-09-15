@@ -15,9 +15,12 @@ import {
   DEFAULT_TOOLS,
   MAX_STILLS,
   STAGE_NAMES,
+  frameNames,
+  framesToDrop,
   outputKeys,
   pickStills,
   planCommands,
+  pruneTransforms,
   planIsClean,
   reconstruct,
   type Adapters,
@@ -32,7 +35,10 @@ const PREFIX = `listings/${LISTING}/scans/${SCAN}/`;
 const job: ScanJob = {
   scanId: SCAN,
   listingId: LISTING,
+  job: "reconstruct",
   attempt: 2,
+  maskSegments: [],
+  durationMs: 300_000,
   timezone: "America/New_York",
   target: { lat: 42.2529, lng: -73.791 },
   thresholds: { accuracyMaxM: 35, geofenceRadiusM: 100 },
@@ -52,6 +58,8 @@ function fakeAdapters(opts: { failAt?: StageName; frames?: number } = {}) {
   const downloads: { key: string; toPath: string }[] = [];
   const ran: string[] = [];
   const logs: string[] = [];
+  const removed: string[] = [];
+  const written = new Map<string, string>();
   const dirs = new Map<string, string[]>();
   const adapters: Adapters = {
     async download(key, toPath) {
@@ -78,20 +86,33 @@ function fakeAdapters(opts: { failAt?: StageName; frames?: number } = {}) {
     async fileSize() {
       return 1;
     },
-    async readText() {
+    async readText(path) {
+      if (written.has(path)) return written.get(path) as string;
+      if (path.endsWith("transforms.json")) {
+        const names = dirs.get(`${ROOT}/processed/images`) ?? [];
+        return JSON.stringify({ camera_model: "OPENCV", frames: names.map((n) => ({ file_path: `images/${n}` })) });
+      }
       return "";
     },
-    async writeText() {},
+    async writeText(path, text) {
+      written.set(path, text);
+    },
+    async remove(path) {
+      removed.push(path);
+      const dir = path.slice(0, path.lastIndexOf("/"));
+      const name = path.slice(path.lastIndexOf("/") + 1);
+      dirs.set(dir, (dirs.get(dir) ?? []).filter((f) => f !== name));
+    },
     log(line) {
       logs.push(line);
     },
   };
-  return { adapters, uploads, downloads, ran, logs };
+  return { adapters, uploads, downloads, ran, logs, removed, written };
 }
 
 describe("the plan", () => {
-  it("is the five honest stages and nothing else", () => {
-    expect(STAGE_NAMES).toEqual(["extract", "stills", "train", "export", "compress"]);
+  it("is the six honest stages and nothing else", () => {
+    expect(STAGE_NAMES).toEqual(["extract", "drop", "stills", "train", "export", "compress"]);
     const stages = planCommands(job, { root: ROOT }).map((c) => c.stage);
     expect(stages).toEqual(["extract", "train", "export", "compress"]);
   });
@@ -190,6 +211,94 @@ describe("outcomes", () => {
       expect(line).not.toMatch(/processed\/images\//);
       expect(line).not.toMatch(/lots of stderr/);
     }
+  });
+});
+
+describe("a crop job drops what the host marked", () => {
+  const cropJob = (segments: { fromMs: number; toMs: number }[]): ScanJob => ({
+    ...job,
+    job: "crop",
+    maskSegments: segments,
+  });
+
+  it("deletes the private frames, prunes the camera list, and verifies", async () => {
+    // 10 frames evenly across 300 s: frame i sits at i/9 of the walk.
+    const { adapters, removed, ran, written } = fakeAdapters({ frames: 10 });
+    const result = await reconstruct(cropJob([{ fromMs: 100_000, toMs: 140_000 }]), { root: ROOT }, adapters);
+
+    expect(result.finish.outcome).toBe("verified");
+    expect(result.stagesDone).toEqual(["extract", "drop", "stills", "train", "export", "compress"]);
+    // 100–140 s covers frames at 100_000 and 133_333: indices 3 and 4.
+    expect(removed).toEqual([`${ROOT}/processed/images/frame_00004.jpg`, `${ROOT}/processed/images/frame_00005.jpg`]);
+
+    const transforms = JSON.parse(written.get(`${ROOT}/processed/transforms.json`) as string) as {
+      camera_model: string;
+      frames: { file_path: string }[];
+    };
+    expect(transforms.camera_model).toBe("OPENCV");
+    expect(transforms.frames.map((f) => f.file_path)).not.toContain("images/frame_00004.jpg");
+    expect(transforms.frames).toHaveLength(8);
+    expect(ran).toEqual(["extract", "train", "export", "compress"]);
+  });
+
+  it("never offers the dropped frames back to the host as stills", async () => {
+    const { adapters } = fakeAdapters({ frames: 10 });
+    const result = await reconstruct(cropJob([{ fromMs: 0, toMs: 140_000 }]), { root: ROOT }, adapters);
+    expect(result.finish.outcome).toBe("verified");
+    const stills = result.finish.artifacts.filter((a) => a.kind === "stills");
+    // Five frames survive, so five stills — all from the part guests will see.
+    expect(stills).toHaveLength(5);
+  });
+
+  it("refuses to train on nothing when the marks would drop every frame", async () => {
+    const { adapters, ran } = fakeAdapters({ frames: 10 });
+    const result = await reconstruct(cropJob([{ fromMs: 0, toMs: 300_001 }]), { root: ROOT }, adapters);
+    expect(result.finish.outcome).toBe("failed");
+    expect(result.stagesDone).toEqual(["extract"]);
+    expect(ran).toEqual(["extract"]);
+  });
+
+  it("a crop with no marks changes nothing and still verifies", async () => {
+    const { adapters, removed } = fakeAdapters({ frames: 10 });
+    const result = await reconstruct(cropJob([]), { root: ROOT }, adapters);
+    expect(removed).toEqual([]);
+    expect(result.finish.outcome).toBe("verified");
+    expect(result.stagesDone).not.toContain("drop");
+  });
+
+  it("a build job never drops a frame, whatever is on the row", async () => {
+    const { adapters, removed } = fakeAdapters({ frames: 10 });
+    const result = await reconstruct({ ...job, maskSegments: [{ fromMs: 0, toMs: 100_000 }] }, { root: ROOT }, adapters);
+    expect(removed).toEqual([]);
+    expect(result.finish.outcome).toBe("needs_mask");
+  });
+});
+
+describe("framesToDrop and pruneTransforms", () => {
+  const names = Array.from({ length: 10 }, (_, i) => `frame_${String(i + 1).padStart(5, "0")}.jpg`);
+
+  it("picks the frames whose moment falls inside a mark", () => {
+    expect(framesToDrop(names, [{ fromMs: 0, toMs: 40_000 }], 300_000)).toEqual([
+      "frame_00001.jpg",
+      "frame_00002.jpg",
+    ]);
+    expect(framesToDrop(names, [], 300_000)).toEqual([]);
+    expect(framesToDrop(names, [{ fromMs: 0, toMs: 40_000 }], 0)).toEqual([]);
+  });
+
+  it("ignores anything that is not a frame", () => {
+    expect(frameNames([...names, "transforms.json", "notes.txt"])).toEqual(names);
+  });
+
+  it("leaves the rest of transforms.json alone", () => {
+    const text = JSON.stringify({ fl_x: 1200, frames: names.map((n) => ({ file_path: `images/${n}` })) });
+    const pruned = JSON.parse(pruneTransforms(text, ["frame_00002.jpg"])) as {
+      fl_x: number;
+      frames: { file_path: string }[];
+    };
+    expect(pruned.fl_x).toBe(1200);
+    expect(pruned.frames).toHaveLength(9);
+    expect(pruneTransforms(JSON.stringify({ frames: "not an array" }), ["x"])).toContain("not an array");
   });
 });
 

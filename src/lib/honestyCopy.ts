@@ -192,6 +192,14 @@ export const HONESTY_REFUSALS = {
   alreadySubmitted: "This walk was already submitted. Start a new walk to scan again.",
   /** 409 when a retry is asked for on a scan that is not `failed` (HM-03). */
   retryNotFailed: "This scan isn't waiting for a retry.",
+  /** 409 from the mask page when the scan is not waiting to be marked (HM-04). */
+  maskNotReady: "The scan isn't ready to mark yet.",
+  /** 400 when the marks would leave a guest nothing to walk through (HM-04). */
+  maskAllPrivate: "You've marked the whole walk private. Keep at least the rental area.",
+  /** 400 when a private-room listing tries to confirm whole home (D11). */
+  maskPrivateRoomWholeHome: "A private room listing always needs its private parts marked.",
+  /** 409 from sending a scan with no answer on it yet (HM-04). */
+  maskNothingMarked: "Mark private parts, or confirm the whole walk is the rental.",
   /** 409 when the attempt cap is spent (HM-03). */
   retryExhausted: (attempts: number) =>
     `We've tried ${attempts} times. Walk again, slower and with more overlap between rooms.`,
@@ -242,11 +250,52 @@ export const SCAN_STATUS_COPY = {
   checkAgainReady: "Ready for you to check.",
   stillsCaption: "Frames from your walk. Nothing here is generated.",
   stillsNone: "The worker didn't save any frames from this walk.",
-  /** HM-04 has not landed: say so rather than link to a page that isn't there. */
-  maskNotYet: "Marking private rooms isn't ready on Stead yet. Nothing from this walk is public until you have.",
   /** The quiet "What happens next" surface (HM-D04 §3). */
   whatNext:
     "Once the walkthrough is built, you mark anything private and those parts are cut before anyone else sees it. Only then can it be verified.",
+} as const;
+
+/**
+ * The mask page (HM-D05). The promise this copy makes is narrow and exact:
+ * a marked part is *cut*, never blurred, tidied or filled in. The worker
+ * drops those frames before it builds anything, so a private room is not in
+ * the walkthrough rather than hidden inside it.
+ */
+export const MASK_COPY = {
+  intro:
+    "Guests will walk through what you keep. Mark anything private — a bedroom, an office, a neighbour's door — and it's cut before anyone else sees the walkthrough.",
+  timelineHeading: "Your walk",
+  timelineHint: "Drag to move through the walk. The frames are from your own recording.",
+  scrubberLabel: "Position in the walk",
+  markFrom: "Mark as private from here",
+  markTo: "…to here",
+  remove: "Remove",
+  wholeHomeHeading: "Whole home",
+  wholeHomeLabel: "The whole walk is the rental — there's nothing private in it",
+  wholeHomeLocks: "Untick this to mark private parts.",
+  privateRoomHint: "A private room listing always needs its private parts marked.",
+  summaryHeading: "What guests will see",
+  summaryWhole: "Guests will see the whole walk.",
+  summaryNone: "Nothing is marked private yet.",
+  summarySegments: (count: number, seconds: number) =>
+    `Guests will see ${count} private ${count === 1 ? "part" : "parts"} removed (${seconds} seconds).`,
+  segmentRow: (range: string) => `Private: ${range}`,
+  send: "Send for verification",
+  saveLater: "Save and finish later",
+  sending: "Sending…",
+  saved: "Saved. You can finish this later.",
+  sent: "Sent for verification.",
+  /** Shown while the host has answered nothing yet; the send button waits on it. */
+  sendBlocked: "Mark private parts, or confirm the whole walk is the rental.",
+  /** A re-mask on a live walkthrough (journeys §6). */
+  liveStaysUp: "Your current walkthrough stays up until the new one is verified.",
+  /** A crop job that didn't finish (HM-D05 §4). */
+  cropFailed:
+    "We couldn't apply the crop. Try sending again, or mark the private parts on the timeline instead.",
+  whatHappensNext:
+    "When you send, the walkthrough is rebuilt without the parts you marked. We'll email you when it's verified.",
+  /** One sentence in the verified email saying what the host chose. */
+  verifiedCoverageCropped: "The parts you marked private are not in it.",
 } as const;
 
 /** Subjects for the one email per terminal state (DECISIONS D14). */
@@ -291,6 +340,10 @@ export const HONESTY_VERBS = {
     "Mark private rooms",
     "Keep this area",
     "Mark as private",
+    "Mark as private from here",
+    "…to here",
+    "Remove",
+    "Save and finish later",
     "Confirm whole home",
     "Send for verification",
     "View the walkthrough",

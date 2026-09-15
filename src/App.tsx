@@ -34,6 +34,10 @@ const HostListingScanPage = lazy(() =>
 const HostListingScanStatusPage = lazy(() =>
   import("./pages/HostListingScanStatus").then((m) => ({ default: m.HostListingScanStatusPage })),
 );
+// HM-04: the mask page pulls in the frame strip; hosting-only, so its own chunk.
+const HostListingScanMaskPage = lazy(() =>
+  import("./pages/HostListingScanMask").then((m) => ({ default: m.HostListingScanMaskPage })),
+);
 
 export function App() {
   return (
@@ -80,6 +84,20 @@ export function App() {
               }
             >
               <HostListingScanStatusPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/host/listings/:listingId/scan/mask"
+          element={
+            <Suspense
+              fallback={
+                <p role="status" className="sr-only">
+                  Loading the page for marking private rooms
+                </p>
+              }
+            >
+              <HostListingScanMaskPage />
             </Suspense>
           }
         />

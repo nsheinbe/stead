@@ -1493,3 +1493,148 @@ describeDb("HM-03: job transitions belong to the functions; members cannot claim
     expect(await notice(null)).toHaveLength(0);
   });
 });
+
+describeDb("HM-04: a mask is the host's own row, writable only while the scan waits for it", () => {
+  afterAll(async () => {
+    await closeTestDb();
+  });
+
+  const DOOR = { lat: 42.2529, lng: -73.791 };
+
+  /** A built scan waiting to be marked, plus its listing type. */
+  async function builtScan(
+    hostId: string,
+    opts: { state?: string; type?: "entire_home" | "private_room" } = {},
+  ) {
+    const listingId = id();
+    const scanId = id();
+    await insertListing({ id: listingId, hostId, title: "Mask RLS cottage", status: "draft", type: opts.type ?? "entire_home" });
+    await asOwner(async (db) => {
+      await db.execute(sql`
+        INSERT INTO public.listing_scans (
+          id, listing_id, host_id, state, honesty_policy_version,
+          accuracy_max_m, geofence_radius_m, bookend_window_seconds, bookend_min_samples,
+          min_indoor_seconds, max_seconds, target_lat, target_lng, captured_on, completed_at, geofence_stats, attempt
+        ) VALUES (
+          ${scanId}::uuid, ${listingId}::uuid, ${hostId}::uuid, ${opts.state ?? "needs_mask"}::public.scan_state, 1,
+          35, 100, 90, 15, 60, 600, ${DOOR.lat}, ${DOOR.lng}, '2026-09-14'::date, now(),
+          '{"durationSeconds":300}'::jsonb, 1
+        )
+      `);
+    });
+    return { listingId, scanId };
+  }
+
+  const writeMask = (
+    viewer: string | null,
+    scanId: string,
+    hostId: string,
+    segments: postgres.JSONValue,
+    whole = false,
+  ) =>
+    rawAsMember(
+      viewer,
+      (tx) => tx`
+        INSERT INTO public.listing_rental_masks (scan_id, host_id, segments, whole_home_confirmed_at)
+        VALUES (${scanId}::uuid, ${hostId}::uuid, ${tx.json(segments)}::jsonb, ${whole ? tx`now()` : null})
+        RETURNING scan_id
+      `,
+    );
+
+  it("only the host may write it, and only for their own scan", async () => {
+    const hostId = id();
+    const otherHost = id();
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    await insertMember(otherHost, `host-${otherHost}@stead.example`, "Other host", true);
+    const { scanId } = await builtScan(hostId);
+    const segments = [{ fromMs: 0, toMs: 10_000 }];
+
+    // A stranger cannot write it as themselves, nor by claiming the host's id.
+    await expect(writeMask(otherHost, scanId, otherHost, segments)).rejects.toThrow(/row-level security/);
+    await expect(writeMask(otherHost, scanId, hostId, segments)).rejects.toThrow(/row-level security/);
+    await expect(writeMask(null, scanId, hostId, segments)).rejects.toThrow(/row-level security/);
+
+    expect(await writeMask(hostId, scanId, hostId, segments)).toHaveLength(1);
+
+    // And only its host can read it back.
+    const read = (viewer: string | null) =>
+      rawAsMember(viewer, (tx) => tx`SELECT scan_id FROM public.listing_rental_masks WHERE scan_id = ${scanId}::uuid`);
+    expect(await read(hostId)).toHaveLength(1);
+    expect(await read(otherHost)).toHaveLength(0);
+    expect(await read(null)).toHaveLength(0);
+
+    // A stranger cannot update or delete it either.
+    await expect(
+      rawAsMember(otherHost, (tx) => tx`UPDATE public.listing_rental_masks SET segments = '[]'::jsonb WHERE scan_id = ${scanId}::uuid`),
+    ).resolves.toHaveLength(0);
+    await expect(
+      rawAsMember(hostId, (tx) => tx`DELETE FROM public.listing_rental_masks WHERE scan_id = ${scanId}::uuid`),
+    ).rejects.toThrow(/permission denied/);
+  });
+
+  it("is refused once the scan has left needs_mask, in both directions", async () => {
+    const hostId = id();
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    const { scanId } = await builtScan(hostId, { state: "uploaded" });
+    await expect(writeMask(hostId, scanId, hostId, [{ fromMs: 0, toMs: 10_000 }])).rejects.toThrow(/row-level security/);
+
+    // Once it is markable the write lands; when it moves on, edits stop.
+    const marked = await builtScan(hostId);
+    expect(await writeMask(hostId, marked.scanId, hostId, [{ fromMs: 0, toMs: 10_000 }])).toHaveLength(1);
+    await asOwner(async (db) => {
+      await db.execute(sql`UPDATE public.listing_scans SET state = 'verified', verified_at = now() WHERE id = ${marked.scanId}::uuid`);
+    });
+    await expect(
+      rawAsMember(
+        hostId,
+        (tx) => tx`UPDATE public.listing_rental_masks SET segments = '[]'::jsonb WHERE scan_id = ${marked.scanId}::uuid`,
+      ),
+    ).rejects.toThrow(/row-level security/);
+  });
+
+  it("a private room cannot confirm whole home, even in raw SQL (D11)", async () => {
+    const hostId = id();
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    const room = await builtScan(hostId, { type: "private_room" });
+    await expect(writeMask(hostId, room.scanId, hostId, [], true)).rejects.toThrow(/row-level security/);
+    expect(await writeMask(hostId, room.scanId, hostId, [{ fromMs: 0, toMs: 10_000 }])).toHaveLength(1);
+
+    const home = await builtScan(hostId, { type: "entire_home" });
+    expect(await writeMask(hostId, home.scanId, hostId, [], true)).toHaveLength(1);
+  });
+
+  it("refuses a segment list that is not segments, and both answers at once", async () => {
+    const hostId = id();
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    const { scanId } = await builtScan(hostId);
+    await expect(writeMask(hostId, scanId, hostId, [{ fromMs: 10_000, toMs: 5_000 }])).rejects.toThrow(/segments_shape/);
+    await expect(writeMask(hostId, scanId, hostId, [{ fromMs: -1, toMs: 5_000 }])).rejects.toThrow(/segments_shape/);
+    await expect(writeMask(hostId, scanId, hostId, ["nope"])).rejects.toThrow(/segments_shape/);
+    await expect(writeMask(hostId, scanId, hostId, [{ fromMs: 0, toMs: 10_000 }], true)).rejects.toThrow(/one_answer/);
+  });
+
+  it("no member can send a scan for verification but its host, and only from needs_mask", async () => {
+    const hostId = id();
+    const otherHost = id();
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    await insertMember(otherHost, `host-${otherHost}@stead.example`, "Other host", true);
+    const { scanId } = await builtScan(hostId);
+    expect(await writeMask(hostId, scanId, hostId, [], true)).toHaveLength(1);
+
+    const send = (viewer: string | null) =>
+      rawAsMember(viewer, (tx) => tx`SELECT state FROM app.send_scan_for_verification(${scanId}::uuid)`);
+    const stateOf = async () => {
+      const rows = await rawAsMember(hostId, (tx) => tx`SELECT state::text FROM public.listing_scans WHERE id = ${scanId}::uuid`);
+      return (rows[0] as { state: string }).state;
+    };
+
+    expect(await send(otherHost)).toHaveLength(0);
+    expect(await send(null)).toHaveLength(0);
+    expect(await stateOf()).toBe("needs_mask");
+
+    expect(await send(hostId)).toEqual([{ state: "verified" }]);
+    expect(await stateOf()).toBe("verified");
+    // Done is done: sending again moves nothing.
+    expect(await send(hostId)).toHaveLength(0);
+  });
+});

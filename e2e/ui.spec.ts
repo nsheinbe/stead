@@ -5,7 +5,7 @@
  * is covered at the HTTP layer; this file checks the pages still render and
  * that a signed-in guest can cancel from /trips/:id.
  */
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import {
   backdateStay,
   confirmBooking,
@@ -651,6 +651,99 @@ test.describe("scan progress (HM-03)", () => {
 
     // The same footage is now the worker's to claim; the attempt count stands.
     await expect(page.getByTestId("scan-attempts")).toHaveText("1 of 3");
+  });
+});
+
+test.describe("private rooms (HM-04)", () => {
+  /** A built walkthrough waiting to be marked. Owner write: no route puts a row here. */
+  async function aBuiltScan(hostId: string, listingId: string) {
+    const scanId = id();
+    await asOwner(async (db) => {
+      await db.execute(sql`
+        INSERT INTO public.listing_scans (
+          id, listing_id, host_id, state, honesty_policy_version,
+          accuracy_max_m, geofence_radius_m, bookend_window_seconds, bookend_min_samples,
+          min_indoor_seconds, max_seconds, target_lat, target_lng,
+          captured_on, completed_at, geofence_stats, attempt
+        ) VALUES (
+          ${scanId}::uuid, ${listingId}::uuid, ${hostId}::uuid, 'needs_mask', 1,
+          35, 100, 90, 15, 60, 600, 42.2529, -73.791,
+          '2026-09-14'::date, now(),
+          '{"sampleCount":60,"accurateCount":60,"durationSeconds":300,"startAccurate":30,"endAccurate":30,"medianDistanceM":10,"startDistanceM":1,"endDistanceM":1}'::jsonb,
+          1
+        )
+      `);
+    });
+    return scanId;
+  }
+
+  async function aListing(request: APIRequestContext, cookie: string, type: string, title: string) {
+    const created = await request.post("/api/listings", {
+      headers: { cookie, "content-type": "application/json" },
+      data: {
+        title,
+        type,
+        city: "Hudson",
+        country: "US",
+        timezone: "America/New_York",
+        nightlyRateCents: 20_000,
+        depositCents: 0,
+        maxGuests: 2,
+        lat: 42.2529,
+        lng: -73.791,
+        confirmCoordinates: true,
+      },
+    });
+    expect(created.status()).toBe(201);
+    return ((await created.json()) as { id: string }).id;
+  }
+
+  test("a whole-home confirmation is an action, and it verifies the walk", async ({ page, request }) => {
+    await ensureDb();
+    const owner = await seedHost();
+    await signIn(page, owner.token);
+    const listingId = await aListing(request, owner.cookie, "entire_home", "Mask cottage");
+    await aBuiltScan(owner.hostId, listingId);
+
+    // The status page now offers the real next step.
+    await page.goto(`/host/listings/${listingId}/scan/status`);
+    await expect(page.getByTestId("scan-status-pill")).toHaveText("Needs private rooms marked");
+    await page.getByRole("link", { name: "Mark private rooms" }).click();
+    await expect(page).toHaveURL(new RegExp(`/host/listings/${listingId}/scan/mask$`));
+    await expect(page.getByRole("heading", { level: 1, name: /Mark private rooms — Mask cottage/ })).toBeVisible();
+
+    // Nothing answered yet: sending waits, and says what it waits for.
+    await expect(page.getByTestId("mask-summary")).toHaveText("Nothing is marked private yet.");
+    await expect(page.getByTestId("mask-send")).toBeDisabled();
+    await expect(page.getByTestId("mask-send-blocked")).toBeVisible();
+
+    // Confirming the whole walk is a tick and a send, never a default.
+    await page.getByLabel("The whole walk is the rental — there's nothing private in it").check();
+    await expect(page.getByTestId("mask-summary")).toHaveText("Guests will see the whole walk.");
+    await expect(page.getByTestId("mask-send")).toBeEnabled();
+    await page.getByTestId("mask-send").click();
+
+    await expect(page).toHaveURL(new RegExp(`/host/listings/${listingId}/scan/status$`));
+    await expect(page.getByTestId("scan-status-pill")).toHaveText(/Verified \d{1,2} \w{3} \d{4}/);
+
+    // The page closes behind it: the answer is recorded, not editable.
+    await page.goto(`/host/listings/${listingId}/scan/mask`);
+    await expect(page.getByTestId("mask-not-ready")).toBeVisible();
+  });
+
+  test("a private room is never offered the whole-home shortcut", async ({ page, request }) => {
+    await ensureDb();
+    const owner = await seedHost();
+    await signIn(page, owner.token);
+    const listingId = await aListing(request, owner.cookie, "private_room", "Spare room");
+    await aBuiltScan(owner.hostId, listingId);
+
+    await page.goto(`/host/listings/${listingId}/scan/mask`);
+    await expect(page.getByTestId("mask-private-room")).toHaveText(
+      "A private room listing always needs its private parts marked.",
+    );
+    await expect(page.getByLabel("The whole walk is the rental — there's nothing private in it")).toHaveCount(0);
+    await expect(page.getByTestId("mask-send")).toBeDisabled();
   });
 });
 

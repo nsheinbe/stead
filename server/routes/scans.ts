@@ -13,7 +13,12 @@
  * HM-03 adds the host's side of reconstruction:
  *
  *   POST /:id/scans/:scanId/retry            failed → uploaded while attempts remain
- *   GET  /:id/scans/:scanId/stills           signed URLs to real frames (failed state)
+ *   GET  /:id/scans/:scanId/stills           signed URLs to real frames, with their moments
+ *
+ * HM-04 adds what guests may walk through:
+ *
+ *   POST /:id/scans/:scanId/mask             the host's marks, or whole-home
+ *   POST /:id/scans/:scanId/send             needs_mask → verified, or a crop job
  *
  * Completion is where the verdict happens: the server reads the location
  * record from the bucket, judges it against the row's frozen target and
@@ -23,10 +28,11 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
-import { HONESTY_REFUSALS, SCAN_REASON_COPY } from "../../src/lib/honestyCopy";
-import type { ListingScan, ScanStills, ScanUploadTarget, ScanUploadedPart } from "../../src/lib/types";
+import { HONESTY_REFUSALS, MASK_COPY, SCAN_REASON_COPY } from "../../src/lib/honestyCopy";
+import type { ListingScan, ScanMask, ScanStills, ScanUploadTarget, ScanUploadedPart } from "../../src/lib/types";
+import { coversWholeWalk, mergeSegments, stillAtMs, MAX_MASK_SEGMENTS } from "../../src/lib/scanMask";
 import { capturedOnFor, parseAttestation } from "../lib/attestation";
-import { scanRejectedEmail, scanStatusUrl, sendEmail } from "../lib/email";
+import { scanRejectedEmail, scanStatusUrl, scanVerifiedEmail, sendEmail } from "../lib/email";
 import { distanceMetres, judgeWalk, sanitizeSamples } from "../lib/geofence";
 import { sessionUser, tenantQuery, type AppEnv } from "../lib/http";
 import {
@@ -49,13 +55,16 @@ import {
   scanObjectKey,
   validPartNumber,
 } from "../lib/scanStorage";
+import { pgCode, pgMessage } from "../lib/pgError";
 import { StorageError, storageConfigured } from "../lib/storage";
 import {
   completeScanUpload,
   getScanForOwner,
   getScanTarget,
   retryScanReconstruction,
+  saveScanMask,
   scanNotice,
+  sendScanForVerification,
   type OwnedScan,
 } from "../queries/scans";
 
@@ -335,8 +344,116 @@ scanRoutes.get("/:id/scans/:scanId/stills", async (c) => {
   const keys = owned.stillsKeys.slice(0, SCAN_MAX_STILLS);
   const signed = await bucket(() => Promise.all(keys.map((key) => presignGetObject(key))));
   const body: ScanStills = {
-    stills: signed.map((s, index) => ({ index, url: s.url })),
+    stills: signed.map((s, index) => ({
+      index,
+      url: s.url,
+      atMs: stillAtMs(index, signed.length, owned.durationMs),
+    })),
     expiresInSeconds: SCAN_URL_TTL_SECONDS,
+    durationMs: owned.durationMs,
   };
   return c.json(body);
+});
+
+// ---------------------------------------------------------------- HM-04 -----
+
+const maskSchema = z.union([
+  z.object({ wholeHomeConfirmed: z.literal(true) }),
+  z.object({
+    wholeHomeConfirmed: z.literal(false).optional(),
+    segments: z
+      .array(z.object({ fromMs: z.number().int().nonnegative(), toMs: z.number().int().positive() }))
+      .max(MAX_MASK_SEGMENTS),
+  }),
+]);
+
+/** The caller's scan on the caller's listing, still waiting to be marked. */
+async function markableScan(c: Parameters<typeof tenantQuery>[0]): Promise<{ owned: OwnedScan; hostId: string }> {
+  const host = sessionUser(c);
+  const listingId = c.req.param("id") as string;
+  const scanId = c.req.param("scanId") as string;
+  const owned = await tenantQuery(c, (tx) => getScanForOwner(tx, host.id, listingId, scanId));
+  if (!owned) throw new HTTPException(404, { message: "No scan of yours here" });
+  if (owned.scan.state !== "needs_mask") {
+    throw new HTTPException(409, { message: HONESTY_REFUSALS.maskNotReady });
+  }
+  return { owned, hostId: host.id };
+}
+
+/**
+ * What guests may walk through. Segments are normalised here — clamped to the
+ * recording, merged, sorted — so the stored answer is the one the worker will
+ * act on, and two equal masks compare equal. Marking everything private is
+ * refused: a walkthrough of nothing is not a walkthrough.
+ */
+scanRoutes.post("/:id/scans/:scanId/mask", async (c) => {
+  // Who before what: a stranger gets 401 or 404, never a note on their body.
+  const { owned, hostId } = await markableScan(c);
+  const body = await parse(c, maskSchema);
+
+  const wholeHomeConfirmed = body.wholeHomeConfirmed === true;
+  if (wholeHomeConfirmed && !owned.scan.wholeHomeAllowed) {
+    throw new HTTPException(400, { message: HONESTY_REFUSALS.maskPrivateRoomWholeHome });
+  }
+  const segments = wholeHomeConfirmed ? [] : mergeSegments(body.segments ?? [], owned.durationMs);
+  if (!wholeHomeConfirmed && coversWholeWalk(segments, owned.durationMs)) {
+    throw new HTTPException(400, { message: HONESTY_REFUSALS.maskAllPrivate });
+  }
+
+  const saved = await tenantQuery(c, (tx) =>
+    saveScanMask(tx, { scanId: owned.scan.id, hostId, segments, wholeHomeConfirmed }),
+  );
+  if (!saved) throw new HTTPException(409, { message: HONESTY_REFUSALS.maskNotReady });
+  const mask: ScanMask = saved;
+  return c.json(mask);
+});
+
+/**
+ * Send it. With nothing marked private there is nothing to cut, so the walk
+ * the host just reviewed is verified as it stands; with marks, the worker
+ * rebuilds it without those frames and verifies that. Either way the state
+ * comes back from the server, and the host is emailed after the commit.
+ */
+scanRoutes.post("/:id/scans/:scanId/send", async (c) => {
+  const { owned } = await markableScan(c);
+  const listingId = owned.listingId;
+  const scanId = owned.scan.id;
+
+  const answered = owned.scan.mask?.wholeHomeConfirmedAt || (owned.scan.mask?.segments.length ?? 0) > 0;
+  if (!answered) throw new HTTPException(409, { message: HONESTY_REFUSALS.maskNothingMarked });
+
+  let sent;
+  try {
+    sent = await tenantQuery(c, (tx) => sendScanForVerification(tx, scanId));
+  } catch (err) {
+    if (pgCode(err) === "P0001") {
+      const message = pgMessage(err);
+      if (/whole walk is marked private/.test(message)) {
+        throw new HTTPException(400, { message: HONESTY_REFUSALS.maskAllPrivate });
+      }
+      if (/private room/.test(message)) {
+        throw new HTTPException(400, { message: HONESTY_REFUSALS.maskPrivateRoomWholeHome });
+      }
+      throw new HTTPException(409, { message: HONESTY_REFUSALS.maskNothingMarked });
+    }
+    throw err;
+  }
+  if (!sent) throw new HTTPException(409, { message: HONESTY_REFUSALS.maskNotReady });
+
+  // After the transaction has committed, never inside it (CLAUDE.md).
+  if (sent.state === "verified") {
+    await sendEmail({
+      to: sent.hostEmail,
+      ...scanVerifiedEmail({
+        listingTitle: sent.listingTitle,
+        statusUrl: scanStatusUrl(listingId),
+        coverage: MASK_COPY.summaryWhole,
+      }),
+    });
+  }
+
+  const after = await tenantQuery(c, (tx) => getScanForOwner(tx, sessionUser(c).id, listingId, scanId));
+  if (!after) throw new HTTPException(404, { message: "No scan of yours here" });
+  const scan: ListingScan = after.scan;
+  return c.json(scan);
 });

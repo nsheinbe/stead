@@ -11,6 +11,10 @@
  * Stages, in order:
  *
  *   extract   ns-process-data video  → images/ + transforms.json (ffmpeg + COLMAP)
+ *   drop      (crop job only) delete the frames inside the host's private
+ *             ranges and prune them from transforms.json, so a private room
+ *             is never in the training set at all — not blurred, not hidden
+ *             inside the splat, simply absent (HM-04, DECISIONS D10)
  *   stills    pick up to 8 real frames, evenly spaced, and upload them first —
  *             so a failure later still leaves the host something honest to see
  *   train     ns-train splatfacto    → a config the export step loads
@@ -20,11 +24,25 @@
  * Every output key sits under the job's `outputPrefix`; the server's
  * app.finish_scan_job refuses anything else.
  */
-import type { ScanJob, ScanJobArtifact, ScanJobFinish, ScanWorkerArtifactKind } from "../../src/lib/types";
+import { isMasked, stillAtMs } from "../../src/lib/scanMask";
+import type {
+  MaskSegment,
+  ScanJob,
+  ScanJobArtifact,
+  ScanJobFinish,
+  ScanWorkerArtifactKind,
+} from "../../src/lib/types";
 
-export type StageName = "extract" | "stills" | "train" | "export" | "compress";
+export type StageName = "extract" | "drop" | "stills" | "train" | "export" | "compress";
 
-export const STAGE_NAMES: readonly StageName[] = ["extract", "stills", "train", "export", "compress"];
+export const STAGE_NAMES: readonly StageName[] = [
+  "extract",
+  "drop",
+  "stills",
+  "train",
+  "export",
+  "compress",
+];
 
 /** Tools the pipeline calls. Overridable by env so a container can pin its own paths. */
 export type ToolConfig = {
@@ -79,6 +97,8 @@ export type Adapters = {
   readText(path: string): Promise<string>;
   /** Write a small text file. */
   writeText(path: string, text: string): Promise<void>;
+  /** Delete one local file. Used only to drop frames a host marked private. */
+  remove(path: string): Promise<void>;
   /** One line of log. Never the contents of an object, never a host's notes. */
   log(line: string): void;
 };
@@ -110,6 +130,41 @@ export function pickStills(frameNames: readonly string[], max = MAX_STILLS): str
     if (name !== undefined && !out.includes(name)) out.push(name);
   }
   return out;
+}
+
+/** Image files only, in name order: how ns-process-data lays out `images/`. */
+export function frameNames(names: readonly string[]): string[] {
+  return names.filter((name) => /\.(jpe?g|png)$/i.test(name)).sort();
+}
+
+/**
+ * Which frames fall inside a private range. Frames are sampled evenly across
+ * the recording, so frame i of n sits at i/(n-1) of the walk — the same
+ * arithmetic the host's scrubber used to place them.
+ */
+export function framesToDrop(
+  names: readonly string[],
+  segments: readonly MaskSegment[],
+  durationMs: number,
+): string[] {
+  if (segments.length === 0 || durationMs <= 0) return [];
+  const frames = frameNames(names);
+  return frames.filter((_, index) => isMasked(segments, stillAtMs(index, frames.length, durationMs)));
+}
+
+/**
+ * transforms.json without the dropped frames. Nerfstudio keeps one entry per
+ * image under `frames[].file_path`; anything else in the file is left alone.
+ */
+export function pruneTransforms(text: string, dropped: readonly string[]): string {
+  const parsed = JSON.parse(text) as { frames?: { file_path?: string }[] };
+  if (!Array.isArray(parsed.frames)) return text;
+  const gone = new Set(dropped);
+  parsed.frames = parsed.frames.filter((frame) => {
+    const name = (frame.file_path ?? "").split("/").pop() ?? "";
+    return !gone.has(name);
+  });
+  return JSON.stringify(parsed);
 }
 
 export function extensionFor(contentType: string): string {
@@ -210,6 +265,15 @@ export async function reconstruct(
     finish: { attempt: job.attempt, outcome: "failed", reason: "reconstruction_failed", artifacts },
     stagesDone,
   });
+  // A build hands the walkthrough back for the host to mark; a crop has
+  // already dropped what they marked, so it is the verified one.
+  const done = (): RunResult => ({
+    finish:
+      job.job === "crop"
+        ? { attempt: job.attempt, outcome: "verified", artifacts }
+        : { attempt: job.attempt, outcome: "needs_mask", artifacts },
+    stagesDone,
+  });
 
   const video = `${dir.root}/video.${extensionFor(job.inputs.videoContentType)}`;
   const processed = `${dir.root}/processed`;
@@ -227,6 +291,29 @@ export async function reconstruct(
   } catch (err) {
     adapters.log(`scan ${job.scanId}: extract failed (${describe(err)})`);
     return fail();
+  }
+
+  // drop — the host's private frames, before anything is trained on them -----
+  if (job.job === "crop" && job.maskSegments.length > 0) {
+    try {
+      const all = await adapters.listFiles(`${processed}/images`);
+      const dropped = framesToDrop(all, job.maskSegments, job.durationMs);
+      if (dropped.length >= frameNames(all).length) {
+        // The server refuses an all-private mask; reaching here means the
+        // frame clock and the host's marks disagree. Do not train on nothing.
+        throw new Error("the mask would drop every frame");
+      }
+      for (const name of dropped) await adapters.remove(`${processed}/images/${name}`);
+      const transforms = await adapters.readText(`${processed}/transforms.json`);
+      await adapters.writeText(`${processed}/transforms.json`, pruneTransforms(transforms, dropped));
+      stagesDone.push("drop");
+      adapters.log(
+        `scan ${job.scanId}: dropped ${dropped.length} of ${frameNames(all).length} frames for ${job.maskSegments.length} private ranges`,
+      );
+    } catch (err) {
+      adapters.log(`scan ${job.scanId}: drop failed (${describe(err)})`);
+      return fail();
+    }
   }
 
   // stills — before anything can fail again ----------------------------------
@@ -285,7 +372,7 @@ export async function reconstruct(
     return fail();
   }
 
-  return { finish: { attempt: job.attempt, outcome: "needs_mask", artifacts }, stagesDone };
+  return done();
 }
 
 /** An error, without anything that could be a path into the home's footage. */

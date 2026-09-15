@@ -202,7 +202,11 @@ describeDb("HM-03 reconstruction jobs", () => {
     expect(job).toEqual({
       scanId: first.scanId,
       listingId: first.listingId,
+      job: "reconstruct",
       attempt: 1,
+      // HM-04: a build carries no marks, and the clock the worker would place them on.
+      maskSegments: [],
+      durationMs: 300_000,
       timezone: "America/New_York",
       target: DOOR,
       thresholds: { accuracyMaxM: 35, geofenceRadiusM: 100 },
@@ -337,8 +341,8 @@ describeDb("HM-03 reconstruction jobs", () => {
       expect(mine.status).toBe(200);
       const body = (await mine.json()) as ScanStills;
       expect(body.stills).toEqual([
-        { index: 0, url: `https://signed.example.test/${s.prefix}stills/00.jpg` },
-        { index: 1, url: `https://signed.example.test/${s.prefix}stills/01.jpg` },
+        { index: 0, url: `https://signed.example.test/${s.prefix}stills/00.jpg`, atMs: 0 },
+        { index: 1, url: `https://signed.example.test/${s.prefix}stills/01.jpg`, atMs: 300_000 },
       ]);
       expect((await app.request(stillsPath, { headers: { cookie: stranger.cookie } })).status).toBe(404);
       expect((await app.request(stillsPath)).status).toBe(401);

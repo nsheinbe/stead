@@ -12,12 +12,15 @@
  */
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { Tx } from "../db/client";
-import { listingScans, listings, scanArtifacts } from "../db/schema";
+import { listingRentalMasks, listingScans, listings, scanArtifacts } from "../db/schema";
 import type {
   GeofenceStatsJson,
   ListingScan,
+  ListingType,
+  MaskSegment,
   ScanJob,
   ScanJobArtifact,
+  ScanMask,
   ScanReason,
   ScanThresholds,
   ScanUploadKind,
@@ -27,6 +30,12 @@ import { getConfigMap, intFromConfig } from "./listings";
 
 type ScanRow = typeof listingScans.$inferSelect;
 type ArtifactRow = typeof scanArtifacts.$inferSelect;
+type MaskRow = typeof listingRentalMasks.$inferSelect;
+
+/** DECISIONS D11: a private room is partial by definition, so it must mark. */
+export function wholeHomeAllowedFor(type: ListingType): boolean {
+  return type !== "private_room";
+}
 
 /** The row plus what the DTO hides: the frozen target the walk is judged against. */
 export type OwnedScan = {
@@ -36,6 +45,9 @@ export type OwnedScan = {
   listingId: string;
   /** HM-03: the worker's stills, in key order, for the failed-state page. */
   stillsKeys: string[];
+  /** HM-04: how long the walk ran, from the stats the server wrote at completion. */
+  durationMs: number;
+  listingType: ListingType;
 };
 
 /** Reconstruction attempts a scan may use, from app_config (default 3). */
@@ -54,7 +66,26 @@ function thresholdsOf(row: ScanRow): ScanThresholds {
   };
 }
 
-function toListingScan(row: ScanRow, artifacts: ArtifactRow[], maxAttempts: number): ListingScan {
+function toMask(row: MaskRow | null | undefined): ScanMask | null {
+  if (!row) return null;
+  return {
+    segments: row.segments ?? [],
+    wholeHomeConfirmedAt: row.wholeHomeConfirmedAt ? row.wholeHomeConfirmedAt.toISOString() : null,
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+/** How long the walk ran, in milliseconds, from the stats written at completion. */
+export function durationMsOf(stats: GeofenceStatsJson | null): number {
+  return stats ? Math.round(stats.durationSeconds * 1000) : 0;
+}
+
+function toListingScan(
+  row: ScanRow,
+  artifacts: ArtifactRow[],
+  maxAttempts: number,
+  extra: { mask: MaskRow | null | undefined; listingType: ListingType },
+): ListingScan {
   const has = (kind: ScanUploadKind | ScanWorkerArtifactKind) => artifacts.some((a) => a.kind === kind);
   return {
     id: row.id,
@@ -80,6 +111,9 @@ function toListingScan(row: ScanRow, artifacts: ArtifactRow[], maxAttempts: numb
       splat_compressed: has("splat_compressed"),
       stills: has("stills"),
     },
+    job: row.job,
+    mask: toMask(extra.mask),
+    wholeHomeAllowed: wholeHomeAllowedFor(extra.listingType),
   };
 }
 
@@ -109,6 +143,15 @@ export async function getScanTarget(
   };
 }
 
+/** The listing's own type, which decides whether whole-home is on offer (D11). */
+async function listingTypeOf(tx: Tx, listingId: string): Promise<ListingType> {
+  const row = await tx.query.listings.findFirst({
+    where: eq(listings.id, listingId),
+    columns: { type: true },
+  });
+  return row?.type ?? "entire_home";
+}
+
 export async function latestScanForOwner(
   tx: Tx,
   hostId: string,
@@ -117,10 +160,13 @@ export async function latestScanForOwner(
   const row = await tx.query.listingScans.findFirst({
     where: and(eq(listingScans.listingId, listingId), eq(listingScans.hostId, hostId)),
     orderBy: desc(listingScans.createdAt),
-    with: { artifacts: true },
+    with: { artifacts: true, mask: true },
   });
   if (!row) return null;
-  return toListingScan(row, row.artifacts, await scanMaxAttempts(tx));
+  return toListingScan(row, row.artifacts, await scanMaxAttempts(tx), {
+    mask: row.mask,
+    listingType: await listingTypeOf(tx, listingId),
+  });
 }
 
 /** One scan by id, only if it belongs to this host and this listing. */
@@ -136,11 +182,12 @@ export async function getScanForOwner(
       eq(listingScans.listingId, listingId),
       eq(listingScans.hostId, hostId),
     ),
-    with: { artifacts: true },
+    with: { artifacts: true, mask: true },
   });
   if (!row) return null;
+  const listingType = await listingTypeOf(tx, row.listingId);
   return {
-    scan: toListingScan(row, row.artifacts, await scanMaxAttempts(tx)),
+    scan: toListingScan(row, row.artifacts, await scanMaxAttempts(tx), { mask: row.mask, listingType }),
     target: { lat: row.targetLat, lng: row.targetLng },
     thresholds: thresholdsOf(row),
     listingId: row.listingId,
@@ -148,6 +195,8 @@ export async function getScanForOwner(
       .filter((a) => a.kind === "stills")
       .map((a) => a.objectKey)
       .sort(),
+    durationMs: durationMsOf(row.geofenceStats ?? null),
+    listingType,
   };
 }
 
@@ -184,7 +233,10 @@ export async function createScan(
     })
     .returning();
   if (!created) throw new Error("Could not start the scan");
-  return toListingScan(created, [], await scanMaxAttempts(tx));
+  return toListingScan(created, [], await scanMaxAttempts(tx), {
+    mask: null,
+    listingType: await listingTypeOf(tx, input.listingId),
+  });
 }
 
 export type ArtifactRecord = {
@@ -262,6 +314,7 @@ export type ScanNotice = {
 type ClaimRow = {
   scan_id: string;
   listing_id: string;
+  job: "reconstruct" | "crop";
   attempt: number;
   accuracy_max_m: number;
   geofence_radius_m: number;
@@ -272,12 +325,15 @@ type ClaimRow = {
   video_content_type: string | null;
   attestation_key: string | null;
   notes_key: string | null;
+  mask_segments: MaskSegment[] | null;
+  duration_ms: number | null;
 };
 
 /**
- * uploaded → reconstructing for the oldest whole package, or null when the
- * queue is empty. Runs with no member: the worker is not one. The function
- * skips locked rows, so two workers never take the same job.
+ * The oldest job of either kind, or null when the queue is empty. Runs with
+ * no member: the worker is not one. The function skips locked rows, so two
+ * workers never take the same job, and it carries the host's marks with a
+ * crop job so the worker knows which frames to drop.
  */
 export async function claimNextScanJob(tx: Tx, workerId: string): Promise<ScanJob | null> {
   const rows = (await tx.execute<ClaimRow>(
@@ -292,6 +348,7 @@ export async function claimNextScanJob(tx: Tx, workerId: string): Promise<ScanJo
   return {
     scanId: row.scan_id,
     listingId: row.listing_id,
+    job: row.job,
     attempt: row.attempt,
     timezone: row.timezone,
     target: { lat: row.target_lat, lng: row.target_lng },
@@ -302,6 +359,8 @@ export async function claimNextScanJob(tx: Tx, workerId: string): Promise<ScanJo
       attestationKey: row.attestation_key,
       notesKey: row.notes_key,
     },
+    maskSegments: row.job === "crop" ? (row.mask_segments ?? []) : [],
+    durationMs: row.duration_ms ?? 0,
     outputPrefix: `listings/${row.listing_id}/scans/${row.scan_id}/`,
   };
 }
@@ -309,16 +368,17 @@ export async function claimNextScanJob(tx: Tx, workerId: string): Promise<ScanJo
 type FinishRow = { host_email: string; listing_title: string; listing_id: string; state: string };
 
 /**
- * reconstructing → needs_mask / failed. Null when the attempt is stale or
- * the row has moved on: a worker that lost its claim writes nothing. Bad
- * keys and kinds raise (P0001) — the route turns that into a 400.
+ * reconstructing → needs_mask (a build) / verified (a crop) / failed. Null
+ * when the attempt is stale or the row has moved on: a worker that lost its
+ * claim writes nothing. An outcome the job kind cannot reach, and bad keys
+ * or kinds, raise (P0001) — the route turns that into a 400.
  */
 export async function finishScanJob(
   tx: Tx,
   input: {
     scanId: string;
     attempt: number;
-    outcome: "needs_mask" | "failed";
+    outcome: "needs_mask" | "verified" | "failed";
     reason: ScanReason | null;
     artifacts: ScanJobArtifact[];
   },
@@ -388,4 +448,67 @@ export async function scanNotice(tx: Tx, scanId: string): Promise<ScanNotice | n
   )) as unknown as { host_email: string; listing_title: string; listing_id: string }[];
   const row = rows[0];
   return row ? { hostEmail: row.host_email, listingTitle: row.listing_title, listingId: row.listing_id } : null;
+}
+
+// ---------------------------------------------------------------- HM-04 -----
+
+/**
+ * Write the host's answer. This is an ordinary member write under RLS, not a
+ * transition: a mask is host input, and the policies hold the rules (own row,
+ * scan still `needs_mask`, whole-home refused for a private room). The
+ * segments are already merged and clamped by the caller.
+ */
+export async function saveScanMask(
+  tx: Tx,
+  input: { scanId: string; hostId: string; segments: MaskSegment[]; wholeHomeConfirmed: boolean },
+): Promise<ScanMask | null> {
+  const wholeHomeConfirmedAt = input.wholeHomeConfirmed ? new Date() : null;
+  const segments = input.wholeHomeConfirmed ? [] : input.segments;
+  const [row] = await tx
+    .insert(listingRentalMasks)
+    .values({
+      scanId: input.scanId,
+      hostId: input.hostId,
+      segments,
+      wholeHomeConfirmedAt,
+    })
+    .onConflictDoUpdate({
+      target: listingRentalMasks.scanId,
+      set: { segments, wholeHomeConfirmedAt, updatedAt: new Date() },
+    })
+    .returning();
+  return toMask(row);
+}
+
+export type SendForVerification = ScanNotice & { state: string };
+
+/**
+ * HM-04: the host sends their answer. needs_mask → verified when nothing
+ * needs cutting, or → reconstructing with a crop job when it does. Null when
+ * the scan is not the caller's or has moved on; a refusal the host can fix
+ * raises (P0001) and the route turns it into the locked sentence.
+ */
+export async function sendScanForVerification(
+  tx: Tx,
+  scanId: string,
+): Promise<SendForVerification | null> {
+  const rows = (await tx.execute<{
+    state: string;
+    host_email: string;
+    listing_title: string;
+    listing_id: string;
+  }>(sql`SELECT * FROM app.send_scan_for_verification(${scanId}::uuid)`)) as unknown as {
+    state: string;
+    host_email: string;
+    listing_title: string;
+    listing_id: string;
+  }[];
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    state: row.state,
+    hostEmail: row.host_email,
+    listingTitle: row.listing_title,
+    listingId: row.listing_id,
+  };
 }

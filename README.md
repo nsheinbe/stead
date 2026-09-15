@@ -102,6 +102,7 @@ The landing fee slider uses `quoteStay` for Stead's column so it cannot disagree
 | `GET`/`POST` | `/api/cron/release-stale-scan-jobs` | HM-03 — a reconstruction claim older than `scan_claim_stale_hours` goes back to the queue, or fails once `scan_max_attempts` is spent |
 | `POST` | `/api/scan-worker/jobs/claim` · `/jobs/:scanId/finish` | the reconstruction worker, `Authorization: Bearer $SCAN_WORKER_SECRET`. No database credential; see `worker/README.md` |
 | `POST`/`GET` | `/api/listings/:id/scans/:scanId/retry` · `/stills` | owner — HM-03: retry a `failed` reconstruction (capped); signed URLs to the worker's real frames |
+| `POST` | `/api/listings/:id/scans/:scanId/mask` · `/send` | owner — HM-04: what guests may walk through, then send it for verification |
 | `*` | `/api/auth/*` | Auth.js — csrf, signin, callback, session, signout |
 
 Write quotas are a process-local sliding window (`server/lib/rateLimit.ts`): create-booking, cancel, send-message, file/respond/resolve-claim, Identity session, Connect onboard. The Stripe webhook is **not** limited — it is already idempotent via `stripe_events`, and a 429 would drop a retry. Set `RATE_LIMIT_DISABLED=1` only on a laptop.

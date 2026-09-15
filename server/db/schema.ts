@@ -21,7 +21,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { GeofenceStatsJson, ListingAmenities } from "../../src/lib/types";
+import type { GeofenceStatsJson, ListingAmenities, MaskSegment } from "../../src/lib/types";
 
 export const listingType = pgEnum("listing_type", ["entire_home", "apartment", "private_room"]);
 export const cancellationPolicy = pgEnum("cancellation_policy", ["flexible", "moderate", "strict"]);
@@ -190,6 +190,9 @@ export const scanState = pgEnum("scan_state", [
   "failed",
 ]);
 
+/** HM-04: the two kinds of work the worker does on a scan. */
+export const scanJobKind = pgEnum("scan_job_kind", ["reconstruct", "crop"]);
+
 /**
  * HM-01: one row per walk-scan. app_user may insert `capturing` for an owned,
  * door-confirmed listing and read its own rows; every later state is a
@@ -228,6 +231,8 @@ export const listingScans = pgTable(
     attempt: integer("attempt").notNull().default(0),
     claimedAt: timestamp("claimed_at", { mode: "date", withTimezone: true }),
     workerId: text("worker_id"),
+    /** HM-04: which pipeline the next claim runs — build it, or rebuild it without the private parts. */
+    job: scanJobKind("job").notNull().default("reconstruct"),
   },
   (table) => [
     index("listing_scans_listing_idx").on(table.listingId, table.createdAt),
@@ -283,6 +288,28 @@ export const scanGeoSamples = pgTable(
     distanceM: integer("distance_m").notNull(),
   },
   (table) => [primaryKey({ columns: [table.scanId, table.seq] })],
+);
+
+/**
+ * HM-04: what the host says guests may walk through. Host input rather than a
+ * verdict, so app_user writes it directly — the policies hold the rules (own
+ * row, scan still markable, whole-home refused for a private room).
+ */
+export const listingRentalMasks = pgTable(
+  "listing_rental_masks",
+  {
+    scanId: uuid("scan_id")
+      .primaryKey()
+      .references(() => listingScans.id, { onDelete: "cascade" }),
+    hostId: uuid("host_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "restrict" }),
+    segments: jsonb("segments").$type<MaskSegment[]>().notNull().default([]),
+    wholeHomeConfirmedAt: timestamp("whole_home_confirmed_at", { mode: "date", withTimezone: true }),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("listing_rental_masks_host_idx").on(table.hostId)],
 );
 
 export const listingPhotos = pgTable(
@@ -598,6 +625,11 @@ export const listingsRelations = relations(listings, ({ one, many }) => ({
 export const listingScansRelations = relations(listingScans, ({ one, many }) => ({
   listing: one(listings, { fields: [listingScans.listingId], references: [listings.id] }),
   artifacts: many(scanArtifacts),
+  mask: one(listingRentalMasks, { fields: [listingScans.id], references: [listingRentalMasks.scanId] }),
+}));
+
+export const listingRentalMasksRelations = relations(listingRentalMasks, ({ one }) => ({
+  scan: one(listingScans, { fields: [listingRentalMasks.scanId], references: [listingScans.id] }),
 }));
 
 export const scanArtifactsRelations = relations(scanArtifacts, ({ one }) => ({
