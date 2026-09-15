@@ -52,6 +52,7 @@ describe("a route is a template, never a URL", () => {
     expect(routeNameFor("/review/abc")).toBe("review");
     expect(routeNameFor("/passport/abc")).toBe("profile");
     expect(routeNameFor("/host/listings/abc")).toBe("host_listing_edit");
+    expect(routeNameFor("/host/listings/abc/scan")).toBe("host_listing_scan");
     expect(routeNameFor("/host/claims/abc")).toBe("host_claim_detail");
   });
 

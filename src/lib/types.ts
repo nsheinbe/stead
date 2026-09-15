@@ -74,6 +74,69 @@ export type ListingDetail = ListingSummary & {
   addressLine: string;
   status: ListingStatus;
   host: HostSummary | null;
+  /**
+   * HM-01: the front-door point and whether the host confirmed it. Present
+   * only when the viewer owns the listing; never on a public read.
+   */
+  coordinates?: ListingCoordinates | null;
+};
+
+export type ListingCoordinates = {
+  lat: number;
+  lng: number;
+  /** ISO timestamp of the host's recorded confirmation, or null. */
+  confirmedAt: string | null;
+};
+
+/** HM-01: honesty-scan state machine, mirrored from public.scan_state. */
+export type ScanState =
+  | "capturing"
+  | "uploaded"
+  | "reconstructing"
+  | "needs_mask"
+  | "verified"
+  | "rejected"
+  | "failed";
+
+/** Locked reason keys a rejected / failed scan carries. Sentences live in honestyCopy. */
+export type ScanReason =
+  | "too_few_samples"
+  | "location_mismatch"
+  | "walk_too_short"
+  | "walk_too_long"
+  | "reconstruction_failed";
+
+/** DECISIONS D07: the thresholds a walk is judged against. Integer metres and seconds. */
+export type ScanThresholds = {
+  accuracyMaxM: number;
+  geofenceRadiusM: number;
+  bookendWindowSeconds: number;
+  bookendMinSamples: number;
+  minIndoorSeconds: number;
+  maxSeconds: number;
+};
+
+/** One walk-scan as its host sees it. State and reason are the server's. */
+export type ListingScan = {
+  id: string;
+  state: ScanState;
+  reason: ScanReason | null;
+  policyVersion: number;
+  thresholds: ScanThresholds;
+  capturedOn: string | null;
+  verifiedAt: string | null;
+  createdAt: string;
+};
+
+/** GET /api/listings/:id/scan — owner only. */
+export type ListingScanStatus = {
+  listingId: string;
+  coordinatesConfirmed: boolean;
+  storageConfigured: boolean;
+  /** Current config, for the on-device progress meter. The row's snapshot is what is judged. */
+  thresholds: ScanThresholds;
+  policyVersion: number;
+  scan: ListingScan | null;
 };
 
 export type TripListing = {
@@ -352,6 +415,11 @@ export type ListingInput = {
   instantBook?: boolean;
   cancellationPolicy?: CancellationPolicy;
   status?: ListingStatus;
+  /** Decimal degrees. The server already validates ranges; HM-01 adds the browser side. */
+  lat?: number | null;
+  lng?: number | null;
+  /** HM-01: record "this is the front door". Refused without both lat and lng. */
+  confirmCoordinates?: boolean;
 };
 
 /** Whether Stripe will actually let this host be paid. */

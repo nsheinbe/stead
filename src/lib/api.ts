@@ -12,6 +12,8 @@ import type {
   HostPayout,
   ListingDetail,
   ListingInput,
+  ListingScan,
+  ListingScanStatus,
   ListingSummary,
   Passport,
   PassportExport,
@@ -157,6 +159,13 @@ export const api = {
 
   deletePhoto: (photoId: string) =>
     request<{ ok: true }>(`/api/listings/photos/${photoId}`, { method: "DELETE" }),
+
+  /** HM-01. Owner only: front-door confirmed?, storage?, thresholds, latest scan. */
+  listingScan: (listingId: string) => request<ListingScanStatus>(`/api/listings/${listingId}/scan`),
+
+  /** HM-01. Start a walk-scan: one `capturing` row. 409 before the door is confirmed. */
+  startScan: (listingId: string) =>
+    request<ListingScan>(`/api/listings/${listingId}/scan`, { method: "POST" }),
 
   connectStatus: () => request<ConnectStatus>("/api/connect/status"),
 

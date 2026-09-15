@@ -36,6 +36,8 @@ export interface ListingInput {
   instantBook?: boolean;
   cancellationPolicy?: CancellationPolicy;
   status?: ListingStatus;
+  /** HM-01: record "this is the front door". The DB refuses it without lat and lng. */
+  confirmCoordinates?: boolean;
 }
 
 export interface HostListing {
@@ -143,6 +145,10 @@ export async function updateListing(
         ? { cancellationPolicy: patch.cancellationPolicy }
         : {}),
       ...(patch.status !== undefined ? { status: patch.status } : {}),
+      // A confirmation is a recorded action, so it is a timestamp the server
+      // sets, never a boolean the client can leave true. Moving lat / lng
+      // without confirming clears it (trigger in 0015).
+      ...(patch.confirmCoordinates ? { coordinatesConfirmedAt: new Date() } : {}),
     })
     .where(and(eq(listings.id, listingId), eq(listings.hostId, hostId)))
     .returning({ id: listings.id });

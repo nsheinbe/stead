@@ -29,6 +29,8 @@
  * silent rewrite of what a host agreed to. Until that migration exists the
  * constant is the only home for the value.
  */
+import type { ScanReason } from "./types";
+
 export const HONESTY_POLICY_VERSION = 1 as const;
 
 /** The badge. Text-led; the check glyph beside it is decorative. */
@@ -194,16 +196,21 @@ export const HONESTY_REFUSALS = {
  * Reasons attached to a `rejected` or `failed` scan. The key is what the
  * scan row stores; the sentence is what the host reads on the status page.
  */
-export const SCAN_REASON_COPY = {
+export const SCAN_REASON_COPY: Record<ScanReason, string> = {
   too_few_samples:
     "We didn't get enough accurate location readings during the walk. Start and finish outside so your phone can get a clear fix.",
   location_mismatch:
     "The location readings don't match where this home is on Stead. Check the home's location in the editor, then walk again.",
+  walk_too_short:
+    "The walk was too short to build from. Film every room you rent, slowly, then finish outside the front door.",
+  walk_too_long:
+    "That walk is longer than we can process. Walk again and keep it shorter.",
   reconstruction_failed:
     "We couldn't build a walkthrough from this footage. This usually means the walk was too fast, too dark, or didn't overlap enough between rooms.",
-} as const;
+};
 
-export type ScanReasonKey = keyof typeof SCAN_REASON_COPY;
+/** @deprecated alias kept for HM-00 callers; prefer ScanReason from ./types. */
+export type ScanReasonKey = ScanReason;
 
 /** One-line mentions HM-00 adds to existing pages. The only edits to those pages in this phase. */
 export const HONESTY_MENTIONS = {

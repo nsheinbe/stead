@@ -3,7 +3,13 @@ import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { sessionUser, tenantQuery, type AppEnv } from "../lib/http";
 import { parseListingFilters } from "../../src/lib/filters";
-import { getListingForViewer, listActiveListings } from "../queries/listings";
+import { HONESTY_REFUSALS } from "../../src/lib/honestyCopy";
+import type { ListingScanStatus } from "../../src/lib/types";
+import { policyVersionFromConfig, scanThresholdsFromConfig } from "../lib/geofence";
+import { pgCode } from "../lib/pgError";
+import { isHiddenSeedListing } from "../lib/seedInventory";
+import { getConfigMap, getListingForViewer, listActiveListings } from "../queries/listings";
+import { createScan, getScanTarget, latestScanForOwner } from "../queries/scans";
 import {
   addListingPhoto,
   createListing,
@@ -65,6 +71,8 @@ const listingSchema = z.object({
   instantBook: z.boolean().optional(),
   cancellationPolicy: z.enum(["flexible", "moderate", "strict"]).optional(),
   status: z.enum(["draft", "active", "paused"]).optional(),
+  // HM-01. A recorded action, so a boolean here becomes a timestamp there.
+  confirmCoordinates: z.boolean().optional(),
 });
 
 const photoUploadSchema = z.object({
@@ -112,9 +120,87 @@ listingsRoutes.post("/", async (c) => {
 listingsRoutes.patch("/:id", async (c) => {
   const host = sessionUser(c);
   const input = await parse(c, listingSchema.partial());
-  const ok = await tenantQuery(c, (tx) => updateListing(tx, host.id, c.req.param("id"), input));
+  let ok: boolean;
+  try {
+    ok = await tenantQuery(c, (tx) => updateListing(tx, host.id, c.req.param("id"), input));
+  } catch (err) {
+    // listings_confirmed_point_needs_lat_lng: confirming a front door that
+    // has no point. The CHECK is the rule; this is the friendly sentence.
+    if (input.confirmCoordinates && pgCode(err) === "23514") {
+      throw new HTTPException(400, {
+        message: "Set both latitude and longitude before confirming the front door.",
+      });
+    }
+    throw err;
+  }
   if (!ok) throw new HTTPException(404, { message: "No listing of yours here" });
   return c.json({ ok: true });
+});
+
+/**
+ * HM-01. What the capture page needs before it opens a camera: whether the
+ * front door is confirmed, whether uploads could land anywhere, the current
+ * thresholds for the on-device meter, and the latest scan row. Owner only —
+ * a stranger gets the same 404 as for any listing that is not theirs.
+ */
+listingsRoutes.get("/:id/scan", async (c) => {
+  const host = sessionUser(c);
+  const listingId = c.req.param("id");
+  const status = await tenantQuery(c, async (tx): Promise<ListingScanStatus | null> => {
+    const target = await getScanTarget(tx, host.id, listingId);
+    if (!target) return null;
+    const config = await getConfigMap(tx);
+    const scan = await latestScanForOwner(tx, host.id, listingId);
+    return {
+      listingId,
+      coordinatesConfirmed: target.confirmed,
+      storageConfigured: storageConfigured(),
+      thresholds: scanThresholdsFromConfig(config),
+      policyVersion: policyVersionFromConfig(config),
+      scan,
+    };
+  });
+  if (!status) throw new HTTPException(404, { message: "No listing of yours here" });
+  return c.json(status);
+});
+
+/**
+ * Start a walk-scan: one `capturing` row with the thresholds, the target
+ * point and the policy version frozen onto it. Refused for a demo home,
+ * without object storage (there would be nowhere for the walk to go), and
+ * before the front door is confirmed. The INSERT policy enforces the last
+ * rule too; the 409 is the friendly version.
+ */
+listingsRoutes.post("/:id/scan", async (c) => {
+  const host = sessionUser(c);
+  const listingId = c.req.param("id");
+  if (isHiddenSeedListing(listingId)) {
+    throw new HTTPException(409, { message: HONESTY_REFUSALS.demoListing });
+  }
+  if (!storageConfigured()) {
+    throw new HTTPException(503, { message: HONESTY_REFUSALS.storageNotConfigured });
+  }
+  const result = await tenantQuery(c, async (tx) => {
+    const target = await getScanTarget(tx, host.id, listingId);
+    if (!target) return { kind: "missing" as const };
+    if (!target.confirmed || target.lat === null || target.lng === null) {
+      return { kind: "unconfirmed" as const };
+    }
+    const config = await getConfigMap(tx);
+    const scan = await createScan(tx, {
+      hostId: host.id,
+      listingId,
+      thresholds: scanThresholdsFromConfig(config),
+      policyVersion: policyVersionFromConfig(config),
+      target: { lat: target.lat, lng: target.lng },
+    });
+    return { kind: "created" as const, scan };
+  });
+  if (result.kind === "missing") throw new HTTPException(404, { message: "No listing of yours here" });
+  if (result.kind === "unconfirmed") {
+    throw new HTTPException(409, { message: HONESTY_REFUSALS.coordinatesUnconfirmed });
+  }
+  return c.json(result.scan, 201);
 });
 
 listingsRoutes.delete("/:id", async (c) => {
