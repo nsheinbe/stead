@@ -271,6 +271,12 @@ listing-local calendar dates with no time. Meters are integers.
 | `hm.pin.precision.exact` | The exact spot |
 | `hm.pin.precision.note` | Guests with a confirmed stay always see the exact spot. |
 | `hm.pin.required` | Set the front door pin first. Your honesty scan is checked against it. |
+| `hm.pin.lat` | Latitude |
+| `hm.pin.lng` | Longitude |
+| `hm.pin.invalid` | Enter both latitude and longitude as decimal degrees, or leave both empty. |
+| `hm.pin.roughFix` | That fix is too rough to use (about {accuracy} m). Try again outside, standing still, or enter the coordinates by hand. |
+| `hm.pin.unsaved` | Save changes to set the pin. |
+| `hm.pin.changeWarning` | Changing the pin takes down any honesty scan for this home. You’d scan again. |
 
 ### 9.3 Capture (HM-D01)
 
@@ -284,6 +290,15 @@ listing-local calendar dates with no time. Meters are integers.
 | `hm.hub.desktop.body` | Recording needs your phone’s camera and location. Sign in on your phone, open Your homes, choose this home, then Scan. |
 | `hm.hub.desktop.email` | Email me the link |
 | `hm.hub.desktop.emailed` | Sent to {email}. |
+| `hm.hub.inProgress.title` | Walk in progress |
+| `hm.hub.inProgress.body` | A walk was started on your phone and hasn’t been finished. Continue it there, or delete it and start again. |
+| `hm.hub.discard` | Delete this walk |
+| `hm.hub.located.title` | Location confirmed at this home. |
+| `hm.hub.located.body` | Uploading the walk itself is the next step and isn’t switched on yet. Your recording is kept on this phone, in this browser, until then. |
+| `hm.hub.facts` | Verified isn’t published, isn’t payouts, and isn’t bookings open. Each is its own step. |
+| `hm.editor.scan.title` | Honesty scan |
+| `hm.editor.scan.body` | Before guests can book, walk-scan the home from your phone. The walk is checked against the front door pin. |
+| `hm.editor.scan.cta` | Open the honesty scan |
 | `hm.capture.unsupported` | This browser can’t record in the page. Open this link in Safari or Chrome on your phone. |
 | `hm.perm.camera.title` | Stead needs the camera to record the walk. |
 | `hm.perm.camera.body` | Allow camera access in your browser settings, then try again. |
@@ -296,6 +311,8 @@ listing-local calendar dates with no time. Meters are integers.
 | `hm.loc.off` | Location: off — allow location to continue |
 | `hm.capture.outsideStart.prompt` | Outside your front door? Turn slowly in a full circle. |
 | `hm.capture.outsideStart.cta` | I’m outside — start |
+| `hm.capture.turn.prompt` | Recording. Turn slowly in a full circle at your door, then walk in. |
+| `hm.capture.walkIn` | Walk in |
 | `hm.capture.waitingFix` | Waiting for a clearer location fix… Standing still helps. |
 | `hm.capture.recording.prompt` | Walk every room slowly. Lights on. Take your time. |
 | `hm.capture.pause` | Pause |
@@ -313,6 +330,13 @@ listing-local calendar dates with no time. Meters are integers.
 | `hm.capture.awake` | Recording keeps the screen on. Plug in if you can. |
 | `hm.capture.maxLength` | Walks up to {maxMinutes} minutes. |
 | `hm.capture.elapsed` | {mm}:{ss} |
+| `hm.capture.preparing` | Getting the camera ready… |
+| `hm.capture.maxReached` | You’ve reached the {maxMinutes}-minute limit. Head back outside and finish the walk. |
+| `hm.capture.submitting` | Sending the location record… |
+| `hm.capture.submitFailed` | We couldn’t send the location record. Try again when you’re back online. |
+| `hm.capture.interrupted.title` | This walk was interrupted. |
+| `hm.capture.interrupted.body` | The recording didn’t survive the reload. Delete this walk and start again from the door. |
+| `hm.capture.notCurrent` | This walk isn’t open any more. |
 
 ### 9.4 Upload (HM-D03)
 
@@ -378,6 +402,7 @@ listing-local calendar dates with no time. Meters are integers.
 | `hm.verified.again` | Scan again |
 | `hm.revoked.title` | Taken down |
 | `hm.revoked.body` | This walkthrough was taken down on {date}: {reason}. Guests can’t walk this home, and it can’t take bookings, until a new walk is verified. |
+| `hm.revoked.reason.pinChanged` | the front door pin was changed |
 
 ### 9.7 Private areas (HM-D05)
 
@@ -476,6 +501,7 @@ listing-local calendar dates with no time. Meters are integers.
 | `hm.scan.state.notStarted` | Scan: Not started |
 | `hm.scan.state.needsPin` | Scan: Needs the front door pin |
 | `hm.scan.state.capturing` | Scan: Walk in progress |
+| `hm.scan.state.located` | Scan: Location confirmed |
 | `hm.scan.state.uploading` | Scan: Uploading |
 | `hm.scan.state.checking` | Scan: Checking location |
 | `hm.scan.state.rejected` | Scan: Not verified |
@@ -511,6 +537,43 @@ listing-local calendar dates with no time. Meters are integers.
 |---|---|---|
 | `/for-homeowners` | A geo-proven walkthrough of your home is required before guests can book. You record it once, from your phone, at the home. | Under “How it works 2 — Get ready for bookings”, as a third sentence. Nothing else on the page changes. |
 | `/host/start` intro | Before guests can book, you’ll walk-scan the home from your phone. That comes after this setup. | Under the five-step list, next to the payout sentence. |
+
+### 9.13 Sheet and disclosure ids
+
+§8 is the readable form of the two disclosures. These ids are what code
+mirrors; the text is identical, split into the pieces a screen renders.
+
+| Id | Copy |
+|---|---|
+| `hm.sheet.title` | Before you start the walk |
+| `hm.sheet.record.heading` | What we record |
+| `hm.sheet.record.video` | Video from your phone’s camera while you walk. |
+| `hm.sheet.record.location` | Your phone’s location, continuously, while you record. |
+| `hm.sheet.why.heading` | Why the location |
+| `hm.sheet.why.body` | To prove this walk happened at this home. Guests see that it was proven, and the date. They never see your route. |
+| `hm.sheet.video.heading` | What we do with the video |
+| `hm.sheet.video.body` | We stitch, steady, and compress it into a walkthrough guests can move through. We don’t add rooms, furniture, or views, and we don’t tidy anything up. What you record is what guests see. |
+| `hm.sheet.private.heading` | Private areas |
+| `hm.sheet.private.body` | After the walk, you mark anything private. It’s cut out before anyone else sees the walkthrough. |
+| `hm.sheet.bookings.heading` | Bookings |
+| `hm.sheet.bookings.body` | A home can’t take bookings until its walkthrough is verified. |
+| `hm.sheet.tips.heading` | Tips |
+| `hm.sheet.tips.body` | Start outside your front door and turn slowly in a full circle. Walk every room you want guests to see, slowly, with the lights on. Finish outside your front door the same way. |
+| `hm.sheet.acknowledge` | I’ve read this and I’m at the home now. |
+| `hm.sheet.acknowledge.hint` | Tick the box to continue. |
+| `hm.sheet.start` | Start the walk |
+| `hm.sheet.notNow` | Not now |
+| `hm.sheet.starting` | Starting… |
+| `hm.sheet.failed` | We couldn’t start the walk. Try again. |
+| `hm.sheet.policyChanged` | The honesty policy changed. Read it again before you start. |
+| `hm.about.title` | How this walkthrough was made |
+| `hm.about.recorded` | The host recorded this walk on their phone, at this home. Their phone reported its location the whole time, within {radius} m of the listing’s front door pin, and the walk started and ended outside the front door. |
+| `hm.about.stitched` | We stitched, steadied, and compressed what they recorded. We didn’t add rooms, furniture, or views. If something wasn’t recorded, it isn’t here. |
+| `hm.about.scope.whole` | Whole home. Everything you can walk is part of the rental. |
+| `hm.about.scope.partial` | Rental areas only. Private rooms are left out on purpose. |
+| `hm.about.captured` | Captured {date}. This is a record of that day, not a live feed. |
+| `hm.about.nearby` | Nearby pins are other Stead homes with a geo-proven walkthrough. Nothing on the map is made up. |
+| `hm.about.signal` | Location proof is a strong signal, not a guarantee. |
 
 ---
 

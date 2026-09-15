@@ -8,7 +8,8 @@ Bookings stay off until Nick sets `ALLOW_GUEST_BOOKINGS=1` after this
 phase ships and is required. This directory is the plan, not the
 implementation.
 
-**Start here (humans):** [BUILD-PLAN.md](BUILD-PLAN.md)
+**Start here (humans):** [BUILD-PLAN.md](BUILD-PLAN.md) · policy appendix:
+[POLICY.md](POLICY.md)
 
 **Claude Code on this branch:** [README-BRANCH.md](README-BRANCH.md) →
 [START-HERE-CLAUDE-CODE.md](START-HERE-CLAUDE-CODE.md). Fill designs in

@@ -13,7 +13,8 @@ const STEPS = [
   },
   {
     title: "Get ready for bookings",
-    body: "Review your price and policy, and set up payouts with Stripe.",
+    body:
+      "Review your price and policy, and set up payouts with Stripe. A geo-proven walkthrough of your home is required before guests can book. You record it once, from your phone, at the home.",
   },
   {
     title: "Publish when you're ready",

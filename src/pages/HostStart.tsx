@@ -268,6 +268,10 @@ export function HostStartPage() {
               Payout setup must be complete before a guest can pay for a stay. A published home and a
               payment-ready account are separate things, and we show them separately.
             </p>
+            <p className="mb-0 mt-3 text-sm text-ink-secondary">
+              Before guests can book, you'll walk-scan the home from your phone. That comes after this
+              setup.
+            </p>
           </Surface>
         </div>
       </Shell>
