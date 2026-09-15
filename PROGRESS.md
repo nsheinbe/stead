@@ -16,6 +16,7 @@ Spec of record: `BUILD_PROMPT.md` (stack amendment at the top). One slice at a t
 | Seed-hide | Done on `main` | `#24` — Slice 1 demo ids hidden from production Explore and booking. |
 | REL-01 Soft-launch readiness | This branch | Dist first-user path, `docs/soft-launch.md`, Nick-gates. **PAY-02 not started.** |
 | Honesty media — design fill (HM-D00…D13) | `codex/claude-code-handoff-2026-09-14` | Docs only: `design/honesty-media/` screens, locked copy, decisions. No app code; implementation starts at HM-00 on a new branch when Nick asks. |
+| HM-00 Honesty policy + copy | `claude/hm-00-honesty-policy` | `src/lib/honestyCopy.ts` locked strings, ban-list test, `docs/honesty-media/POLICY.md`, one-line mentions on `/for-homeowners` and `/host/start`. No schema, no scan code, kill-switch untouched. |
 
 ## Production (`openstead.app`)
 

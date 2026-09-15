@@ -203,6 +203,8 @@ test.describe("shared shell", () => {
     await page.goto("/for-homeowners");
     await expect(page.getByRole("heading", { level: 1, name: /clearer way to host/i })).toBeVisible();
     await expect(page.getByText("Your home starts as a draft. You choose when to publish it.")).toBeVisible();
+    // HM-00: the honesty scan is mentioned before a host reaches the publish step.
+    await expect(page.getByText("What is the honesty scan?")).toBeVisible();
     await page.getByRole("link", { name: "Start your listing" }).first().click();
     await expect(page).toHaveURL(/\/host\/start$/);
   });

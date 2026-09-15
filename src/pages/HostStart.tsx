@@ -32,6 +32,7 @@ import {
   type ListingFormValues,
   type ListingStepName,
 } from "../lib/listingForm";
+import { HONESTY_MENTIONS } from "../lib/honestyCopy";
 import { MIN_STAY_NIGHTS } from "../lib/money";
 import { POLICY_LABEL, TYPE_LABEL } from "../lib/types";
 
@@ -264,7 +265,8 @@ export function HostStartPage() {
                 </li>
               ))}
             </ol>
-            <p className="mb-0 mt-5 text-sm text-ink-secondary">
+            <p className="mb-0 mt-4 text-sm font-semibold">{HONESTY_MENTIONS.hostStartSetup}</p>
+            <p className="mb-0 mt-3 text-sm text-ink-secondary">
               Payout setup must be complete before a guest can pay for a stay. A published home and a
               payment-ready account are separate things, and we show them separately.
             </p>

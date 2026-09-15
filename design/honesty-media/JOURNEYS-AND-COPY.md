@@ -177,7 +177,8 @@ Buttons say what they do. The verb list below is the allowed set for
 honesty-media surfaces; anything not listed needs a copy review.
 
 Allowed: Start the walk · Pause · Resume · Finish the walk · Walk again ·
-Finish uploading · Check progress · Check again · Mark private rooms ·
+Continue the walk · Finish uploading · Check progress · Check again · See
+what happened · Mark private rooms ·
 Keep this area · Mark as private · Confirm whole home · Send for
 verification · View the walkthrough · Walk through this home · Enter the
 home · Leave the walkthrough · Step outside · Go inside · Walk {city} ·
