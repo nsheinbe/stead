@@ -15,6 +15,7 @@ Spec of record: `BUILD_PROMPT.md` (stack amendment at the top). One slice at a t
 | Redesign BASE-01 → QA-01 | Done on `main` | `#22` (BASE/UI/NAV/INT/PAY-01) and `#23` (renter, homeowner, lifecycle, safety, measurement, QA record). |
 | Seed-hide | Done on `main` | `#24` — Slice 1 demo ids hidden from production Explore and booking. |
 | REL-01 Soft-launch readiness | This branch | Dist first-user path, `docs/soft-launch.md`, Nick-gates. **PAY-02 not started.** |
+| Honesty media — design fill (HM-D00…D13) | `codex/claude-code-handoff-2026-09-14` | Docs only: `design/honesty-media/` screens, locked copy, decisions. No app code; implementation starts at HM-00 on a new branch when Nick asks. |
 
 ## Production (`openstead.app`)
 
