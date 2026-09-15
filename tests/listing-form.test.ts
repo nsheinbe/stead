@@ -133,6 +133,16 @@ describe("hydrating the editor from listing detail", () => {
     expect(input.amenities).toEqual({});
     expect(input.instantBook).toBe(false);
   });
+
+  it("hydrates to an empty address when the read carried none", () => {
+    // Only the owner's read carries `addressLine` now, and only the owner
+    // reaches the editor — but hydration must not turn an absent key into the
+    // string "undefined" if a stale cache entry ever reaches it.
+    const { addressLine: _omitted, ...withoutAddress } = fullListing();
+    const values = listingFormFromDetail(withoutAddress);
+    expect(values.addressLine).toBe("");
+    expect(unwrap(values).addressLine).toBe("");
+  });
 });
 
 describe("money in the editor", () => {

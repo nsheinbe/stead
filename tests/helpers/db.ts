@@ -135,6 +135,7 @@ export async function insertListing(opts: {
   hostId: string;
   title?: string;
   type?: "entire_home" | "apartment" | "private_room";
+  addressLine?: string;
   city?: string;
   timezone?: string;
   nightlyRateCents?: number;
@@ -147,11 +148,12 @@ export async function insertListing(opts: {
   await asOwner(async (db) => {
     await db.execute(sql`
       INSERT INTO public.listings (
-        id, host_id, title, description, type, city, country, timezone,
+        id, host_id, title, description, type, address_line, city, country, timezone,
         nightly_rate_cents, deposit_cents, max_guests, instant_book, status, cancellation_policy
       ) VALUES (
         ${opts.id}::uuid, ${opts.hostId}::uuid, ${opts.title ?? "Test cottage"}, 'Test listing',
-        ${opts.type ?? "entire_home"}::public.listing_type, ${opts.city ?? "Hudson"}, 'US',
+        ${opts.type ?? "entire_home"}::public.listing_type, ${opts.addressLine ?? ""},
+        ${opts.city ?? "Hudson"}, 'US',
         ${opts.timezone ?? "America/New_York"},
         ${opts.nightlyRateCents ?? 20000}, ${opts.depositCents ?? 30000}, ${opts.maxGuests ?? 4},
         ${opts.instantBook ?? false},

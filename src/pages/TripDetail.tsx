@@ -203,6 +203,11 @@ export function TripDetailPage() {
               <DataRow label="Check-in" value={checkInLine(booking, config.data?.checkinLocalTime)} />
               <DataRow label="Checkout" value={checkOutLine(booking, config.data?.checkoutLocalTime)} />
               <DataRow label="Guests" value={String(booking.guests)} />
+              {/* The server sends the address only once the stay is confirmed,
+                  so its presence is the permission — this never re-decides it. */}
+              {listing.addressLine ? (
+                <DataRow label="Address" value={`${listing.addressLine}, ${place}`} />
+              ) : null}
               <DataRow label="Time zone" value={listing.timezone} />
             </DataList>
           </Card>

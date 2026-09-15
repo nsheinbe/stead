@@ -138,15 +138,17 @@ export async function getListingForViewer(
     cancellationPolicy: row.cancellationPolicy,
     photos: toPhotos(row.photos),
     description: row.description,
-    addressLine: row.addressLine,
     status: row.status,
     host: row.host
       ? { id: row.host.id, displayName: row.host.displayName, avatarUrl: row.host.avatarUrl }
       : null,
-    // The front door is the owner's to see. A public read carries no key at
-    // all, so the precise point never leaves in a guest's JSON.
+    // The front door is the owner's to see — the street address as much as the
+    // point. The editor's own hint promises the address is "shared with a guest
+    // after a stay is confirmed, not on the public page", so a public read
+    // carries no key at all and neither leaves in a guest's JSON.
     ...(owner
       ? {
+          addressLine: row.addressLine,
           coordinates:
             row.lat !== null && row.lng !== null
               ? {
