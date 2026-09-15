@@ -18,6 +18,7 @@ export const STALE_AFTER_MS: Record<string, number> = {
   "release-deposits": 3 * 60 * 60 * 1000,
   "publish-reviews": 26 * 60 * 60 * 1000,
   "review-reminders": 26 * 60 * 60 * 1000,
+  "release-stale-scan-jobs": 3 * 60 * 60 * 1000,
   watchdog: 26 * 60 * 60 * 1000,
 };
 

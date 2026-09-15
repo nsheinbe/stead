@@ -28,7 +28,7 @@ Copyright 2026 Stead contributors.
 | HM-D01 | HM-01 | `/host/listings/:listingId/scan` | none | [screens/HM-D01.md](screens/HM-D01.md) | D05, D07, D15 |
 | HM-D02 | HM-01 | `/host/listings/:listingId#where` (editor section) | `HostListingEditPage` "Where it is" | [screens/HM-D02.md](screens/HM-D02.md) | D08 (deferred map) |
 | HM-D03 | HM-02 | `/host/listings/:listingId/scan` (upload step) | none | [screens/HM-D03.md](screens/HM-D03.md) | D06, D16 |
-| HM-D04 | HM-03 | `/host/listings/:listingId/scan/status` | none | [screens/HM-D04.md](screens/HM-D04.md) | D03, D14 |
+| HM-D04 | HM-03 | `/host/listings/:listingId/scan/status` | built (HM-03): `src/pages/HostListingScanStatus.tsx` | [screens/HM-D04.md](screens/HM-D04.md) | D03, D14 |
 | HM-D05 | HM-04 | `/host/listings/:listingId/scan/mask` | none | [screens/HM-D05.md](screens/HM-D05.md) | D10, D11 |
 | HM-D06 | HM-05 | `/listing/:id` (walk entry section) | `ListingDetailPage` | [screens/HM-D06-D07.md](screens/HM-D06-D07.md) | D20 |
 | HM-D07 | HM-05 | `/listing/:id/walk` | none | [screens/HM-D06-D07.md](screens/HM-D06-D07.md) | D20 |

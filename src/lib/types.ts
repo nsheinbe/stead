@@ -148,7 +148,49 @@ export type ListingScan = {
   uploads: ScanUploads;
   stats: GeofenceStatsJson | null;
   completedAt: string | null;
+  /** HM-03: reconstruction attempts so far, the cap, and whether the host may ask again. */
+  attempt: number;
+  maxAttempts: number;
+  canRetry: boolean;
+  claimedAt: string | null;
+  updatedAt: string;
+  /** HM-03: which worker outputs exist. */
+  outputs: Record<ScanWorkerArtifactKind, boolean>;
 };
+
+/** What the worker may record (HM-03). The raw kinds are recorded at upload. */
+export type ScanWorkerArtifactKind = "frames" | "cameras" | "splat" | "splat_compressed" | "stills";
+
+/** GET /api/listings/:id/scans/:scanId/stills — short-lived signed URLs to real frames. */
+export type ScanStills = {
+  stills: { index: number; url: string }[];
+  expiresInSeconds: number;
+};
+
+/** A claimed reconstruction job as the worker sees it (POST /api/scan-worker/jobs/claim). */
+export type ScanJob = {
+  scanId: string;
+  listingId: string;
+  attempt: number;
+  timezone: string;
+  target: { lat: number; lng: number };
+  thresholds: { accuracyMaxM: number; geofenceRadiusM: number };
+  inputs: { videoKey: string; videoContentType: string; attestationKey: string; notesKey: string };
+  /** Where the worker writes its outputs. */
+  outputPrefix: string;
+};
+
+export type ScanJobArtifact = {
+  kind: ScanWorkerArtifactKind;
+  objectKey: string;
+  contentType: string;
+  sizeBytes: number;
+};
+
+/** POST /api/scan-worker/jobs/:scanId/finish */
+export type ScanJobFinish =
+  | { attempt: number; outcome: "needs_mask"; artifacts: ScanJobArtifact[] }
+  | { attempt: number; outcome: "failed"; reason: "reconstruction_failed"; artifacts: ScanJobArtifact[] };
 
 /** POST /api/listings/:id/scans/:scanId/uploads — where one part of the package goes. */
 export type ScanUploadTarget =

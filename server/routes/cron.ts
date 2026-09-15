@@ -15,9 +15,12 @@ import {
   depositReleasedEmail,
   reviewOpenEmail,
   reviewReminderEmail,
+  scanFailedEmail,
+  scanStatusUrl,
   sendEmail,
   watchdogAlertEmail,
 } from "../lib/email";
+import { SCAN_REASON_COPY } from "../../src/lib/honestyCopy";
 import { expirePendingBookings, recordHeartbeat } from "../queries/bookings";
 import {
   holdDueEscrows,
@@ -26,6 +29,7 @@ import {
   releaseDueEscrows,
 } from "../queries/escrow";
 import { listReviewOpenNotices, publishDueReviews } from "../queries/reviews";
+import { releaseStaleScanJobs } from "../queries/scans";
 import { getConfigMap, intFromConfig } from "../queries/listings";
 import {
   listExpiredUnrefunded,
@@ -163,6 +167,41 @@ cronRoutes.on(["GET", "POST"], "/review-reminders", async (c) => {
     }
   }
   return c.json({ due: due.length, notified });
+});
+
+/**
+ * HM-03: a reconstruction claim older than `scan_claim_stale_hours` is a dead
+ * worker. The row goes back to the queue while attempts remain, otherwise to
+ * `failed` — and that host is told, after the transaction has committed.
+ */
+cronRoutes.on(["GET", "POST"], "/release-stale-scan-jobs", async (c) => {
+  assertCronCaller(c.req.header("authorization"));
+  const moved = await runJob(c, "release-stale-scan-jobs", async (tx) => {
+    const config = await getConfigMap(tx);
+    return releaseStaleScanJobs(
+      tx,
+      intFromConfig(config.scan_claim_stale_hours, 6),
+      intFromConfig(config.scan_max_attempts, 3),
+    );
+  });
+  let notified = 0;
+  for (const job of moved) {
+    if (job.state !== "failed") continue;
+    const sent = await sendEmail({
+      to: job.hostEmail,
+      ...scanFailedEmail({
+        listingTitle: job.listingTitle,
+        statusUrl: scanStatusUrl(job.listingId),
+        reason: SCAN_REASON_COPY.reconstruction_failed,
+      }),
+    });
+    if (sent) notified += 1;
+  }
+  return c.json({
+    requeued: moved.filter((j) => j.state === "uploaded").length,
+    failed: moved.filter((j) => j.state === "failed").length,
+    notified,
+  });
 });
 
 /**

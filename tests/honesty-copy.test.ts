@@ -26,8 +26,10 @@ import {
   HONESTY_VERBS,
   LOCATION_READOUT,
   PLATFORM_BANNED_WORDS,
+  SCAN_EMAIL_SUBJECTS,
   SCAN_REASON_COPY,
   SCAN_STATE_COPY,
+  SCAN_STATUS_COPY,
   type ScanStateKey,
 } from "../src/lib/honestyCopy";
 
@@ -56,6 +58,8 @@ const SURFACES = {
   HONESTY_NEARBY,
   HONESTY_HOST_SHEET,
   SCAN_STATE_COPY,
+  SCAN_STATUS_COPY,
+  SCAN_EMAIL_SUBJECTS,
   LOCATION_READOUT,
   HONESTY_REFUSALS,
   SCAN_REASON_COPY,
@@ -151,6 +155,31 @@ describe("honesty copy — locked strings", () => {
     expect(SCAN_STATE_COPY.failed.tone).not.toBe("danger");
   });
 
+  it("every scan state has one status sentence, and none of them invents an ETA (HM-D04)", () => {
+    const sentences: Record<ScanStateKey, string> = {
+      not_started: SCAN_STATUS_COPY.none,
+      needs_location: SCAN_STATUS_COPY.none,
+      capturing: SCAN_STATUS_COPY.capturing,
+      uploading: SCAN_STATUS_COPY.capturing,
+      uploaded: SCAN_STATUS_COPY.uploaded,
+      reconstructing: SCAN_STATUS_COPY.reconstructing,
+      needs_mask: SCAN_STATUS_COPY.needs_mask,
+      verified: SCAN_STATUS_COPY.verified("14 Sep 2026"),
+      rejected: SCAN_STATUS_COPY.rejected,
+      failed: SCAN_STATUS_COPY.failed,
+    };
+    for (const [key, sentence] of Object.entries(sentences)) {
+      expect(sentence.length, key).toBeGreaterThan(0);
+      expect(sentence, key).not.toMatch(/\b\d+ ?(minutes|mins|hours)\b/i);
+      expect(sentence, key).not.toMatch(/\d+ ?%/);
+    }
+    expect(SCAN_STATUS_COPY.uploaded).toMatch(/often hours/);
+    expect(SCAN_STATUS_COPY.stillsCaption).toMatch(/Nothing here is generated/);
+    for (const subject of Object.values(SCAN_EMAIL_SUBJECTS)) {
+      expect(subject("Sample")).toContain("Sample");
+    }
+  });
+
   it("rounds the location readout to 5 m and never invents a fix", () => {
     expect(LOCATION_READOUT.good(8)).toBe("Location: good (about 10 m)");
     expect(LOCATION_READOUT.rough(62)).toMatch(/^Location: rough \(about 60 m\)\./);
@@ -188,7 +217,9 @@ describe("honesty copy — the two gates stay distinguishable", () => {
   });
 
   it("scan refusals never match the kill-switch regexes used by tests/guest-bookings.test.ts", () => {
-    for (const message of Object.values(HONESTY_REFUSALS)) {
+    for (const entry of Object.values(HONESTY_REFUSALS)) {
+      // retryExhausted (HM-03) takes the attempt count; sample it.
+      const message = typeof entry === "function" ? entry(3) : entry;
       expect(message).not.toMatch(/not open for bookings yet/i);
       expect(message).not.toMatch(/aren't open yet/i);
     }

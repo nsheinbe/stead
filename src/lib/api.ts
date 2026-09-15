@@ -15,6 +15,7 @@ import type {
   ListingScan,
   ListingScanStatus,
   ListingSummary,
+  ScanStills,
   ScanUploadKind,
   ScanUploadTarget,
   ScanUploadedPart,
@@ -206,6 +207,15 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }),
+
+  // --- HM-03: reconstruction status -----------------------------------------
+  /** failed → uploaded while attempts remain. 409 with the locked message otherwise. */
+  retryScan: (listingId: string, scanId: string) =>
+    request<ListingScan>(`/api/listings/${listingId}/scans/${scanId}/retry`, { method: "POST" }),
+
+  /** Short-lived signed URLs to real frames from the walk, for the failed-state page. */
+  scanStills: (listingId: string, scanId: string) =>
+    request<ScanStills>(`/api/listings/${listingId}/scans/${scanId}/stills`),
 
   /** PUT a blob to a presigned URL. A content type is sent only when the signature carries one. */
   async putToBucket(uploadUrl: string, body: Blob, contentType?: string): Promise<void> {

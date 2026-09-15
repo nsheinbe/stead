@@ -99,6 +99,9 @@ The landing fee slider uses `quoteStay` for Stead's column so it cannot disagree
 | `GET`/`POST` | `/api/cron/publish-reviews` | both-in or 14 days after listing-local checkout |
 | `GET`/`POST` | `/api/cron/review-reminders` | day 3 / day 7 after listing-local checkout |
 | `GET`/`POST` | `/api/cron/watchdog` | stale/errored heartbeats → `OPS_ALERT_EMAIL` |
+| `GET`/`POST` | `/api/cron/release-stale-scan-jobs` | HM-03 — a reconstruction claim older than `scan_claim_stale_hours` goes back to the queue, or fails once `scan_max_attempts` is spent |
+| `POST` | `/api/scan-worker/jobs/claim` · `/jobs/:scanId/finish` | the reconstruction worker, `Authorization: Bearer $SCAN_WORKER_SECRET`. No database credential; see `worker/README.md` |
+| `POST`/`GET` | `/api/listings/:id/scans/:scanId/retry` · `/stills` | owner — HM-03: retry a `failed` reconstruction (capped); signed URLs to the worker's real frames |
 | `*` | `/api/auth/*` | Auth.js — csrf, signin, callback, session, signout |
 
 Write quotas are a process-local sliding window (`server/lib/rateLimit.ts`): create-booking, cancel, send-message, file/respond/resolve-claim, Identity session, Connect onboard. The Stripe webhook is **not** limited — it is already idempotent via `stripe_events`, and a 429 would drop a retry. Set `RATE_LIMIT_DISABLED=1` only on a laptop.
@@ -232,6 +235,7 @@ Required environment variables:
 | `ALLOW_GUEST_BOOKINGS` | `1` allows create-booking (and stay payment / setup for new bookings). Unset or `0` refuses fail-closed. Soft Dist Production stays off until Nick flips it on Vercel. |
 | `PASSPORT_SIGNING_KEY` | Ed25519 PKCS8 PEM, base64 — `openssl genpkey -algorithm ed25519 \| base64 -w0` |
 | `OPS_ALERT_EMAIL` | watchdog destination when a cron heartbeat is stale or errored |
+| `SCAN_WORKER_SECRET` | bearer the honesty-media reconstruction worker presents to `/api/scan-worker/*` (HM-03). The worker holds no database credential; see `worker/README.md` |
 
 Point the Stripe webhook endpoint at `https://<deployment>/api/stripe/webhook`. Subscribe to `payment_intent.succeeded`, `charge.dispute.created`, `charge.dispute.closed`, `identity.verification_session.verified`, `identity.verification_session.requires_input`, and `account.updated`.
 
@@ -250,6 +254,7 @@ Jobs are plain authenticated endpoints under `/api/cron/*`, all taking `Authoriz
 | `publish-reviews` | unpublished reviews: both directions in, or 14 days after listing-local checkout | hourly |
 | `review-reminders` | day 3 and day 7 follow-ups if that party has not submitted | daily is enough |
 | `watchdog` | emails ops if any heartbeat is stale or errored; retries expired-and-paid refunds | daily |
+| `release-stale-scan-jobs` | HM-03: a reconstruction claim older than `scan_claim_stale_hours` (default 6) returns to the queue, or fails once `scan_max_attempts` (default 3) is spent, emailing that host | hourly |
 
 Each moves only what is due and re-running one changes nothing, so a missed tick is caught by the next rather than needing a backfill. Each records a heartbeat in `cron_heartbeats` on success and on failure, so a stale `last_ok` is the signal that one has quietly stopped.
 
@@ -265,6 +270,7 @@ curl -H "Authorization: Bearer $CRON_SECRET" https://your-host/api/cron/release-
 curl -H "Authorization: Bearer $CRON_SECRET" https://your-host/api/cron/publish-reviews
 curl -H "Authorization: Bearer $CRON_SECRET" https://your-host/api/cron/review-reminders
 curl -H "Authorization: Bearer $CRON_SECRET" https://your-host/api/cron/watchdog
+curl -H "Authorization: Bearer $CRON_SECRET" https://your-host/api/cron/release-stale-scan-jobs
 ```
 
 Deliberately **not** in `vercel.json`: Vercel Cron on the Hobby plan fires at most once a day, and a deployment is rejected outright if the expression asks for more, which makes it both unusable here and a confusing build failure. On Pro, add them back:
@@ -277,7 +283,8 @@ Deliberately **not** in `vercel.json`: Vercel Cron on the Hobby plan fires at mo
   { "path": "/api/cron/release-deposits", "schedule": "0 * * * *" },
   { "path": "/api/cron/publish-reviews",  "schedule": "0 * * * *" },
   { "path": "/api/cron/review-reminders", "schedule": "0 15 * * *" },
-  { "path": "/api/cron/watchdog",         "schedule": "0 16 * * *" }
+  { "path": "/api/cron/watchdog",         "schedule": "0 16 * * *" },
+  { "path": "/api/cron/release-stale-scan-jobs", "schedule": "30 * * * *" }
 ]
 ```
 

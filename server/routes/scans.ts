@@ -10,6 +10,11 @@
  *   POST /:id/scans/:scanId/uploads/finish   assemble the video from its parts
  *   POST /:id/scans/:scanId/complete         judge the package, record it
  *
+ * HM-03 adds the host's side of reconstruction:
+ *
+ *   POST /:id/scans/:scanId/retry            failed → uploaded while attempts remain
+ *   GET  /:id/scans/:scanId/stills           signed URLs to real frames (failed state)
+ *
  * Completion is where the verdict happens: the server reads the location
  * record from the bucket, judges it against the row's frozen target and
  * thresholds, and calls app.complete_scan_upload. No transaction is held
@@ -18,9 +23,10 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
-import { HONESTY_REFUSALS } from "../../src/lib/honestyCopy";
-import type { ListingScan, ScanUploadTarget, ScanUploadedPart } from "../../src/lib/types";
+import { HONESTY_REFUSALS, SCAN_REASON_COPY } from "../../src/lib/honestyCopy";
+import type { ListingScan, ScanStills, ScanUploadTarget, ScanUploadedPart } from "../../src/lib/types";
 import { capturedOnFor, parseAttestation } from "../lib/attestation";
+import { scanRejectedEmail, scanStatusUrl, sendEmail } from "../lib/email";
 import { distanceMetres, judgeWalk, sanitizeSamples } from "../lib/geofence";
 import { sessionUser, tenantQuery, type AppEnv } from "../lib/http";
 import {
@@ -32,16 +38,26 @@ import {
   isVideoKeyFor,
   listUploadedParts,
   maxBytesFor,
+  presignGetObject,
   presignPutObject,
   presignUploadPart,
   SCAN_MAX_ATTESTATION_BYTES,
   SCAN_MAX_PARTS,
+  SCAN_MAX_STILLS,
   SCAN_PART_SIZE_BYTES,
+  SCAN_URL_TTL_SECONDS,
   scanObjectKey,
   validPartNumber,
 } from "../lib/scanStorage";
 import { StorageError, storageConfigured } from "../lib/storage";
-import { completeScanUpload, getScanForOwner, getScanTarget, type OwnedScan } from "../queries/scans";
+import {
+  completeScanUpload,
+  getScanForOwner,
+  getScanTarget,
+  retryScanReconstruction,
+  scanNotice,
+  type OwnedScan,
+} from "../queries/scans";
 
 export const scanRoutes = new Hono<AppEnv>();
 
@@ -253,5 +269,74 @@ scanRoutes.post("/:id/scans/:scanId/complete", async (c) => {
   const after = await tenantQuery(c, (tx) => getScanForOwner(tx, hostId, listingId, scanId));
   if (!after) throw new HTTPException(404, { message: "No scan of yours here" });
   const scan: ListingScan = after.scan;
+
+  // HM-03 (D14): a rejection is a terminal state, so the host gets the one
+  // email for it — after the transaction, and never blocking the receipt.
+  if (!verdict.ok) {
+    const notice = await tenantQuery(c, (tx) => scanNotice(tx, scanId));
+    if (notice) {
+      await sendEmail({
+        to: notice.hostEmail,
+        ...scanRejectedEmail({
+          listingTitle: notice.listingTitle,
+          statusUrl: scanStatusUrl(listingId),
+          reason: SCAN_REASON_COPY[verdict.reason],
+        }),
+      });
+    }
+  }
   return c.json(scan);
+});
+
+// ---------------------------------------------------------------- HM-03 -----
+
+/**
+ * Try processing again: failed → uploaded, the same footage, while attempts
+ * remain. The function re-checks the caller, the state and the cap; the two
+ * 409s here are the friendly versions of its refusal.
+ */
+scanRoutes.post("/:id/scans/:scanId/retry", async (c) => {
+  const host = sessionUser(c);
+  const listingId = c.req.param("id");
+  const scanId = c.req.param("scanId");
+  const result = await tenantQuery(c, async (tx) => {
+    const owned = await getScanForOwner(tx, host.id, listingId, scanId);
+    if (!owned) return { kind: "missing" as const };
+    if (owned.scan.state !== "failed") return { kind: "not_failed" as const };
+    if (owned.scan.attempt >= owned.scan.maxAttempts) {
+      return { kind: "exhausted" as const, attempts: owned.scan.attempt };
+    }
+    const ok = await retryScanReconstruction(tx, scanId, owned.scan.maxAttempts);
+    if (!ok) return { kind: "not_failed" as const };
+    const after = await getScanForOwner(tx, host.id, listingId, scanId);
+    return after ? { kind: "queued" as const, scan: after.scan } : { kind: "missing" as const };
+  });
+  if (result.kind === "missing") throw new HTTPException(404, { message: "No scan of yours here" });
+  if (result.kind === "not_failed") throw new HTTPException(409, { message: HONESTY_REFUSALS.retryNotFailed });
+  if (result.kind === "exhausted") {
+    throw new HTTPException(409, { message: HONESTY_REFUSALS.retryExhausted(result.attempts) });
+  }
+  const scan: ListingScan = result.scan;
+  return c.json(scan);
+});
+
+/**
+ * Frames the worker saved from the walk, as short-lived signed URLs. Real
+ * captured frames only — the worker has no step that could make any other
+ * kind. Owner only; an empty list is honest when the worker saved none.
+ */
+scanRoutes.get("/:id/scans/:scanId/stills", async (c) => {
+  requireStorage();
+  const host = sessionUser(c);
+  const listingId = c.req.param("id");
+  const scanId = c.req.param("scanId");
+  const owned = await tenantQuery(c, (tx) => getScanForOwner(tx, host.id, listingId, scanId));
+  if (!owned) throw new HTTPException(404, { message: "No scan of yours here" });
+  const keys = owned.stillsKeys.slice(0, SCAN_MAX_STILLS);
+  const signed = await bucket(() => Promise.all(keys.map((key) => presignGetObject(key))));
+  const body: ScanStills = {
+    stills: signed.map((s, index) => ({ index, url: s.url })),
+    expiresInSeconds: SCAN_URL_TTL_SECONDS,
+  };
+  return c.json(body);
 });

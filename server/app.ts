@@ -25,6 +25,7 @@ import { messagesRoutes } from "./routes/messages";
 import { opsRoutes } from "./routes/ops";
 import { passportRoutes } from "./routes/passport";
 import { reviewsRoutes } from "./routes/reviews";
+import { scanWorkerRoutes } from "./routes/scanWorker";
 import { stripeRoutes } from "./routes/stripe";
 import { logEmailFromMisconfig } from "./lib/emailFrom";
 import { getConfigMap, toPublicConfig } from "./queries/listings";
@@ -57,9 +58,11 @@ app.get("/config", async (c) => c.json(toPublicConfig(await tenantQuery(c, getCo
 app.route("/listings", listingsRoutes);
 app.route("/passport", passportRoutes);
 
-// Stripe and the scheduler authenticate themselves; they are not members.
+// Stripe, the scheduler and the reconstruction worker authenticate
+// themselves; they are not members.
 app.route("/stripe", stripeRoutes);
 app.route("/cron", cronRoutes);
+app.route("/scan-worker", scanWorkerRoutes);
 app.use("/connect", requireUser);
 app.use("/connect/*", requireUser);
 app.route("/connect", connectRoutes);

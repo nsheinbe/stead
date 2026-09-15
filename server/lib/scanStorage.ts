@@ -28,7 +28,7 @@ import {
   UploadPartCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import type { ScanUploadKind } from "../../src/lib/types";
+import type { ScanUploadKind, ScanWorkerArtifactKind } from "../../src/lib/types";
 import { getStorageClient, StorageError } from "./storage";
 
 /** Extension is derived from the signed content type, never from a filename. */
@@ -81,6 +81,23 @@ export function scanObjectKey(
   contentType: string,
 ): string {
   return `${scanPrefix(listingId, scanId)}${kind}.${extensionForScanUpload(kind, contentType)}`;
+}
+
+/** Stills the status page shows for a failed scan (HM-D04 §3): real frames, at most this many. */
+export const SCAN_MAX_STILLS = 8;
+
+export const WORKER_ARTIFACT_KINDS: readonly ScanWorkerArtifactKind[] = [
+  "frames",
+  "cameras",
+  "splat",
+  "splat_compressed",
+  "stills",
+];
+
+/** A key the worker may record: under this scan's prefix, no traversal, not empty. */
+export function isWorkerKeyFor(listingId: string, scanId: string, key: string): boolean {
+  const prefix = scanPrefix(listingId, scanId);
+  return key.startsWith(prefix) && key.length > prefix.length && !key.includes("..") && !key.endsWith("/");
 }
 
 export function isVideoKeyFor(listingId: string, scanId: string, key: string): boolean {
@@ -167,6 +184,14 @@ export async function presignPutObject(
     { expiresIn: SCAN_URL_TTL_SECONDS },
   );
   return { uploadUrl, expiresInSeconds: SCAN_URL_TTL_SECONDS };
+}
+
+/** A short-lived GET for one object — how a host sees a still, how nobody sees a raw key. */
+export async function presignGetObject(key: string): Promise<{ url: string; expiresInSeconds: number }> {
+  const url = await getSignedUrl(getStorageClient(), new GetObjectCommand({ Bucket: bucket(), Key: key }), {
+    expiresIn: SCAN_URL_TTL_SECONDS,
+  });
+  return { url, expiresInSeconds: SCAN_URL_TTL_SECONDS };
 }
 
 export type ObjectHead = { sizeBytes: number; contentType: string };

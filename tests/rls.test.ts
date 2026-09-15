@@ -8,6 +8,7 @@
  */
 import { afterAll, describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
+import type postgres from "postgres";
 import { assertTenantRole, describeRole, PrivilegedRoleError } from "../server/db/client";
 import {
   asOwner,
@@ -1326,3 +1327,169 @@ describeDb("HM-02: artifacts are owner-read, samples are nobody's, completion is
   });
 });
 
+
+describeDb("HM-03: job transitions belong to the functions; members cannot claim, finish, retry another's scan or touch the job columns", () => {
+  afterAll(async () => {
+    await closeTestDb();
+  });
+
+  const DOOR = { lat: 42.2529, lng: -73.791 };
+
+  /** An uploaded package, as HM-02 leaves it. Owner writes, because members cannot. */
+  async function uploaded(hostId: string, overrides: { state?: string; attempt?: number; claimedAt?: string | null } = {}) {
+    const listingId = id();
+    const scanId = id();
+    const prefix = `listings/${listingId}/scans/${scanId}/`;
+    await insertListing({ id: listingId, hostId, title: "Job RLS cottage", status: "draft" });
+    await asOwner(async (db) => {
+      await db.execute(sql`
+        INSERT INTO public.listing_scans (
+          id, listing_id, host_id, state, reason, honesty_policy_version,
+          accuracy_max_m, geofence_radius_m, bookend_window_seconds, bookend_min_samples,
+          min_indoor_seconds, max_seconds, target_lat, target_lng, captured_on, completed_at, attempt, claimed_at
+        ) VALUES (
+          ${scanId}::uuid, ${listingId}::uuid, ${hostId}::uuid, ${overrides.state ?? "uploaded"}::public.scan_state,
+          ${overrides.state === "failed" ? "reconstruction_failed" : null}, 1,
+          35, 100, 90, 15, 60, 600, ${DOOR.lat}, ${DOOR.lng}, '2026-09-14'::date, now(),
+          ${overrides.attempt ?? 0}, ${overrides.claimedAt ?? null}::timestamptz
+        )
+      `);
+      await db.execute(sql`
+        INSERT INTO public.scan_artifacts (scan_id, kind, object_key, content_type, size_bytes) VALUES
+          (${scanId}::uuid, 'video', ${`${prefix}video.mp4`}, 'video/mp4', 1000),
+          (${scanId}::uuid, 'attestation', ${`${prefix}attestation.json`}, 'application/json', 100),
+          (${scanId}::uuid, 'notes', ${`${prefix}notes.json`}, 'application/json', 50)
+      `);
+    });
+    return { listingId, scanId, prefix };
+  }
+
+  const stateOf = async (viewer: string, scanId: string) => {
+    const rows = await rawAsMember(viewer, (tx) => tx`SELECT state::text, attempt, reason FROM public.listing_scans WHERE id = ${scanId}::uuid`);
+    return rows[0] as { state: string; attempt: number; reason: string | null } | undefined;
+  };
+
+  /** Claim as the worker does (no member) until this scan comes out; other suites leave packages behind. */
+  async function claimUntil(scanId: string): Promise<number> {
+    for (let i = 0; i < 50; i += 1) {
+      const rows = (await rawAsMember(null, (tx) => tx`SELECT scan_id, attempt FROM app.claim_next_scan_job('rls-probe')`)) as {
+        scan_id: string;
+        attempt: number;
+      }[];
+      if (rows.length === 0) throw new Error("queue empty before the probe's scan was claimed");
+      if (rows[0]?.scan_id === scanId) return rows[0].attempt;
+    }
+    throw new Error("probe's scan never came up");
+  }
+
+  it("no member can write the job columns or move the state directly", async () => {
+    const hostId = id();
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    const { scanId } = await uploaded(hostId);
+    for (const statement of [
+      (tx: postgres.TransactionSql) => tx`UPDATE public.listing_scans SET attempt = 9 WHERE id = ${scanId}::uuid`,
+      (tx: postgres.TransactionSql) => tx`UPDATE public.listing_scans SET claimed_at = now(), worker_id = 'me' WHERE id = ${scanId}::uuid`,
+      (tx: postgres.TransactionSql) => tx`UPDATE public.listing_scans SET state = 'reconstructing' WHERE id = ${scanId}::uuid`,
+      (tx: postgres.TransactionSql) => tx`UPDATE public.listing_scans SET state = 'needs_mask' WHERE id = ${scanId}::uuid`,
+      (tx: postgres.TransactionSql) => tx`UPDATE public.listing_scans SET state = 'failed', reason = 'reconstruction_failed' WHERE id = ${scanId}::uuid`,
+    ]) {
+      await expect(rawAsMember(hostId, statement)).rejects.toThrow(/permission denied/);
+    }
+    expect(await stateOf(hostId, scanId)).toEqual({ state: "uploaded", attempt: 0, reason: null });
+  });
+
+  it("finish refuses a stale attempt and a key outside the prefix, then records only under the prefix", async () => {
+    const hostId = id();
+    const otherHost = id();
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    await insertMember(otherHost, `host-${otherHost}@stead.example`, "Other host", true);
+    const { scanId, prefix } = await uploaded(hostId);
+    const attempt = await claimUntil(scanId);
+    expect(attempt).toBe(1);
+    expect(await stateOf(hostId, scanId)).toMatchObject({ state: "reconstructing", attempt: 1 });
+
+    const good = [
+      { kind: "cameras", object_key: `${prefix}cameras.json`, content_type: "application/json", size_bytes: 1 },
+      { kind: "splat", object_key: `${prefix}splat.ply`, content_type: "application/octet-stream", size_bytes: 1 },
+    ];
+    const finish = (viewer: string | null, at: number, artifacts: postgres.JSONValue) =>
+      rawAsMember(viewer, (tx) => tx`SELECT state FROM app.finish_scan_job(${scanId}::uuid, ${at}, 'needs_mask', NULL, ${tx.json(artifacts)}::jsonb)`);
+
+    // A stale attempt writes nothing, whoever calls.
+    expect(await finish(null, 2, good)).toHaveLength(0);
+    expect(await finish(hostId, 2, good)).toHaveLength(0);
+    expect(await stateOf(hostId, scanId)).toMatchObject({ state: "reconstructing", attempt: 1 });
+
+    await expect(
+      finish(null, 1, [...good, { kind: "stills", object_key: "listings/x/scans/y/stills/00.jpg", content_type: "image/jpeg", size_bytes: 1 }]),
+    ).rejects.toThrow(/outside the scan prefix/);
+    await expect(
+      finish(null, 1, [...good, { kind: "video", object_key: `${prefix}video.mp4`, content_type: "video/mp4", size_bytes: 1 }]),
+    ).rejects.toThrow(/outside the scan prefix|may not record/);
+    await expect(finish(null, 1, good.slice(0, 1))).rejects.toThrow(/needs a splat/);
+    expect(await stateOf(hostId, scanId)).toMatchObject({ state: "reconstructing", attempt: 1 });
+
+    const rows = await finish(null, 1, good);
+    expect(rows).toEqual([{ state: "needs_mask" }]);
+    expect(await stateOf(hostId, scanId)).toEqual({ state: "needs_mask", attempt: 1, reason: null });
+    // Recorded pointers are the host's to read and nobody's to write.
+    const artifacts = (viewer: string | null) =>
+      rawAsMember(viewer, (tx) => tx`SELECT kind::text FROM public.scan_artifacts WHERE scan_id = ${scanId}::uuid AND kind IN ('cameras', 'splat')`);
+    expect(await artifacts(hostId)).toHaveLength(2);
+    expect(await artifacts(otherHost)).toHaveLength(0);
+    expect(await artifacts(null)).toHaveLength(0);
+    // Done is done: the same attempt again returns nothing.
+    expect(await finish(null, 1, good)).toHaveLength(0);
+  });
+
+  it("retry is the host's alone, from failed only, and capped", async () => {
+    const hostId = id();
+    const otherHost = id();
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    await insertMember(otherHost, `host-${otherHost}@stead.example`, "Other host", true);
+    const { scanId } = await uploaded(hostId, { state: "failed", attempt: 1 });
+    const retry = (viewer: string | null, max = 3) =>
+      rawAsMember(viewer, (tx) => tx`SELECT app.retry_scan_reconstruction(${scanId}::uuid, ${max}) AS ok`);
+
+    expect((await retry(otherHost))[0]).toEqual({ ok: false });
+    expect((await retry(null))[0]).toEqual({ ok: false });
+    expect(await stateOf(hostId, scanId)).toMatchObject({ state: "failed", attempt: 1 });
+    expect((await retry(hostId, 1))[0]).toEqual({ ok: false }); // cap already spent
+    expect((await retry(hostId))[0]).toEqual({ ok: true });
+    expect(await stateOf(hostId, scanId)).toEqual({ state: "uploaded", attempt: 1, reason: null });
+    expect((await retry(hostId))[0]).toEqual({ ok: false }); // not failed any more
+  });
+
+  it("release moves only claims older than the window, and scan_notice answers only its host", async () => {
+    const hostId = id();
+    const otherHost = id();
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    await insertMember(otherHost, `host-${otherHost}@stead.example`, "Other host", true);
+    const old = new Date(Date.now() - 7 * 3600_000).toISOString();
+    const recent = new Date(Date.now() - 600_000).toISOString();
+    const dead = await uploaded(hostId, { state: "reconstructing", attempt: 1, claimedAt: old });
+    const spent = await uploaded(hostId, { state: "reconstructing", attempt: 3, claimedAt: old });
+    const alive = await uploaded(hostId, { state: "reconstructing", attempt: 1, claimedAt: recent });
+
+    const moved = (await rawAsMember(
+      null,
+      (tx) => tx`SELECT scan_id, state FROM app.release_stale_scan_jobs(interval '6 hours', 3) ORDER BY scan_id`,
+    )) as { scan_id: string; state: string }[];
+    const mine = moved.filter((m) => [dead.scanId, spent.scanId, alive.scanId].includes(m.scan_id));
+    expect(mine.sort((a, b) => a.scan_id.localeCompare(b.scan_id))).toEqual(
+      [
+        { scan_id: dead.scanId, state: "uploaded" },
+        { scan_id: spent.scanId, state: "failed" },
+      ].sort((a, b) => a.scan_id.localeCompare(b.scan_id)),
+    );
+    expect(await stateOf(hostId, dead.scanId)).toEqual({ state: "uploaded", attempt: 1, reason: null });
+    expect(await stateOf(hostId, spent.scanId)).toEqual({ state: "failed", attempt: 3, reason: "reconstruction_failed" });
+    expect(await stateOf(hostId, alive.scanId)).toMatchObject({ state: "reconstructing", attempt: 1 });
+
+    const notice = (viewer: string | null) =>
+      rawAsMember(viewer, (tx) => tx`SELECT host_email FROM app.scan_notice(${spent.scanId}::uuid)`);
+    expect(await notice(hostId)).toEqual([{ host_email: `host-${hostId}@stead.example` }]);
+    expect(await notice(otherHost)).toHaveLength(0);
+    expect(await notice(null)).toHaveLength(0);
+  });
+});
