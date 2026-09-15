@@ -19,7 +19,7 @@ Everyone reads these strings. Only HM-00 writes them.
 | Item | Where | Content |
 |---|---|---|
 | Locked strings | `src/lib/honestyCopy.ts` (browser) and a server mirror or re-export the server can import without React | Every key in [journeys §1](../JOURNEYS-AND-COPY.md#1-locked-strings-hm-00): badge, guest disclosure, captured-on and coverage, nearby, host pre-capture sheet, scan state labels, location readouts, refusal messages, allowed and banned verbs |
-| Policy version | `app_config.honesty_policy_version = 1` | Snapshotted onto each scan (HM-02) so a later copy change is visible as a version, not a silent rewrite |
+| Policy version | `HONESTY_POLICY_VERSION = 1` in the copy module (HM-00 adds no migration, per BUILD-PLAN's HM-00 file map); HM-02's migration adds the `app_config` key and snapshots it onto each scan | A later copy change is visible as a version, not a silent rewrite |
 | Ban list as a test | `tests/honesty-copy.test.ts` | Asserts no banned verb (journeys §1.9) appears in the copy module, that `BOOKINGS_CLOSED_COPY` and `GUEST_BOOKINGS_CLOSED_MESSAGE` are unchanged, and that the scan refusal does not match the kill-switch regexes |
 | Engineering checklist | `docs/honesty-media/POLICY.md` (short) | BUILD-PLAN §4 restated as a reviewer checklist a PR can quote: "stitch / stabilise / compress / cleanup only", no generative step, no beautify control, provenance is a signal |
 

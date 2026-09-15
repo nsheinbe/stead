@@ -4,6 +4,7 @@ import { Shell } from "../components/Shell";
 import { ButtonLink, Card, Surface } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { api } from "../lib/api";
+import { HONESTY_MENTIONS } from "../lib/honestyCopy";
 import { formatUsd, MIN_STAY_NIGHTS, quoteStay } from "../lib/money";
 
 const STEPS = [
@@ -13,7 +14,7 @@ const STEPS = [
   },
   {
     title: "Get ready for bookings",
-    body: "Review your price and policy, and set up payouts with Stripe.",
+    body: HONESTY_MENTIONS.forHomeownersStep,
   },
   {
     title: "Publish when you're ready",
@@ -34,6 +35,7 @@ const FAQ = [
     q: "When can a renter pay for a stay?",
     a: "Payout setup must be complete before guests can pay for a stay. A listing can be live before that, so we show payout readiness separately from your listing's status.",
   },
+  HONESTY_MENTIONS.forHomeownersFaq,
   {
     q: "Can I rent a home and host with the same account?",
     a: "Yes. One account covers both. Renting and hosting are things you do, not a permanent choice about who you are.",
