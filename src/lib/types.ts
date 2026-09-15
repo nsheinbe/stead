@@ -326,6 +326,13 @@ export type TripDetail = TripSummary & {
   host: TripParty;
   guest: TripParty;
   cancellation: CancellationPreview;
+  /**
+   * The trips *list* carries `TripListing` as it stands; only the detail adds
+   * the street address, and `getTripForParty` only sets it once the stay is
+   * confirmed (see `stayIsConfirmed`). The list type cannot express it at all,
+   * which is the point: a pending or canceled stay has no address to leak.
+   */
+  listing: TripListing & { addressLine?: string };
 };
 
 /** Fee policy from app_config. Public: the 2% is the whole point. */

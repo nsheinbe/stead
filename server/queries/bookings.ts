@@ -22,6 +22,7 @@ import {
   listings,
 } from "../db/schema";
 import { isHiddenSeedListing } from "../lib/seedInventory";
+import { stayIsConfirmed } from "../../src/lib/tripStatus";
 import type { TripDetail, TripSummary } from "../../src/lib/types";
 import { getCancelableBooking, previewCancellation } from "./cancellations";
 import { getClaimForBooking } from "./claims";
@@ -99,7 +100,7 @@ export async function getTripForParty(
     where: and(eq(bookings.id, bookingId), or(eq(bookings.guestId, viewerId), hostOwnsListing)),
     with: {
       listing: {
-        columns: { id: true, title: true, city: true, region: true, timezone: true },
+        columns: { id: true, title: true, city: true, region: true, timezone: true, addressLine: true },
         with: { photos: { orderBy: asc(listingPhotos.sortOrder) } },
       },
       escrow: {
@@ -198,6 +199,13 @@ export async function getTripForParty(
       city: row.listing.city,
       region: row.listing.region,
       timezone: row.listing.timezone,
+      // "Shared with a guest after a stay is confirmed" — the editor's own
+      // promise, kept here rather than by the page choosing what to render.
+      // An unconfirmed, canceled or finished stay carries no address at all,
+      // and a listing that never had one carries no empty string either.
+      ...(stayIsConfirmed(row.status) && row.listing.addressLine
+        ? { addressLine: row.listing.addressLine }
+        : {}),
       photos: row.listing.photos.map((p) => ({
         id: p.id,
         storagePath: p.storagePath,

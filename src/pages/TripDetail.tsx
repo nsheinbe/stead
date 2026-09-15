@@ -28,7 +28,7 @@ import { dollarsToCents } from "../lib/cents";
 import { prettyDay, prettyRange } from "../lib/dates";
 import { depositHeading } from "../lib/fees";
 import { formatUsd } from "../lib/money";
-import { tripState } from "../lib/tripStatus";
+import { stayIsConfirmed, tripState } from "../lib/tripStatus";
 import { CLAIM_STATE_LABEL, type TripDetail } from "../lib/types";
 
 /**
@@ -209,9 +209,17 @@ export function TripDetailPage() {
         </div>
 
         {/* --- arrival ---------------------------------------------- */}
-        {booking.status === "confirmed" || booking.status === "checked_in" ? (
+        {stayIsConfirmed(booking.status) ? (
           <Surface padding="sm">
             <h2 className="m-0 text-base font-semibold">Getting in</h2>
+            {/* The server sends the address only once the stay is confirmed, so
+                its presence is the permission — this never re-decides it. */}
+            {listing.addressLine ? (
+              <p className="mb-0 mt-2 font-medium">
+                {listing.addressLine}
+                <span className="text-ink-secondary">{`, ${place}`}</span>
+              </p>
+            ) : null}
             <p className="mb-0 mt-2 text-sm text-ink-secondary">
               {booking.viewerIsHost
                 ? `Send ${other.displayName} the arrival details before check-in. Stead doesn't hold keys or codes.`
