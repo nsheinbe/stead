@@ -81,7 +81,8 @@ export function listingFormFromDetail(listing: ListingDetail): ListingFormValues
     title: listing.title,
     description: listing.description,
     type: listing.type,
-    addressLine: listing.addressLine,
+    // Only the owner's read carries the address, and only the owner edits.
+    addressLine: listing.addressLine ?? "",
     city: listing.city,
     region: listing.region,
     country: listing.country,
