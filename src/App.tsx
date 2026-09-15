@@ -25,6 +25,15 @@ import { ReviewPage } from "./pages/Review";
 // so it is neither a route nor a chunk there.
 const UiGalleryPage = import.meta.env.DEV ? lazy(() => import("./pages/dev/UiGallery")) : null;
 
+// Host-only honesty scan surfaces (HM-01): their own chunk, so a guest browsing
+// homes never downloads the camera and location code.
+const HostListingScanPage = lazy(() =>
+  import("./pages/HostListingScan").then((m) => ({ default: m.HostListingScanPage })),
+);
+const HostListingScanCapturePage = lazy(() =>
+  import("./pages/HostListingScanCapture").then((m) => ({ default: m.HostListingScanCapturePage })),
+);
+
 export function App() {
   return (
     <>
@@ -45,6 +54,22 @@ export function App() {
         <Route path="/host/start" element={<HostStartPage />} />
         <Route path="/host/listings" element={<HostListingsPage />} />
         <Route path="/host/listings/:listingId" element={<HostListingEditPage />} />
+        <Route
+          path="/host/listings/:listingId/scan"
+          element={
+            <Suspense fallback={null}>
+              <HostListingScanPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/host/listings/:listingId/scan/capture"
+          element={
+            <Suspense fallback={null}>
+              <HostListingScanCapturePage />
+            </Suspense>
+          }
+        />
         <Route path="/host/payouts" element={<HostPayoutsPage />} />
         <Route path="/host/claims" element={<HostClaimsPage />} />
         <Route path="/host/claims/:claimId" element={<HostClaimDetailPage />} />

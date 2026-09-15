@@ -63,6 +63,7 @@ State transitions are closed to `app_user` entirely. It has no `UPDATE` grant on
 | `/ops` | Minimal ops view — disputes, stale heartbeats, frozen payouts. Gated by `is_ops`. |
 | `/host/start` | Canonical entry to listing creation; signed-out visitors get a contextual sign-in that returns here |
 | `/host/listings` · `/host/payouts` · `/host/claims` | Host surface |
+| `/host/listings/:id/scan` · `/scan/capture` | Honesty scan hub and phone viewfinder (HM-01): start a walk, record a continuous location record, get the server's geofence verdict. Video stays on the phone until HM-02. |
 | `/host/claims/:id` | Claim detail, evidence, arbiter resolution |
 | `/login` | Magic-link email. Google OAuth is deferred. |
 | anything else | Deliberate not-found view with a way back |
@@ -78,6 +79,9 @@ The landing fee slider uses `quoteStay` for Stead's column so it cannot disagree
 | `GET` | `/api/listings` | public — active listings; `q`, `city`, `type`, `guests`, `maxRate` (cents), `instant=1` |
 | `GET` | `/api/listings/:id` | public if active; the host also sees their own draft/paused |
 | `GET` | `/api/me` | current session, or `{ user: null }` |
+| `GET`/`POST` | `/api/listings/:id/scan` | owner — honesty scan hub / start a walk (needs a front door pin and the current policy version) |
+| `POST` | `/api/listings/:id/scan/:scanId/location` | owner — the walk's location record; the server judges it (`server/lib/geofence.ts`) and stores the verdict |
+| `DELETE` | `/api/listings/:id/scan/:scanId` | owner — discard an unfinished walk (RLS refuses a judged one) |
 | `GET` | `/api/trips` · `/api/trips/:id` | signed-in guest; `/:id` also the listing host |
 | `GET`/`POST` | `/api/trips/:id/cancellation` · `/cancel` | stay parties — preview / cancel-booking. Cancel is rate-limited. |
 | `GET`/`POST` | `/api/messages` · `/unread` · `/:listingId/:guestId` | participants — threads, send-message (rate-limited), mark-read |

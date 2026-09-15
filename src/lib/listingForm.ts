@@ -23,6 +23,7 @@
  * money rules forbid.
  */
 import { dollarsToCents } from "./cents";
+import { HM } from "./honesty";
 import type {
   CancellationPolicy,
   ListingAmenities,
@@ -41,6 +42,9 @@ export type ListingFormValues = {
   region: string;
   country: string;
   timezone: string;
+  /** The front door pin as typed, decimal degrees. Both or neither (HM-01). */
+  lat: string;
+  lng: string;
   /** Dollars as typed, e.g. "200" or "199.50". */
   nightlyRate: string;
   deposit: string;
@@ -86,6 +90,8 @@ export function listingFormFromDetail(listing: ListingDetail): ListingFormValues
     region: listing.region,
     country: listing.country,
     timezone: listing.timezone,
+    lat: listing.coordinates ? String(listing.coordinates.lat) : "",
+    lng: listing.coordinates ? String(listing.coordinates.lng) : "",
     nightlyRate: centsToDollarsInput(listing.nightlyRateCents),
     deposit: centsToDollarsInput(listing.depositCents),
     maxGuests: String(listing.maxGuests),
@@ -115,6 +121,31 @@ export function isValidTimeZone(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+/** Decimal degrees as typed. Null when blank; NaN-safe; range-checked by the caller. */
+function parseDegrees(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (!/^[-+]?\d+(\.\d+)?$/.test(trimmed)) return null;
+  const n = Number(trimmed);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * The pin is both coordinates or neither. Returns the pair, `null` for "no
+ * pin", or an error sentence when one half is missing or out of range.
+ */
+export function parsePin(latRaw: string, lngRaw: string): { lat: number; lng: number } | null | { error: string } {
+  const latBlank = latRaw.trim() === "";
+  const lngBlank = lngRaw.trim() === "";
+  if (latBlank && lngBlank) return null;
+  if (latBlank || lngBlank) return { error: HM["hm.pin.invalid"] };
+  const lat = parseDegrees(latRaw);
+  const lng = parseDegrees(lngRaw);
+  if (lat === null || lng === null || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return { error: HM["hm.pin.invalid"] };
+  }
+  return { lat, lng };
 }
 
 function parseCount(raw: string, max: number): number | null {
@@ -176,6 +207,9 @@ export function listingFormToInput(values: ListingFormValues): ListingFormResult
   const beds = values.beds.trim() === "" ? undefined : parseCount(values.beds, 50);
   if (beds === null) errors.beds = "Enter a whole number of beds, from 0 to 50.";
 
+  const pin = parsePin(values.lat, values.lng);
+  if (pin !== null && "error" in pin) errors.lat = pin.error;
+
   if (
     Object.keys(errors).length > 0 ||
     nightlyRateCents === null ||
@@ -208,6 +242,8 @@ export function listingFormToInput(values: ListingFormValues): ListingFormResult
       region,
       country,
       timezone,
+      lat: pin !== null && "lat" in pin ? pin.lat : null,
+      lng: pin !== null && "lng" in pin ? pin.lng : null,
       nightlyRateCents,
       depositCents,
       maxGuests,
@@ -245,6 +281,8 @@ export function diffListingInput(original: ListingInput, next: ListingInput): Pa
     "region",
     "country",
     "timezone",
+    "lat",
+    "lng",
     "nightlyRateCents",
     "depositCents",
     "maxGuests",
@@ -273,6 +311,8 @@ export const LISTING_FIELD_ORDER: ListingFormField[] = [
   "region",
   "country",
   "timezone",
+  "lat",
+  "lng",
   "nightlyRate",
   "deposit",
   "maxGuests",
@@ -301,6 +341,8 @@ export function emptyListingForm(suggestedTimeZone: string): ListingFormValues {
     region: "",
     country: "US",
     timezone: isValidTimeZone(suggestedTimeZone) ? suggestedTimeZone : "UTC",
+    lat: "",
+    lng: "",
     nightlyRate: "",
     deposit: "",
     maxGuests: "2",

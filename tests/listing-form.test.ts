@@ -65,6 +65,8 @@ describe("hydrating the editor from listing detail", () => {
       region: listing.region,
       country: listing.country,
       timezone: listing.timezone,
+      lat: null,
+      lng: null,
       nightlyRateCents: listing.nightlyRateCents,
       depositCents: listing.depositCents,
       maxGuests: listing.maxGuests,
@@ -72,6 +74,30 @@ describe("hydrating the editor from listing detail", () => {
       instantBook: listing.instantBook,
       cancellationPolicy: listing.cancellationPolicy,
     });
+  });
+
+  it("round-trips the front door pin as numbers, and clears it as null", () => {
+    const pinned = fullListing({ coordinates: { lat: 40.7128, lng: -74.006 } });
+    const values = listingFormFromDetail(pinned);
+    expect(values.lat).toBe("40.7128");
+    expect(values.lng).toBe("-74.006");
+    expect(unwrap(values)).toMatchObject({ lat: 40.7128, lng: -74.006 });
+
+    const cleared = unwrap({ ...values, lat: "", lng: "" });
+    expect(cleared).toMatchObject({ lat: null, lng: null });
+    expect(diffListingInput(unwrap(values), cleared)).toEqual({ lat: null, lng: null });
+  });
+
+  it("refuses half a pin or one off the globe, next to the field", () => {
+    const values = listingFormFromDetail(fullListing());
+    const half = listingFormToInput({ ...values, lat: "40.7", lng: "" });
+    expect(half.ok).toBe(false);
+    if (!half.ok) expect(half.errors.lat).toMatch(/both latitude and longitude/);
+    const off = listingFormToInput({ ...values, lat: "91", lng: "0" });
+    expect(off.ok).toBe(false);
+    const text = listingFormToInput({ ...values, lat: "north", lng: "0" });
+    expect(text.ok).toBe(false);
+    expect(unwrap({ ...values, lat: " -33.8688 ", lng: "151.2093" })).toMatchObject({ lat: -33.8688, lng: 151.2093 });
   });
 
   it("produces an empty patch when nothing was touched", () => {

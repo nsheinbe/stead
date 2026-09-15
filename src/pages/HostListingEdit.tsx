@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { HostSubnav } from "../components/HostSubnav";
 import { ListingPhoto } from "../components/ListingPhoto";
+import { FrontDoorPin } from "../components/honesty/FrontDoorPin";
 import { Shell } from "../components/Shell";
 import { SignInPrompt } from "../components/SignInPrompt";
 import {
@@ -35,6 +36,7 @@ import {
   type ListingFormField,
   type ListingFormValues,
 } from "../lib/listingForm";
+import { HM } from "../lib/honesty";
 import { formatUsd, MIN_STAY_NIGHTS } from "../lib/money";
 import { POLICY_LABEL, TYPE_LABEL, type ListingDetail, type ListingInput } from "../lib/types";
 import { LISTING_WIZARD_STEPS } from "./HostStart";
@@ -49,6 +51,8 @@ const FIELD_ID: Record<ListingFormField, string> = {
   region: "listing-region",
   country: "listing-country",
   timezone: "listing-timezone",
+  lat: "listing-lat",
+  lng: "listing-lng",
   nightlyRate: "listing-nightly",
   deposit: "listing-deposit",
   maxGuests: "listing-guests",
@@ -120,6 +124,19 @@ export function HostListingEditPage() {
   const listing = listingQuery.data;
   const isOwner = Boolean(listing?.host && user && listing.host.id === user.id);
 
+  // The honesty scan's state, so the pin block can warn before a change takes
+  // a walk down, and the scan card can say where things stand. Owner-only.
+  const scanQuery = useQuery({
+    queryKey: ["host-scan", listingId],
+    enabled: Boolean(listingId) && status === "signed_in" && isOwner,
+    queryFn: () => api.hostScan(listingId as string),
+    retry: false,
+  });
+  const scanLive = Boolean(
+    scanQuery.data?.scan &&
+      !["rejected", "failed", "revoked"].includes(scanQuery.data.scan.state),
+  );
+
   // Seed once, and only from a listing this member owns. Later edits are not
   // clobbered by a background refetch.
   useEffect(() => {
@@ -134,6 +151,7 @@ export function HostListingEditPage() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["listing", listingId] }),
       queryClient.invalidateQueries({ queryKey: ["host-listings", user?.id] }),
+      queryClient.invalidateQueries({ queryKey: ["host-scan", listingId] }),
     ]);
   };
 
@@ -387,6 +405,20 @@ export function HostListingEditPage() {
                       onChange={(e) => update("timezone", e.target.value)}
                     />
                   </div>
+                  <FrontDoorPin
+                    latId={FIELD_ID.lat}
+                    lngId={FIELD_ID.lng}
+                    lat={form.lat}
+                    lng={form.lng}
+                    error={errors.lat}
+                    savedLat={baseline?.lat ?? null}
+                    savedLng={baseline?.lng ?? null}
+                    scanLive={scanLive}
+                    onChange={(lat, lng) => {
+                      update("lat", lat);
+                      update("lng", lng);
+                    }}
+                  />
                 </div>
               </Card>
 
@@ -537,6 +569,24 @@ export function HostListingEditPage() {
                 </p>
               </div>
             </form>
+            )}
+
+            {setupStep ? null : (
+              <Surface as="section" aria-labelledby="scan-card-heading">
+                <h2 id="scan-card-heading" className="m-0 text-card-title">
+                  {HM["hm.editor.scan.title"]}
+                </h2>
+                <p className="mb-0 mt-2 text-sm text-ink-secondary">
+                  {scanQuery.data && !scanQuery.data.listing.hasPin
+                    ? HM["hm.pin.required"]
+                    : HM["hm.editor.scan.body"]}
+                </p>
+                <div className="mt-4">
+                  <ButtonLink to={`/host/listings/${listing.id}/scan`} variant="secondary" size="sm">
+                    {HM["hm.editor.scan.cta"]}
+                  </ButtonLink>
+                </div>
+              </Surface>
             )}
 
             {setupStep === 5 ? null : (

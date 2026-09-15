@@ -10,6 +10,10 @@ import type {
   CreateBookingResponse,
   HostListing,
   HostPayout,
+  HostScan,
+  ScanLocationRequest,
+  StartScanRequest,
+  StartScanResponse,
   ListingDetail,
   ListingInput,
   ListingSummary,
@@ -157,6 +161,26 @@ export const api = {
 
   deletePhoto: (photoId: string) =>
     request<{ ok: true }>(`/api/listings/photos/${photoId}`, { method: "DELETE" }),
+
+  // --- Honesty scan (HM-01). Owner-only; every verdict in the response is the server's.
+  hostScan: (listingId: string) => request<HostScan>(`/api/listings/${listingId}/scan`),
+
+  startScan: (listingId: string, body: StartScanRequest) =>
+    request<StartScanResponse>(`/api/listings/${listingId}/scan`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+
+  recordScanLocation: (listingId: string, scanId: string, body: ScanLocationRequest) =>
+    request<HostScan>(`/api/listings/${listingId}/scan/${scanId}/location`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+
+  discardScan: (listingId: string, scanId: string) =>
+    request<{ ok: true }>(`/api/listings/${listingId}/scan/${scanId}`, { method: "DELETE" }),
 
   connectStatus: () => request<ConnectStatus>("/api/connect/status"),
 
