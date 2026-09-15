@@ -71,7 +71,12 @@ export type ListingSummary = {
 
 export type ListingDetail = ListingSummary & {
   description: string;
-  addressLine: string;
+  /**
+   * The street address the editor promises is "shared with a guest after a
+   * stay is confirmed, not on the public page". Present only when the viewer
+   * owns the listing; absent on every other read, so the browser type says so.
+   */
+  addressLine?: string;
   status: ListingStatus;
   host: HostSummary | null;
   /**

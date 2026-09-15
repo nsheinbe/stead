@@ -287,6 +287,35 @@ describeDb("the listing editor's contract", () => {
     expect((await readAs(listingId, owner.cookie)).status).toBe(200);
   });
 
+  it("gives the street address to the owner and to nobody else", async () => {
+    const owner = await aHost("owner");
+    const stranger = await aHost("stranger");
+    const listingId = await createFullListing(owner.cookie);
+    const publish = await app.request(
+      `/api/listings/${listingId}`,
+      json({ status: "active" }, owner.cookie, "PATCH"),
+    );
+    expect(publish.status, await publish.clone().text()).toBe(200);
+
+    // The editor's hint under "Street address" promises the address is shared
+    // with a guest after a stay is confirmed, not on the public page. That
+    // promise is kept here, at the API, not by a page choosing not to render it.
+    const mine = (await (await readAs(listingId, owner.cookie)).json()) as ListingDetail;
+    expect(mine.addressLine).toBe(FULL_LISTING.addressLine);
+
+    for (const [who, cookie] of [
+      ["a signed-out caller", undefined],
+      ["another host", stranger.cookie],
+    ] as const) {
+      const res = await readAs(listingId, cookie);
+      expect(res.status).toBe(200);
+      const raw = (await res.clone().json()) as Record<string, unknown>;
+      expect(raw, `${who} must not receive the address`).not.toHaveProperty("addressLine");
+      // Belt and braces: the string itself is nowhere in the payload.
+      expect(await res.text()).not.toContain(FULL_LISTING.addressLine);
+    }
+  });
+
   it("refuses to delete a home that has stays against it", async () => {
     const owner = await aHost("owner");
     const guestId = id();
