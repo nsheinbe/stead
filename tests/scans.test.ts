@@ -119,6 +119,30 @@ describeDb("HM-01 front door and scan start", () => {
     expect("coordinates" in anonymous).toBe(false);
   });
 
+  it("a creation can carry the point and the confirmation together, but not the confirmation alone", async () => {
+    const { cookie } = await aHost("create");
+    const base = {
+      title: "Created with door",
+      type: "entire_home",
+      city: "Hudson",
+      country: "US",
+      timezone: "America/New_York",
+      nightlyRateCents: 20_000,
+      depositCents: 0,
+      maxGuests: 2,
+    };
+    let res = await app.request("/api/listings", json({ ...base, ...DOOR, confirmCoordinates: true }, cookie, "POST"));
+    expect(res.status, await res.clone().text()).toBe(201);
+    const { id: listingId } = (await res.json()) as { id: string };
+    const d = await detail(listingId, cookie);
+    expect(d.coordinates?.lat).toBe(DOOR.lat);
+    expect(d.coordinates?.confirmedAt).not.toBeNull();
+
+    res = await app.request("/api/listings", json({ ...base, confirmCoordinates: true }, cookie, "POST"));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "Set both latitude and longitude before confirming the front door." });
+  });
+
   it("refuses to confirm a front door that has no point", async () => {
     const { hostId, cookie } = await aHost("nopoint");
     const listingId = await aDraft(hostId);

@@ -109,6 +109,9 @@ export async function createListing(
       // A new listing is a draft unless the host says otherwise, so a
       // half-filled one is never publicly bookable.
       status: input.status ?? "draft",
+      // HM-01: a creation that carries the point and the confirmation records
+      // both; the CHECK in 0015 refuses a confirmation without a point.
+      coordinatesConfirmedAt: input.confirmCoordinates ? new Date() : null,
     })
     .returning({ id: listings.id });
   if (!created) throw new Error("Could not create the listing");

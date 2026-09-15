@@ -110,10 +110,20 @@ listingsRoutes.get("/mine", async (c) => {
   return c.json(await tenantQuery(c, (tx) => listHostListings(tx, host.id)));
 });
 
+const CONFIRM_NEEDS_POINT = "Set both latitude and longitude before confirming the front door.";
+
 listingsRoutes.post("/", async (c) => {
   const host = sessionUser(c);
   const input = await parse(c, listingSchema);
-  const id = await tenantQuery(c, (tx) => createListing(tx, host.id, input));
+  let id: string;
+  try {
+    id = await tenantQuery(c, (tx) => createListing(tx, host.id, input));
+  } catch (err) {
+    if (input.confirmCoordinates && pgCode(err) === "23514") {
+      throw new HTTPException(400, { message: CONFIRM_NEEDS_POINT });
+    }
+    throw err;
+  }
   return c.json({ id }, 201);
 });
 
@@ -127,9 +137,7 @@ listingsRoutes.patch("/:id", async (c) => {
     // listings_confirmed_point_needs_lat_lng: confirming a front door that
     // has no point. The CHECK is the rule; this is the friendly sentence.
     if (input.confirmCoordinates && pgCode(err) === "23514") {
-      throw new HTTPException(400, {
-        message: "Set both latitude and longitude before confirming the front door.",
-      });
+      throw new HTTPException(400, { message: CONFIRM_NEEDS_POINT });
     }
     throw err;
   }
