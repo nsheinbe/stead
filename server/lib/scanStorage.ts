@@ -29,7 +29,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { ScanUploadKind, ScanWorkerArtifactKind } from "../../src/lib/types";
-import { getStorageClient, StorageError } from "./storage";
+import { getStorageClient, storageConfigured, StorageError } from "./storage";
 
 /** Extension is derived from the signed content type, never from a filename. */
 const VIDEO_TYPES: Record<string, string> = {
@@ -192,6 +192,20 @@ export async function presignGetObject(key: string): Promise<{ url: string; expi
     expiresIn: SCAN_URL_TTL_SECONDS,
   });
   return { url, expiresInSeconds: SCAN_URL_TTL_SECONDS };
+}
+
+/**
+ * A signed GET, or null when this deployment has no object storage or the
+ * signer refuses. Used where a missing artifact is a fact to show rather than
+ * an error to raise — a listing page should still render without its poster.
+ */
+export async function presignGetOrNull(key: string): Promise<string | null> {
+  if (!storageConfigured()) return null;
+  try {
+    return (await presignGetObject(key)).url;
+  } catch {
+    return null;
+  }
 }
 
 export type ObjectHead = { sizeBytes: number; contentType: string };
