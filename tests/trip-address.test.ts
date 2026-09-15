@@ -7,14 +7,16 @@
  * the first: the guest on a confirmed stay gets it on their trip, and nobody
  * gets it a moment earlier or later.
  *
- * The status table is the point of this file. "Confirmed" has to mean one thing
- * in `getTripForParty` and on the trip page, so `stayIsConfirmed` is asserted
- * against every status the column can hold — a new one cannot be added without
- * a deliberate answer here.
+ * The status table is the point of this file. `addressIsShared` is asserted
+ * against every status the column can hold, so a new one cannot be added
+ * without a deliberate answer here. It is deliberately wider than the page's
+ * "Getting in" section, which retires at checkout: a past stay keeps its
+ * address while the review and claim windows run, so the address has to render
+ * somewhere that outlasts that section.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { app } from "../server/app";
-import { stayIsConfirmed } from "../src/lib/tripStatus";
+import { addressIsShared } from "../src/lib/tripStatus";
 import type { BookingStatus, TripDetail } from "../src/lib/types";
 import {
   closeTestDb,
@@ -36,16 +38,25 @@ const STATUS_TABLE: { status: BookingStatus; shared: boolean }[] = [
   { status: "pending_payment", shared: false },
   { status: "confirmed", shared: true },
   { status: "checked_in", shared: true },
-  { status: "completed", shared: false },
+  { status: "completed", shared: true },
   { status: "canceled_by_guest", shared: false },
   { status: "canceled_by_host", shared: false },
   { status: "expired", shared: false },
 ];
 
-describe("what counts as confirmed", () => {
+describe("which stays carry the address", () => {
   it("answers for every booking status", () => {
     for (const { status, shared } of STATUS_TABLE) {
-      expect(stayIsConfirmed(status), status).toBe(shared);
+      expect(addressIsShared(status), status).toBe(shared);
+    }
+  });
+
+  it("keeps it through checkout but never for a stay that did not happen", () => {
+    // The pair worth stating outright: a finished stay still has it, and no
+    // amount of canceling or expiring ever did.
+    expect(addressIsShared("completed")).toBe(true);
+    for (const status of ["pending_payment", "expired", "canceled_by_guest", "canceled_by_host"] as const) {
+      expect(addressIsShared(status), status).toBe(false);
     }
   });
 });
@@ -111,6 +122,15 @@ describeDb("the street address on a trip", () => {
     expect(trip.listing.addressLine).toBe(ADDRESS);
   });
 
+  it("leaves it on the stay after checkout", async () => {
+    const stay = await aStay("completed");
+
+    // Checkout does not take it back: the guest can still look up where they
+    // were while the review and claim windows are open.
+    const trip = (await (await tripAs(stay.bookingId, stay.guest.cookie)).json()) as TripDetail;
+    expect(trip.listing.addressLine).toBe(ADDRESS);
+  });
+
   it("gives the host the same address on the same stay", async () => {
     const stay = await aStay("confirmed");
 
@@ -120,7 +140,7 @@ describeDb("the street address on a trip", () => {
     expect(trip.listing.addressLine).toBe(ADDRESS);
   });
 
-  it("shares it for exactly the statuses that count as confirmed", async () => {
+  it("shares it for exactly the statuses the table says, over HTTP", async () => {
     for (const { status, shared } of STATUS_TABLE) {
       const stay = await aStay(status);
       const res = await tripAs(stay.bookingId, stay.guest.cookie);
@@ -142,7 +162,7 @@ describeDb("the street address on a trip", () => {
     const stay = await aStay("confirmed", { addressLine: "" });
 
     // `listings.address_line` defaults to '' rather than NULL, so without this
-    // the page would render a blank line under "Getting in".
+    // the page would render an "Address" row with nothing after the comma.
     const trip = (await (await tripAs(stay.bookingId, stay.guest.cookie)).json()) as TripDetail;
     expect(trip.listing).not.toHaveProperty("addressLine");
   });

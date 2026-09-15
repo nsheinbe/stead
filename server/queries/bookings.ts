@@ -22,7 +22,7 @@ import {
   listings,
 } from "../db/schema";
 import { isHiddenSeedListing } from "../lib/seedInventory";
-import { stayIsConfirmed } from "../../src/lib/tripStatus";
+import { addressIsShared } from "../../src/lib/tripStatus";
 import type { TripDetail, TripSummary } from "../../src/lib/types";
 import { getCancelableBooking, previewCancellation } from "./cancellations";
 import { getClaimForBooking } from "./claims";
@@ -201,9 +201,9 @@ export async function getTripForParty(
       timezone: row.listing.timezone,
       // "Shared with a guest after a stay is confirmed" — the editor's own
       // promise, kept here rather than by the page choosing what to render.
-      // An unconfirmed, canceled or finished stay carries no address at all,
-      // and a listing that never had one carries no empty string either.
-      ...(stayIsConfirmed(row.status) && row.listing.addressLine
+      // A stay that was never paid for or was canceled carries no address at
+      // all, and a listing that never had one carries no empty string either.
+      ...(addressIsShared(row.status) && row.listing.addressLine
         ? { addressLine: row.listing.addressLine }
         : {}),
       photos: row.listing.photos.map((p) => ({

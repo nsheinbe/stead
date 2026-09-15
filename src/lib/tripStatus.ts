@@ -162,16 +162,20 @@ export const TRIP_GROUP_LABEL: Record<TripGroup, string> = {
 };
 
 /**
- * Whether a stay has reached the point where arrival details — the street
- * address among them — belong to the guest. The editor's hint under "Street
- * address" is the promise being kept: "Shared with a guest after a stay is
- * confirmed, not on the public page."
+ * Whether a stay carries the listing's street address. The editor's hint under
+ * "Street address" is the promise being kept: "Shared with a guest after a stay
+ * is confirmed, not on the public page."
  *
- * `getTripForParty` gates the address on this and the trip page renders the
- * arrival section on it, so the API and the UI cannot drift into disagreeing
- * about what "confirmed" means. A stay that is over, canceled or never paid
- * for is not in it: the address is for getting there, not a souvenir.
+ * Confirmed onwards, and it stays shared once the guest has been: a past stay
+ * is still theirs to look up while the review and claim windows run. What never
+ * carries it is a stay that did not happen — `pending_payment` and `expired`
+ * never bought anything, and a canceled one gave back what it bought.
+ *
+ * `getTripForParty` is the enforcement; the trip page renders on the field's
+ * presence rather than re-deciding this, so the two cannot drift. Note this is
+ * deliberately wider than the arrival section's own rule: "Getting in" speaks
+ * about turning up and retires at checkout, while the address outlasts it.
  */
-export function stayIsConfirmed(status: BookingStatus): boolean {
-  return status === "confirmed" || status === "checked_in";
+export function addressIsShared(status: BookingStatus): boolean {
+  return status === "confirmed" || status === "checked_in" || status === "completed";
 }
