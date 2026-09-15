@@ -1,8 +1,9 @@
 /**
- * What the scan hub shows for a given server state (HM-01). Pure, so the
- * mapping from the server's words to the host's card is testable without a
- * browser. Nothing here infers a verdict: `located` is only ever the server's
- * `geofence = passed`.
+ * What the scan hub shows for a given server state (HM-01, HM-02). Pure, so
+ * the mapping from the server's words to the host's card is testable without
+ * a browser. Nothing here infers a verdict: `located` is only ever the
+ * server's `geofence = passed`, and `queued` only ever the server's
+ * `state = uploaded`.
  */
 import { HM } from "./honesty";
 import type { PillTone } from "../components/ui/StatusPill";
@@ -13,6 +14,7 @@ export type HubKind =
   | "not_started"
   | "in_progress"
   | "located"
+  | "queued"
   | "rejected"
   | "revoked"
   | "later";
@@ -24,15 +26,16 @@ export function hubKind(hub: HostScan): HubKind {
     if (scan.geofence === "passed") return "located";
     if (scan.geofence === "pending") return hub.listing.hasPin ? "in_progress" : "needs_pin";
   }
+  if (scan.state === "uploaded") return "queued";
   if (scan.state === "rejected") return "rejected";
   if (scan.state === "revoked") return "revoked";
-  // uploaded, reconstructing, needs_mask, verified, failed: HM-02 onward.
+  // reconstructing, needs_mask, verified, failed: HM-03 onward.
   return "later";
 }
 
 const STATE_LABEL: Record<ScanState, string> = {
   capturing: HM["hm.scan.state.capturing"],
-  uploaded: HM["hm.scan.state.checking"],
+  uploaded: HM["hm.scan.state.queued"],
   reconstructing: HM["hm.scan.state.building"],
   needs_mask: HM["hm.scan.state.needsMask"],
   verified: HM["hm.scan.state.verified"],

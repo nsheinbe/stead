@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { HonestySheet } from "../components/honesty/HonestySheet";
+import { ScanUploadCard } from "../components/honesty/ScanUploadCard";
 import { HostSubnav } from "../components/HostSubnav";
 import { Shell } from "../components/Shell";
 import { SignInPrompt } from "../components/SignInPrompt";
@@ -9,6 +10,8 @@ import {
   Button,
   ButtonLink,
   Card,
+  DataList,
+  DataRow,
   PageHeader,
   Skeleton,
   StatusMessage,
@@ -19,7 +22,9 @@ import { useAuth } from "../hooks/useAuth";
 import { api, ApiError } from "../lib/api";
 import { HM } from "../lib/honesty";
 import { hubKind, rejectedReasonCopy, revokedReasonCopy, scanStatePill } from "../lib/scanHub";
-import { clearScan } from "../lib/scanStore";
+import { clearScan, countChunks } from "../lib/scanStore";
+import { formatBytes } from "../lib/scanUploader";
+import type { HostScan } from "../lib/types";
 
 /** A coarse pointer is the best signal the browser gives that this is a phone. */
 function usePhone(): boolean {
@@ -36,10 +41,37 @@ function usePhone(): boolean {
 }
 
 /**
+ * Is the recording for this scan in this browser? null while looking. The
+ * answer decides whether a located walk uploads from here or the hub says
+ * where the recording is.
+ */
+function useLocalRecording(scanId: string | null): boolean | null {
+  const [local, setLocal] = useState<boolean | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setLocal(null);
+    if (!scanId) return;
+    countChunks(scanId).then(
+      (n) => {
+        if (!cancelled) setLocal(n > 0);
+      },
+      () => {
+        if (!cancelled) setLocal(false);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [scanId]);
+  return scanId ? local : false;
+}
+
+/**
  * The scan hub (HM-D01): one card for the current state and one next action.
  * Every state on this page is the server's word — the browser never computes
- * a verdict — and upload, reconstruction and masking are later releases, so
- * a walk that has passed its location check waits here, honestly labelled.
+ * a verdict. A walk that has passed its location check uploads from the
+ * phone that recorded it (HM-D03); reconstruction and masking are later
+ * releases, so an uploaded walk waits here, honestly labelled.
  */
 export function HostListingScanPage() {
   const { listingId } = useParams<{ listingId: string }>();
@@ -66,6 +98,9 @@ export function HostListingScanPage() {
         acknowledged: true,
       }),
     onSuccess: async (result) => {
+      // A new walk replaces the old one; its recording on this phone can go.
+      const previous = hub.data?.scan?.id;
+      if (previous && previous !== result.scanId) await clearScan(previous).catch(() => undefined);
       await invalidate();
       navigate(`/host/listings/${listingId}/scan/capture?scan=${result.scanId}`);
     },
@@ -85,6 +120,19 @@ export function HostListingScanPage() {
     setSheetOpen(true);
   };
 
+  const notFound = hub.error instanceof ApiError && hub.error.status === 404;
+  const data = hub.data;
+  const kind = data ? hubKind(data) : null;
+  const pill = data ? scanStatePill(data) : null;
+  const scan = data?.scan ?? null;
+  const editorHref = `/host/listings/${listingId}`;
+  const localRecording = useLocalRecording(kind === "located" && scan ? scan.id : null);
+  const uploading = kind === "located" && localRecording === true;
+  const onUploaded = (next: HostScan) => {
+    queryClient.setQueryData(["host-scan", listingId], next);
+    void invalidate();
+  };
+
   if (status !== "signed_in") {
     return (
       <Shell width="narrow" workspace="hosting" title={HM["hm.hub.title"]}>
@@ -98,13 +146,6 @@ export function HostListingScanPage() {
       </Shell>
     );
   }
-
-  const notFound = hub.error instanceof ApiError && hub.error.status === 404;
-  const data = hub.data;
-  const kind = data ? hubKind(data) : null;
-  const pill = data ? scanStatePill(data) : null;
-  const scan = data?.scan ?? null;
-  const editorHref = `/host/listings/${listingId}`;
 
   return (
     <Shell
@@ -159,7 +200,23 @@ export function HostListingScanPage() {
               </Card>
             ) : null}
 
-            {kind === "not_started" || kind === "rejected" || kind === "revoked" || kind === "located" ? (
+            {uploading && scan && data ? (
+              <ScanUploadCard
+                listingId={listingId as string}
+                scan={scan}
+                limits={data.uploadLimits}
+                storageConfigured={data.storageConfigured}
+                onUploaded={onUploaded}
+              />
+            ) : null}
+
+            {kind === "located" && localRecording === null ? (
+              <div className="flex flex-col gap-4" aria-busy="true">
+                <Skeleton className="h-48 w-full" />
+              </div>
+            ) : null}
+
+            {kind === "not_started" || kind === "rejected" || kind === "revoked" || (kind === "located" && localRecording === false) ? (
               <Card as="section" aria-labelledby="scan-state">
                 {kind === "not_started" ? (
                   <>
@@ -251,6 +308,29 @@ export function HostListingScanPage() {
                     <StatusMessage tone="danger" title="We couldn't delete that walk. Please try again." />
                   </div>
                 ) : null}
+              </Card>
+            ) : null}
+
+            {kind === "queued" && scan ? (
+              <Card as="section" aria-labelledby="scan-state">
+                <h2 id="scan-state" className="m-0 text-card-title">
+                  {HM["hm.build.queued.title"]}
+                </h2>
+                <p className="mb-0 mt-2 text-ink-secondary">{HM["hm.build.notYet"]}</p>
+                {scan.upload ? (
+                  <DataList className="mt-4">
+                    <DataRow
+                      label={HM["hm.upload.group.video"]}
+                      value={`${formatBytes(scan.upload.totalBytes)} · ${scan.upload.partCount} parts`}
+                    />
+                    <DataRow label={HM["hm.upload.group.location"]} value={HM["hm.upload.group.location.done"]} />
+                    <DataRow
+                      label={HM["hm.upload.group.details"]}
+                      value={scan.upload.uploadedAt ? new Date(scan.upload.uploadedAt).toLocaleString() : ""}
+                    />
+                  </DataList>
+                ) : null}
+                <p className="mb-0 mt-3 text-sm text-ink-secondary">{HM["hm.build.notify.none"]}</p>
               </Card>
             ) : null}
 

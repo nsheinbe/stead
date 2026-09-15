@@ -12,6 +12,10 @@ import type {
   HostPayout,
   HostScan,
   ScanLocationRequest,
+  ScanUploadConfirmResponse,
+  ScanUploadDeclareRequest,
+  ScanUploadDeclareResponse,
+  ScanUploadPresignResponse,
   StartScanRequest,
   StartScanResponse,
   ListingDetail,
@@ -181,6 +185,31 @@ export const api = {
 
   discardScan: (listingId: string, scanId: string) =>
     request<{ ok: true }>(`/api/listings/${listingId}/scan/${scanId}`, { method: "DELETE" }),
+
+  // --- Honesty scan upload (HM-02). Bytes go to the bucket, never through here.
+  declareScanUpload: (listingId: string, scanId: string, body: ScanUploadDeclareRequest) =>
+    request<ScanUploadDeclareResponse>(`/api/listings/${listingId}/scan/${scanId}/upload`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+
+  presignScanUpload: (listingId: string, scanId: string, seqs: number[]) =>
+    request<ScanUploadPresignResponse>(`/api/listings/${listingId}/scan/${scanId}/upload/presign`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ seqs }),
+    }),
+
+  confirmScanUpload: (listingId: string, scanId: string, seqs: number[]) =>
+    request<ScanUploadConfirmResponse>(`/api/listings/${listingId}/scan/${scanId}/upload/confirm`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ seqs }),
+    }),
+
+  completeScanUpload: (listingId: string, scanId: string) =>
+    request<HostScan>(`/api/listings/${listingId}/scan/${scanId}/upload/complete`, { method: "POST" }),
 
   connectStatus: () => request<ConnectStatus>("/api/connect/status"),
 

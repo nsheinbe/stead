@@ -1,11 +1,13 @@
 /**
- * On-device keeping of a walk (HM-01).
+ * On-device keeping of a walk (HM-01, HM-02).
  *
- * The recording never passes through the API. Until HM-02's presigned upload
- * lands, it is kept here, in the browser's IndexedDB, keyed by scan id:
- * video chunks as they arrive from the recorder, and the location record as
- * it grows. Every function rejects when storage is unavailable; callers treat
- * that as "kept in memory only" and say so, never as verification.
+ * The recording never passes through the API. It is kept here, in the
+ * browser's IndexedDB, keyed by scan id — video chunks as they arrive from
+ * the recorder, and the location record as it grows — until the hub on this
+ * same phone uploads it straight to the bucket and the server records the
+ * complete package. Every function rejects when storage is unavailable;
+ * callers treat that as "kept in memory only" and say so, never as
+ * verification.
  */
 import type { ScanLocationSample } from "./types";
 
@@ -20,7 +22,12 @@ export type ScanMeta = {
   samples: ScanLocationSample[];
   chunkCount: number;
   updatedAt: string;
+  /** Set when the walk finished (HM-02): what the upload declares. */
+  durationMs?: number | null;
+  clientEnvironment?: Record<string, string | number | boolean>;
 };
+
+export type StoredChunk = { seq: number; blob: Blob };
 
 function open(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -86,6 +93,21 @@ export async function readMeta(scanId: string): Promise<ScanMeta | null> {
     const tx = db.transaction(META, "readonly");
     const found = await result(tx.objectStore(META).get(scanId) as IDBRequest<ScanMeta | undefined>);
     return found ?? null;
+  } finally {
+    db.close();
+  }
+}
+
+/** Every chunk of one scan, in recorder order. Blobs are handles, not bytes in memory. */
+export async function listChunks(scanId: string): Promise<StoredChunk[]> {
+  const db = await open();
+  try {
+    const tx = db.transaction(CHUNKS, "readonly");
+    const range = IDBKeyRange.bound([scanId, 0], [scanId, Number.MAX_SAFE_INTEGER]);
+    const rows = await result(
+      tx.objectStore(CHUNKS).getAll(range) as IDBRequest<{ scanId: string; seq: number; blob: Blob }[]>,
+    );
+    return rows.map((r) => ({ seq: r.seq, blob: r.blob })).sort((a, b) => a.seq - b.seq);
   } finally {
     db.close();
   }

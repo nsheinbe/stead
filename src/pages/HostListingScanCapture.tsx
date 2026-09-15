@@ -27,11 +27,26 @@ const KEEPALIVE_MS = 10_000;
 
 type Permission = "unknown" | "granted" | "denied";
 
+/** What the phone says about itself. Facts for the manifest, never a verdict. */
+function describeClientEnvironment(recorder: MediaRecorder | null): Record<string, string | number | boolean> {
+  const out: Record<string, string | number | boolean> = {
+    userAgent: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 400) : "",
+    chunkMs: 2000,
+  };
+  if (recorder) {
+    out.recorderMimeType = recorder.mimeType;
+    if (recorder.videoBitsPerSecond) out.videoBitsPerSecond = recorder.videoBitsPerSecond;
+  }
+  if (typeof navigator !== "undefined" && navigator.language) out.language = navigator.language;
+  return out;
+}
+
 /**
  * The viewfinder (HM-D01). Phone-first; the page records video into local
  * storage and a continuous location record in memory (persisted as it grows),
  * then sends only the location record to the server, which judges it. The
- * recording stays on this phone until HM-02's upload.
+ * recording stays on this phone until the hub, on this phone, uploads it
+ * after the location check passes.
  *
  * Nothing here decides anything. The buttons only light up when the record
  * could pass; the server still says whether it did.
@@ -173,12 +188,15 @@ function Viewfinder({
 
   const persistSamples = useCallback(async () => {
     try {
+      const startedAt = startedAtRef.current;
       await putMeta({
         scanId,
         mimeType: recorderRef.current?.mimeType ?? null,
         samples: samplesRef.current,
         chunkCount: chunkSeqRef.current,
         updatedAt: new Date().toISOString(),
+        durationMs: startedAt ? Math.max(0, Date.now() - startedAt) : null,
+        clientEnvironment: describeClientEnvironment(recorderRef.current),
       });
     } catch {
       setStorageWarning(true);

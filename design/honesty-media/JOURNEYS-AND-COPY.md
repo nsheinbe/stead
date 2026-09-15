@@ -60,8 +60,8 @@ and the mask step also work on desktop.
 | Outdoor start | Am I in the right place? | Viewfinder shows the location line (§9.3). Prompt: “Outside your front door? Turn slowly in a full circle.” **I’m outside — start** enables only on a good fix. | Nothing yet. The accuracy threshold (integer meters) came from the server with the capture session. |
 | Indoor walk | Is it still working indoors? | Recording. Location line says “rough — expected indoors”. **Pause** / **Finish outside**. Screen stays awake. | None. Samples keep streaming to the local record. |
 | Outdoor finish | How do I end it properly? | Prompt: “Back outside your front door? Turn slowly in a full circle, then finish.” **Finish the walk** enables only on a good fix. **Stop without finishing** deletes the walk after a confirmation. | None. |
-| Upload | Did it save? | `/scan` hub in Uploading state (HM-D03). Progress by group. **Pause upload** / **Resume upload**. “Keep this page open.” | Presigned URLs per object from the server; the hub says “Uploaded” only after the server records the complete package. |
-| Location check | Was it really here? | Hub: “Checking the location record.” Then “Location confirmed at this home” or a Not-verified reason (§9.5) with **Check the pin** / **Scan again**. | Server computed the geofence verdict from the samples. The browser never displays a verdict it computed itself. |
+| Location check | Was it really here? | Hub: “Checking the location record.” Then “Location confirmed at this home” or a Not-verified reason (§9.5) with **Check the pin** / **Scan again**. | Server computed the geofence verdict from the samples the phone sent when the walk finished. The browser never displays a verdict it computed itself. The recording stays on the phone until this passes. |
+| Upload | Did it save? | `/scan` hub in Uploading state (HM-D03), on the phone that recorded. Starts on its own when the hub finds the recording; on any other device the hub says where it is. Progress by group. **Pause upload** / **Resume upload**. “Keep this page open.” | Presigned URLs per video part from the server, one part at a time; the server confirms each part landed by size before the package is complete. The hub says “Uploaded” only after the server records the complete package and moves the scan to `uploaded`. |
 | Building | How long? | Hub: In the queue → Building the walkthrough (HM-D04). “This can take a while.” No ETA unless the worker reports one. | `listing_scans.state` from the worker. |
 | Couldn’t build | What went wrong, and what do I do? | Hub: Couldn’t build (§9.6) with the reason, stills from the recorded frames, **Scan again** or **Retry** (transient worker error only). | Worker wrote `failed` with an enumerated reason. |
 | Mark private areas | What will guests see? | `/host/listings/:listingId/scan/mask` (HM-D05). Draw private boxes, or **Confirm whole home** when the listing type allows it. **Preview as a guest**. **Finish and verify**. | Splat exists. Listing type decides whether whole-home confirm is offered. |
@@ -294,7 +294,7 @@ listing-local calendar dates with no time. Meters are integers.
 | `hm.hub.inProgress.body` | A walk was started on your phone and hasn’t been finished. Continue it there, or delete it and start again. |
 | `hm.hub.discard` | Delete this walk |
 | `hm.hub.located.title` | Location confirmed at this home. |
-| `hm.hub.located.body` | Uploading the walk itself is the next step and isn’t switched on yet. Your recording is kept on this phone, in this browser, until then. |
+| `hm.hub.located.body` | The recording is on the phone that made the walk, in the browser that recorded it. Open this page there and the upload starts on its own. |
 | `hm.hub.facts` | Verified isn’t published, isn’t payouts, and isn’t bookings open. Each is its own step. |
 | `hm.editor.scan.title` | Honesty scan |
 | `hm.editor.scan.body` | Before guests can book, walk-scan the home from your phone. The walk is checked against the front door pin. |
@@ -354,9 +354,19 @@ listing-local calendar dates with no time. Meters are integers.
 | `hm.upload.stopped.body` | Nothing you recorded was lost. Resume when you’re back online. |
 | `hm.upload.tooLarge.title` | This walk is larger than we can accept. |
 | `hm.upload.tooLarge.body` | {size} of {limit} allowed. Record a shorter walk — {maxMinutes} minutes at most. |
-| `hm.upload.done` | Uploaded. We’re checking the location record now. |
+| `hm.upload.done` | Uploaded. Your walk is in the queue for reconstruction. |
 | `hm.upload.checking` | Checking the location record |
 | `hm.upload.located` | Location confirmed at this home. |
+| `hm.upload.preparing` | Getting your walk ready to upload |
+| `hm.upload.paused` | Paused. Nothing is lost. |
+| `hm.upload.offline` | You’re offline. The upload continues when you’re back online. |
+| `hm.upload.group.location.done` | Sent with the walk |
+| `hm.upload.group.details.pending` | After the video |
+| `hm.upload.completing` | Finishing up… |
+| `hm.upload.unconfigured.title` | Uploads aren’t set up on this deployment yet. |
+| `hm.upload.unconfigured.body` | Your recording stays on this phone until they are. |
+| `hm.upload.mismatch.title` | A part didn’t arrive the way it left. |
+| `hm.upload.mismatch.body` | We sent it again. If this keeps happening, delete the walk and scan again. |
 
 ### 9.5 Not verified (geofence, HM-D03 / HM-D04)
 
@@ -379,6 +389,7 @@ listing-local calendar dates with no time. Meters are integers.
 | `hm.build.queued.body` | Your walk is waiting for the reconstruction worker. This can take a while. |
 | `hm.build.notify.email` | We’ll email {email} when it’s ready. |
 | `hm.build.notify.none` | Check back here. |
+| `hm.build.notYet` | Reconstruction isn’t switched on yet. Your walk is safely uploaded and will be first in line when it is. |
 | `hm.build.running.title` | Building the walkthrough |
 | `hm.build.running.body` | We’re stitching and steadying what you recorded. Nothing is added. |
 | `hm.build.started` | Started {time} |
