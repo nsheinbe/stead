@@ -45,6 +45,26 @@ await bootstrapRoles(owner, { appUser: TEST_APP_USER_PASSWORD, authUser: TEST_AU
 process.env.DATABASE_URL = urlAs(owner, "app_user", TEST_APP_USER_PASSWORD);
 process.env.AUTH_DATABASE_URL = urlAs(owner, "auth_user", TEST_AUTH_USER_PASSWORD);
 
+// A stand-in bucket on the next port, so the honesty scan upload runs end to
+// end in the browser (presigned PUT, CORS preflight, server-side HEAD). A
+// shell that already points S3_* at a real bucket keeps it.
+const s3Env: Record<string, string> = {};
+if (!process.env.S3_BUCKET) {
+  const { startS3Stub } = await import("./e2e-s3-stub");
+  const s3 = await startS3Stub(Number(port) + 1);
+  Object.assign(s3Env, {
+    S3_ENDPOINT: s3.url,
+    S3_REGION: "us-east-1",
+    S3_BUCKET: s3.bucket,
+    S3_ACCESS_KEY_ID: "e2e",
+    S3_SECRET_ACCESS_KEY: "e2e-secret",
+    S3_FORCE_PATH_STYLE: "true",
+    S3_PUBLIC_URL: `${s3.url}/${s3.bucket}`,
+  });
+  Object.assign(process.env, s3Env);
+  console.log(`Stead e2e bucket stub listening on ${s3.url}/${s3.bucket}`);
+}
+
 if (existsSync("dist/index.html")) {
   await import("../server/node");
 } else {
@@ -56,6 +76,7 @@ if (existsSync("dist/index.html")) {
     PORT: port,
     APP_URL: process.env.APP_URL ?? `http://127.0.0.1:${port}`,
     ALLOW_GUEST_BOOKINGS: process.env.ALLOW_GUEST_BOOKINGS ?? "1",
+    ...s3Env,
   };
   const { createServer } = await import("vite");
   const vite = await createServer({

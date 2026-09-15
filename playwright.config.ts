@@ -39,7 +39,7 @@ export default defineConfig({
     },
     {
       name: "chromium",
-      testMatch: /ui\.spec\.ts|routes\.spec\.ts|a11y\.spec\.ts/,
+      testMatch: /ui\.spec\.ts|routes\.spec\.ts|a11y\.spec\.ts|honesty-upload\.spec\.ts/,
       use: { ...devices["Desktop Chrome"] },
     },
   ],
