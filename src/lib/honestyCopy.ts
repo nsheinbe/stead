@@ -306,6 +306,39 @@ export const SCAN_EMAIL_SUBJECTS = {
   failed: (title: string) => `We couldn't process the walk for ${title}`,
 } as const;
 
+/**
+ * The guest's walk (HM-D06 / HM-D07). Nothing here promises motion, a tour or
+ * a preview: the camera is stationary until the guest moves it, and every
+ * fallback shows real frames rather than a stand-in.
+ */
+export const WALK_COPY = {
+  /** The listing-detail section and the button into the walk. */
+  heading: "Walk through this home",
+  enter: "Walk through this home",
+  leave: "Leave the walkthrough",
+  /** The walk's own chrome. */
+  controls: "Controls",
+  controlMap: "Look around: drag, or arrow keys · Move: on-screen arrows, or W A S D · Leave: Esc or Back",
+  gotIt: "Got it",
+  moveForward: "Move forward",
+  moveBack: "Move back",
+  moveLeft: "Move left",
+  moveRight: "Move right",
+  /** Loading is a count of real megabytes, never a spinner alone. */
+  loading: (loadedMb: number, totalMb: number) =>
+    `Loading the walkthrough… ${loadedMb} MB of ${totalMb} MB`,
+  loadingUnknown: "Loading the walkthrough…",
+  canvasLabel: (title: string) => `3D walkthrough of ${title}, captured by the host`,
+  /** Reduced motion and no-WebGL both land on real frames. */
+  stillsCaption: "Stills from the host's walk",
+  showThreeD: "Show the 3D walkthrough",
+  reducedMotion:
+    "Your device asks for reduced motion, so we're showing stills. The walkthrough never moves on its own.",
+  loadFailed: "We couldn't load the walkthrough.",
+  /** The host looking at their own unpublished home. */
+  ownerPreview: "Guests will see this walk once the home is published.",
+} as const;
+
 /** One-line mentions HM-00 adds to existing pages. The only edits to those pages in this phase. */
 export const HONESTY_MENTIONS = {
   /** `/for-homeowners`, the "Get ready for bookings" step body. */

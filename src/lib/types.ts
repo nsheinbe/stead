@@ -75,10 +75,43 @@ export type ListingDetail = ListingSummary & {
   status: ListingStatus;
   host: HostSummary | null;
   /**
+   * HM-05: present only when this listing has a verified walkthrough a guest
+   * may see, or when its own host is previewing. Null means there is nothing
+   * to walk — there is no "coming soon" for guests.
+   */
+  honesty?: ListingHonesty | null;
+  /**
    * HM-01: the front-door point and whether the host confirmed it. Present
    * only when the viewer owns the listing; never on a public read.
    */
   coordinates?: ListingCoordinates | null;
+};
+
+/** Whether the walk covers the whole rental or only the part the host kept. */
+export type HonestyCoverage = "whole_home" | "rental_area";
+
+/** HM-05: the honesty facts the listing-detail entry needs. No object keys. */
+export type ListingHonesty = {
+  capturedOn: string | null;
+  verifiedAt: string | null;
+  coverage: HonestyCoverage;
+  policyVersion: number;
+  /** True when the viewer is the host looking at their own unpublished home. */
+  ownerPreview: boolean;
+  /** A real captured frame, signed and short-lived. Null when none was saved. */
+  posterUrl: string | null;
+};
+
+/** GET /api/listings/:id/walkthrough — everything the walk route loads. */
+export type Walkthrough = ListingHonesty & {
+  listingId: string;
+  title: string;
+  timezone: string;
+  /** Short-lived signed URL for the artifact the viewer loads; compressed when there is one. */
+  splatUrl: string;
+  /** Real frames from the host's walk, for reduced motion and for no WebGL. */
+  stills: { index: number; url: string }[];
+  expiresInSeconds: number;
 };
 
 export type ListingCoordinates = {

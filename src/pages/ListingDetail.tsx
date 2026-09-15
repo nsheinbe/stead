@@ -15,7 +15,14 @@ import { estimateMinimumStay } from "../lib/estimate";
 import { feePercent } from "../lib/fees";
 import { guestBookingsOpen } from "../lib/guestBookings";
 import { formatUsd, MIN_STAY_NIGHTS } from "../lib/money";
-import { POLICY_LABEL, TYPE_LABEL, type ListingDetail } from "../lib/types";
+import { POLICY_LABEL, TYPE_LABEL, type ListingDetail, type ListingHonesty } from "../lib/types";
+import { formatInTimeZone } from "date-fns-tz";
+import {
+  HONESTY_BADGE,
+  HONESTY_CAPTURED,
+  HONESTY_GUEST_DISCLOSURE,
+  WALK_COPY,
+} from "../lib/honestyCopy";
 
 /** Amenities the contract actually carries. Absent is not the same as false. */
 function amenityList(listing: ListingDetail): string[] {
@@ -171,6 +178,9 @@ export function ListingDetailPage() {
           ) : null}
         </div>
 
+        {/* --- the walkthrough (HM-D06) -------------------------------- */}
+        {listing.honesty ? <WalkthroughEntry listing={listing} honesty={listing.honesty} /> : null}
+
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1.6fr)_minmax(320px,1fr)] lg:items-start">
           {/* --- the home ---------------------------------------------- */}
           <div className="flex flex-col gap-8">
@@ -324,5 +334,76 @@ export function ListingDetailPage() {
         </div>
       </div>
     </Shell>
+  );
+}
+
+/**
+ * HM-05 (HM-D06) — the way into the walk, and the facts that go with it.
+ *
+ * Rendered only when the server sent `honesty`, which means this listing has
+ * a verified walkthrough a guest may see, or its own host is previewing.
+ * There is deliberately no "walkthrough coming soon": a guest is told what
+ * exists, not what might.
+ */
+function WalkthroughEntry({ listing, honesty }: { listing: ListingDetail; honesty: ListingHonesty }) {
+  const capturedOn = honesty.capturedOn
+    ? formatInTimeZone(`${honesty.capturedOn}T12:00:00Z`, listing.timezone, "d MMM yyyy")
+    : null;
+  const coverage = HONESTY_CAPTURED.coverage[honesty.coverage];
+
+  return (
+    <section aria-labelledby="walkthrough-heading">
+      <h2 id="walkthrough-heading" className="m-0 mb-3 text-card-title">
+        {WALK_COPY.heading}
+      </h2>
+      <Card>
+        <div className="grid gap-5 sm:grid-cols-2 sm:items-start">
+          <div className="flex flex-col gap-3">
+            <ListingPhoto
+              src={honesty.posterUrl}
+              alt=""
+              aspect="16/9"
+              className="rounded-surface"
+              sizes="(min-width: 640px) 520px, 100vw"
+            />
+            <ButtonLink to={`/listing/${listing.id}/walk`} className="self-start" data-testid="walk-enter">
+              {WALK_COPY.enter}
+            </ButtonLink>
+          </div>
+          <div className="flex flex-col gap-3">
+            <StatusPill tone="brand" testId="walk-badge-detail">
+              <span className="hidden sm:inline">{HONESTY_BADGE.full}</span>
+              <span className="sm:hidden">{HONESTY_BADGE.short}</span>
+            </StatusPill>
+            {capturedOn ? (
+              <div className="flex flex-col gap-1">
+                <p className="m-0 font-semibold" data-testid="walk-captured-detail">
+                  {HONESTY_CAPTURED.capturedOn(capturedOn)}
+                </p>
+                <p className="m-0 text-sm text-ink-secondary">{HONESTY_CAPTURED.hint}</p>
+              </div>
+            ) : null}
+            <p className="m-0 text-sm" data-testid="walk-coverage-detail">
+              <strong>{coverage.label}</strong> — {coverage.body}
+            </p>
+            {honesty.ownerPreview ? (
+              <p className="m-0 text-sm text-ink-secondary" data-testid="walk-owner-note">
+                {WALK_COPY.ownerPreview}
+              </p>
+            ) : null}
+            <details className="text-sm">
+              <summary className="cursor-pointer font-semibold">{HONESTY_GUEST_DISCLOSURE.title}</summary>
+              <div className="mt-2 flex flex-col gap-2 text-ink-secondary">
+                {HONESTY_GUEST_DISCLOSURE.paragraphs.map((paragraph) => (
+                  <p key={paragraph.slice(0, 24)} className="m-0 leading-relaxed">
+                    {paragraph}
+                  </p>
+                ))}
+              </div>
+            </details>
+          </div>
+        </div>
+      </Card>
+    </section>
   );
 }
