@@ -9,7 +9,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { sql } from "drizzle-orm";
 import { app } from "../server/app";
-import { HONESTY_REFUSALS } from "../src/lib/honestyCopy";
+import { HONESTY_REFUSALS, SCAN_EMAIL_SUBJECTS } from "../src/lib/honestyCopy";
 import type { ListingScan, ScanUploadTarget } from "../src/lib/types";
 import { asOwner, closeTestDb, getHarness, id, insertListing, insertMember, ownerDatabaseUrl } from "./helpers/db";
 import { mintSessionCookie } from "./helpers/session";
@@ -41,6 +41,20 @@ const bucket = vi.hoisted(() => {
     /** Simulates the browser's PUT of a small JSON object. */
     putObject(key: string, text: string, contentType = "application/json") {
       objects.set(key, { bytes: Buffer.byteLength(text), contentType, text });
+    },
+  };
+});
+
+/** HM-03 (D14): the rejected receipt is also the one email for that state. */
+const outbox = vi.hoisted(() => ({ sent: [] as { to: string; subject: string }[] }));
+
+vi.mock("../server/lib/email", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../server/lib/email")>();
+  return {
+    ...actual,
+    async sendEmail(message: { to: string; subject: string }) {
+      outbox.sent.push({ to: message.to, subject: message.subject });
+      return true;
     },
   };
 });
@@ -141,6 +155,7 @@ describeDb("HM-02 upload package", () => {
 
   afterEach(() => {
     bucket.reset();
+    outbox.sent.length = 0;
     for (const key of S3_KEYS) process.env[key] = key === "S3_PUBLIC_URL" ? "https://cdn.example.test/stead" : "test";
   });
 
@@ -156,7 +171,7 @@ describeDb("HM-02 upload package", () => {
     const hostId = id();
     const email = `${label}-${hostId}@stead.example`;
     await insertMember(hostId, email, label, true);
-    return { hostId, cookie: await mintSessionCookie({ id: hostId, email, name: label }) };
+    return { hostId, email, cookie: await mintSessionCookie({ id: hostId, email, name: label }) };
   }
 
   /** A confirmed draft with a capturing scan, ready for its package. */
@@ -287,6 +302,7 @@ describeDb("HM-02 upload package", () => {
     expect(res.status, await res.clone().text()).toBe(200);
     const scan = (await res.json()) as ListingScan;
     expect(scan.state).toBe("rejected");
+    expect(outbox.sent).toEqual([{ to: ctx.email, subject: SCAN_EMAIL_SUBJECTS.rejected("Upload cottage") }]);
     expect(scan.reason).toBe("location_mismatch");
     expect(scan.capturedOn).toBe("2026-09-14");
   });

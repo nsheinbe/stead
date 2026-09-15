@@ -51,6 +51,12 @@ const done: ListingScan = {
   uploads: { video: true, attestation: true, notes: true },
   stats: null,
   completedAt: "2026-09-14T23:40:00.000Z",
+  attempt: 0,
+  maxAttempts: 3,
+  canRetry: false,
+  claimedAt: null,
+  updatedAt: "2026-09-14T23:40:00.000Z",
+  outputs: { frames: false, cameras: false, splat: false, splat_compressed: false, stills: false },
 };
 
 type Call = string;

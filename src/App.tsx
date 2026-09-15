@@ -30,6 +30,10 @@ const UiGalleryPage = import.meta.env.DEV ? lazy(() => import("./pages/dev/UiGal
 const HostListingScanPage = lazy(() =>
   import("./pages/HostListingScan").then((m) => ({ default: m.HostListingScanPage })),
 );
+// HM-03: the status page is light, but it lives beside the capture page.
+const HostListingScanStatusPage = lazy(() =>
+  import("./pages/HostListingScanStatus").then((m) => ({ default: m.HostListingScanStatusPage })),
+);
 
 export function App() {
   return (
@@ -62,6 +66,20 @@ export function App() {
               }
             >
               <HostListingScanPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/host/listings/:listingId/scan/status"
+          element={
+            <Suspense
+              fallback={
+                <p role="status" className="sr-only">
+                  Loading the scan progress page
+                </p>
+              }
+            >
+              <HostListingScanStatusPage />
             </Suspense>
           }
         />

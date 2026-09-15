@@ -224,6 +224,10 @@ export const listingScans = pgTable(
     /** HM-02: the server's geofence stats at completion. */
     geofenceStats: jsonb("geofence_stats").$type<GeofenceStatsJson>(),
     completedAt: timestamp("completed_at", { mode: "date", withTimezone: true }),
+    /** HM-03: reconstruction attempts so far; the claim increments it. */
+    attempt: integer("attempt").notNull().default(0),
+    claimedAt: timestamp("claimed_at", { mode: "date", withTimezone: true }),
+    workerId: text("worker_id"),
   },
   (table) => [
     index("listing_scans_listing_idx").on(table.listingId, table.createdAt),

@@ -1,13 +1,14 @@
 /**
- * HM-01 / HM-02 — honesty scan reads and the writes a host may make.
+ * HM-01 / HM-02 / HM-03 — honesty scan reads and the writes a host may make.
  *
  * RLS is the enforcement: listing_scans_host_read scopes SELECT to the
  * caller's rows and listing_scans_host_start lets a host insert only a
  * `capturing` row for an owned, door-confirmed listing. The host_id filters
  * here mirror those policies so the intent reads locally; they are not what
  * makes it safe. Every state change is a SECURITY DEFINER function:
- * app.complete_scan_upload (HM-02) is the first, and it re-checks the caller
- * and the row's state itself.
+ * app.complete_scan_upload (HM-02) judges the upload, and HM-03 adds the
+ * job transitions (claim, finish, retry, release) — each re-checks the
+ * caller and the row's state itself.
  */
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { Tx } from "../db/client";
@@ -15,10 +16,14 @@ import { listingScans, listings, scanArtifacts } from "../db/schema";
 import type {
   GeofenceStatsJson,
   ListingScan,
+  ScanJob,
+  ScanJobArtifact,
   ScanReason,
   ScanThresholds,
   ScanUploadKind,
+  ScanWorkerArtifactKind,
 } from "../../src/lib/types";
+import { getConfigMap, intFromConfig } from "./listings";
 
 type ScanRow = typeof listingScans.$inferSelect;
 type ArtifactRow = typeof scanArtifacts.$inferSelect;
@@ -29,7 +34,14 @@ export type OwnedScan = {
   target: { lat: number; lng: number };
   thresholds: ScanThresholds;
   listingId: string;
+  /** HM-03: the worker's stills, in key order, for the failed-state page. */
+  stillsKeys: string[];
 };
+
+/** Reconstruction attempts a scan may use, from app_config (default 3). */
+export async function scanMaxAttempts(tx: Tx): Promise<number> {
+  return intFromConfig((await getConfigMap(tx)).scan_max_attempts, 3);
+}
 
 function thresholdsOf(row: ScanRow): ScanThresholds {
   return {
@@ -42,8 +54,8 @@ function thresholdsOf(row: ScanRow): ScanThresholds {
   };
 }
 
-function toListingScan(row: ScanRow, artifacts: ArtifactRow[]): ListingScan {
-  const has = (kind: ScanUploadKind) => artifacts.some((a) => a.kind === kind);
+function toListingScan(row: ScanRow, artifacts: ArtifactRow[], maxAttempts: number): ListingScan {
+  const has = (kind: ScanUploadKind | ScanWorkerArtifactKind) => artifacts.some((a) => a.kind === kind);
   return {
     id: row.id,
     state: row.state,
@@ -56,6 +68,18 @@ function toListingScan(row: ScanRow, artifacts: ArtifactRow[]): ListingScan {
     uploads: { video: has("video"), attestation: has("attestation"), notes: has("notes") },
     stats: row.geofenceStats ?? null,
     completedAt: row.completedAt ? row.completedAt.toISOString() : null,
+    attempt: row.attempt,
+    maxAttempts,
+    canRetry: row.state === "failed" && row.attempt < maxAttempts,
+    claimedAt: row.claimedAt ? row.claimedAt.toISOString() : null,
+    updatedAt: row.updatedAt.toISOString(),
+    outputs: {
+      frames: has("frames"),
+      cameras: has("cameras"),
+      splat: has("splat"),
+      splat_compressed: has("splat_compressed"),
+      stills: has("stills"),
+    },
   };
 }
 
@@ -95,7 +119,8 @@ export async function latestScanForOwner(
     orderBy: desc(listingScans.createdAt),
     with: { artifacts: true },
   });
-  return row ? toListingScan(row, row.artifacts) : null;
+  if (!row) return null;
+  return toListingScan(row, row.artifacts, await scanMaxAttempts(tx));
 }
 
 /** One scan by id, only if it belongs to this host and this listing. */
@@ -115,10 +140,14 @@ export async function getScanForOwner(
   });
   if (!row) return null;
   return {
-    scan: toListingScan(row, row.artifacts),
+    scan: toListingScan(row, row.artifacts, await scanMaxAttempts(tx)),
     target: { lat: row.targetLat, lng: row.targetLng },
     thresholds: thresholdsOf(row),
     listingId: row.listingId,
+    stillsKeys: row.artifacts
+      .filter((a) => a.kind === "stills")
+      .map((a) => a.objectKey)
+      .sort(),
   };
 }
 
@@ -155,7 +184,7 @@ export async function createScan(
     })
     .returning();
   if (!created) throw new Error("Could not start the scan");
-  return toListingScan(created, []);
+  return toListingScan(created, [], await scanMaxAttempts(tx));
 }
 
 export type ArtifactRecord = {
@@ -219,4 +248,144 @@ export async function completeScanUpload(
     ) AS done
   `)) as unknown as { done: boolean }[];
   return rows[0]?.done === true;
+}
+
+// ---------------------------------------------------------------- HM-03 -----
+
+/** Who to tell, and about which home. Both the worker and host paths return this shape. */
+export type ScanNotice = {
+  hostEmail: string;
+  listingTitle: string;
+  listingId: string;
+};
+
+type ClaimRow = {
+  scan_id: string;
+  listing_id: string;
+  attempt: number;
+  accuracy_max_m: number;
+  geofence_radius_m: number;
+  target_lat: number;
+  target_lng: number;
+  timezone: string;
+  video_key: string | null;
+  video_content_type: string | null;
+  attestation_key: string | null;
+  notes_key: string | null;
+};
+
+/**
+ * uploaded → reconstructing for the oldest whole package, or null when the
+ * queue is empty. Runs with no member: the worker is not one. The function
+ * skips locked rows, so two workers never take the same job.
+ */
+export async function claimNextScanJob(tx: Tx, workerId: string): Promise<ScanJob | null> {
+  const rows = (await tx.execute<ClaimRow>(
+    sql`SELECT * FROM app.claim_next_scan_job(${workerId})`,
+  )) as unknown as ClaimRow[];
+  const row = rows[0];
+  if (!row) return null;
+  if (!row.video_key || !row.attestation_key || !row.notes_key) {
+    // The claim only takes whole packages; reaching here means the schema drifted.
+    throw new Error(`scan ${row.scan_id} was claimed without its upload package`);
+  }
+  return {
+    scanId: row.scan_id,
+    listingId: row.listing_id,
+    attempt: row.attempt,
+    timezone: row.timezone,
+    target: { lat: row.target_lat, lng: row.target_lng },
+    thresholds: { accuracyMaxM: row.accuracy_max_m, geofenceRadiusM: row.geofence_radius_m },
+    inputs: {
+      videoKey: row.video_key,
+      videoContentType: row.video_content_type ?? "video/mp4",
+      attestationKey: row.attestation_key,
+      notesKey: row.notes_key,
+    },
+    outputPrefix: `listings/${row.listing_id}/scans/${row.scan_id}/`,
+  };
+}
+
+type FinishRow = { host_email: string; listing_title: string; listing_id: string; state: string };
+
+/**
+ * reconstructing → needs_mask / failed. Null when the attempt is stale or
+ * the row has moved on: a worker that lost its claim writes nothing. Bad
+ * keys and kinds raise (P0001) — the route turns that into a 400.
+ */
+export async function finishScanJob(
+  tx: Tx,
+  input: {
+    scanId: string;
+    attempt: number;
+    outcome: "needs_mask" | "failed";
+    reason: ScanReason | null;
+    artifacts: ScanJobArtifact[];
+  },
+): Promise<(ScanNotice & { state: string }) | null> {
+  const artifacts = input.artifacts.map((a) => ({
+    kind: a.kind,
+    object_key: a.objectKey,
+    content_type: a.contentType,
+    size_bytes: a.sizeBytes,
+  }));
+  const rows = (await tx.execute<FinishRow>(sql`
+    SELECT * FROM app.finish_scan_job(
+      ${input.scanId}::uuid,
+      ${input.attempt},
+      ${input.outcome},
+      ${input.reason},
+      ${JSON.stringify(artifacts)}::jsonb
+    )
+  `)) as unknown as FinishRow[];
+  const row = rows[0];
+  if (!row) return null;
+  return { hostEmail: row.host_email, listingTitle: row.listing_title, listingId: row.listing_id, state: row.state };
+}
+
+/** Host-only: failed → uploaded while attempts remain. False when nothing changed. */
+export async function retryScanReconstruction(tx: Tx, scanId: string, maxAttempts: number): Promise<boolean> {
+  const rows = (await tx.execute<{ ok: boolean }>(
+    sql`SELECT app.retry_scan_reconstruction(${scanId}::uuid, ${maxAttempts}) AS ok`,
+  )) as unknown as { ok: boolean }[];
+  return rows[0]?.ok === true;
+}
+
+export type ReleasedScanJob = ScanNotice & { scanId: string; state: string };
+
+/**
+ * Cron: a claim older than the window is a dead worker. Rows go back to the
+ * queue while attempts remain, otherwise to `failed`; the caller emails the
+ * hosts in the second group after the transaction has committed.
+ */
+export async function releaseStaleScanJobs(
+  tx: Tx,
+  olderThanHours: number,
+  maxAttempts: number,
+): Promise<ReleasedScanJob[]> {
+  const rows = (await tx.execute<{
+    scan_id: string;
+    state: string;
+    host_email: string;
+    listing_title: string;
+    listing_id: string;
+  }>(sql`
+    SELECT * FROM app.release_stale_scan_jobs(make_interval(hours => ${olderThanHours}::int), ${maxAttempts})
+  `)) as unknown as { scan_id: string; state: string; host_email: string; listing_title: string; listing_id: string }[];
+  return rows.map((r) => ({
+    scanId: r.scan_id,
+    state: r.state,
+    hostEmail: r.host_email,
+    listingTitle: r.listing_title,
+    listingId: r.listing_id,
+  }));
+}
+
+/** The host's own address and title for a notice sent in the host's request. Host-scoped. */
+export async function scanNotice(tx: Tx, scanId: string): Promise<ScanNotice | null> {
+  const rows = (await tx.execute<{ host_email: string; listing_title: string; listing_id: string }>(
+    sql`SELECT * FROM app.scan_notice(${scanId}::uuid)`,
+  )) as unknown as { host_email: string; listing_title: string; listing_id: string }[];
+  const row = rows[0];
+  return row ? { hostEmail: row.host_email, listingTitle: row.listing_title, listingId: row.listing_id } : null;
 }

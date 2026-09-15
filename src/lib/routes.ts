@@ -30,6 +30,7 @@ const TABLE: { pattern: RegExp; title: string; workspace: Workspace }[] = [
   { pattern: /^\/host\/listings$/, title: "Your homes", workspace: "hosting" },
   { pattern: new RegExp(`^/host/listings/${ID}$`), title: "Edit your home", workspace: "hosting" },
   { pattern: new RegExp(`^/host/listings/${ID}/scan$`), title: "Scan your home", workspace: "hosting" },
+  { pattern: new RegExp(`^/host/listings/${ID}/scan/status$`), title: "Scan progress", workspace: "hosting" },
   { pattern: /^\/host\/payouts$/, title: "Payouts", workspace: "hosting" },
   { pattern: /^\/host\/claims$/, title: "Claims", workspace: "hosting" },
   { pattern: new RegExp(`^/host/claims/${ID}$`), title: "Claim details", workspace: "hosting" },

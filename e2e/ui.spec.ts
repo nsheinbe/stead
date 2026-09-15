@@ -15,8 +15,10 @@ import {
   seedBookableParty,
   seedHost,
 } from "./helpers/party";
-import { insertBooking } from "../tests/helpers/db";
+import { sql } from "drizzle-orm";
+import { asOwner, id, insertBooking } from "../tests/helpers/db";
 import { SESSION_COOKIE } from "../tests/helpers/session";
+import { SCAN_REASON_COPY } from "../src/lib/honestyCopy";
 
 async function signIn(page: Page, token: string) {
   const base = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:4173";
@@ -575,6 +577,80 @@ test.describe("front door and scan (HM-01)", () => {
       page.getByTestId("scan-open-on-phone").or(page.getByText("Scans aren't configured on this deployment.")),
     ).toBeVisible();
     await expect(page.getByRole("button", { name: "Start the walk" })).toHaveCount(0);
+  });
+});
+
+test.describe("scan progress (HM-03)", () => {
+  test("shows an unscanned home, then a failed reconstruction with a capped retry", async ({ page, request }) => {
+    await ensureDb();
+    const owner = await seedHost();
+    await signIn(page, owner.token);
+    const created = await request.post("/api/listings", {
+      headers: { cookie: owner.cookie, "content-type": "application/json" },
+      data: {
+        title: "Progress cottage",
+        type: "apartment",
+        city: "Hudson",
+        country: "US",
+        timezone: "America/New_York",
+        nightlyRateCents: 20_000,
+        depositCents: 0,
+        maxGuests: 2,
+        lat: 42.2529,
+        lng: -73.791,
+        confirmCoordinates: true,
+      },
+    });
+    expect(created.status()).toBe(201);
+    const { id: listingId } = (await created.json()) as { id: string };
+
+    // Nothing scanned yet: the state is said plainly and the one action leads to capture.
+    await page.goto(`/host/listings/${listingId}/scan/status`);
+    await expect(page.getByRole("heading", { level: 1, name: /Scan progress — Progress cottage/ })).toBeVisible();
+    await expect(page.getByTestId("scan-status-pill")).toHaveText("Not started");
+    await expect(page.getByTestId("scan-status-sentence")).toHaveText("This home hasn't been scanned yet.");
+    await expect(page.getByRole("link", { name: "Scan this home" })).toHaveAttribute("href", `/host/listings/${listingId}/scan`);
+
+    // A reconstruction that failed on its first attempt, as the worker leaves it.
+    // Owner write: no member and no route can put a row here directly.
+    const scanId = id();
+    await asOwner(async (db) => {
+      await db.execute(sql`
+        INSERT INTO public.listing_scans (
+          id, listing_id, host_id, state, reason, honesty_policy_version,
+          accuracy_max_m, geofence_radius_m, bookend_window_seconds, bookend_min_samples,
+          min_indoor_seconds, max_seconds, target_lat, target_lng,
+          captured_on, completed_at, geofence_stats, attempt
+        ) VALUES (
+          ${scanId}::uuid, ${listingId}::uuid, ${owner.hostId}::uuid, 'failed', 'reconstruction_failed', 1,
+          35, 100, 90, 15, 60, 600, 42.2529, -73.791,
+          '2026-09-14'::date, now(),
+          '{"sampleCount":60,"accurateCount":60,"durationSeconds":245,"startAccurate":30,"endAccurate":30,"medianDistanceM":10,"startDistanceM":1,"endDistanceM":1}'::jsonb,
+          1
+        )
+      `);
+    });
+    await page.reload();
+    await expect(page.getByTestId("scan-status-pill")).toHaveText("Processing didn't finish");
+    await expect(page.getByTestId("scan-status-sentence")).toHaveText("Processing didn't finish.");
+    await expect(page.getByTestId("scan-status-reason")).toHaveText(SCAN_REASON_COPY.reconstruction_failed);
+    await expect(page.getByTestId("scan-attempts")).toHaveText("1 of 3");
+    await expect(page.getByText("Walk recorded")).toBeVisible();
+    await expect(page.getByText("14 Sep 2026", { exact: true })).toBeVisible();
+    await expect(page.getByText("04:05")).toBeVisible();
+    await expect(page.getByText("The worker didn't save any frames from this walk.")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Walk again" })).toHaveAttribute("href", `/host/listings/${listingId}/scan`);
+
+    // Try processing again: the state shown comes from the server's answer.
+    await page.getByTestId("scan-retry").click();
+    await expect(page.getByTestId("scan-status-pill")).toHaveText("Queued for processing");
+    await expect(page.getByTestId("scan-status-sentence")).toHaveText(/Queued for processing\. This can take a while/);
+    await expect(page.getByTestId("scan-retry")).toHaveCount(0);
+    await page.getByRole("button", { name: "Check again" }).click();
+    await expect(page.getByTestId("scan-check-result")).toHaveText("Still processing.");
+
+    // The same footage is now the worker's to claim; the attempt count stands.
+    await expect(page.getByTestId("scan-attempts")).toHaveText("1 of 3");
   });
 });
 

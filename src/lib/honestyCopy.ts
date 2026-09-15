@@ -190,6 +190,11 @@ export const HONESTY_REFUSALS = {
   uploadTooLarge: "That recording is bigger than we can process. Walk again and keep it shorter.",
   /** 409 when a walk is completed twice or after it was already judged (HM-02). */
   alreadySubmitted: "This walk was already submitted. Start a new walk to scan again.",
+  /** 409 when a retry is asked for on a scan that is not `failed` (HM-03). */
+  retryNotFailed: "This scan isn't waiting for a retry.",
+  /** 409 when the attempt cap is spent (HM-03). */
+  retryExhausted: (attempts: number) =>
+    `We've tried ${attempts} times. Walk again, slower and with more overlap between rooms.`,
   /** 503 when object storage is not configured. */
   storageNotConfigured: "Scans aren't configured on this deployment.",
   /** 409 from starting a scan on a hidden demo listing. */
@@ -217,6 +222,40 @@ export const SCAN_REASON_COPY: Record<ScanReason, string> = {
 
 /** @deprecated alias kept for HM-00 callers; prefer ScanReason from ./types. */
 export type ScanReasonKey = ScanReason;
+
+/**
+ * The status page's sentence per scan state (HM-D04). "This can take a
+ * while — often hours" is deliberate: the worker reports no percentage and
+ * the page never invents an ETA.
+ */
+export const SCAN_STATUS_COPY = {
+  none: "This home hasn't been scanned yet.",
+  capturing: "The walk hasn't finished uploading.",
+  uploaded: "Queued for processing. This can take a while — often hours. We'll email you when it's done.",
+  reconstructing:
+    "Processing your walk into a 3D walkthrough. This can take a while — often hours. We'll email you when it's done.",
+  needs_mask: "Your walkthrough is ready for you to check. Mark anything private before it's verified.",
+  verified: (date: string) => `Verified ${date}. Guests will see this walkthrough once the home is published.`,
+  rejected: "We couldn't confirm the location.",
+  failed: "Processing didn't finish.",
+  checkAgainStill: "Still processing.",
+  checkAgainReady: "Ready for you to check.",
+  stillsCaption: "Frames from your walk. Nothing here is generated.",
+  stillsNone: "The worker didn't save any frames from this walk.",
+  /** HM-04 has not landed: say so rather than link to a page that isn't there. */
+  maskNotYet: "Marking private rooms isn't ready on Stead yet. Nothing from this walk is public until you have.",
+  /** The quiet "What happens next" surface (HM-D04 §3). */
+  whatNext:
+    "Once the walkthrough is built, you mark anything private and those parts are cut before anyone else sees it. Only then can it be verified.",
+} as const;
+
+/** Subjects for the one email per terminal state (DECISIONS D14). */
+export const SCAN_EMAIL_SUBJECTS = {
+  needs_mask: (title: string) => `Your walkthrough of ${title} is ready to check`,
+  verified: (title: string) => `${title} is verified`,
+  rejected: (title: string) => `We couldn't confirm the location for ${title}`,
+  failed: (title: string) => `We couldn't process the walk for ${title}`,
+} as const;
 
 /** One-line mentions HM-00 adds to existing pages. The only edits to those pages in this phase. */
 export const HONESTY_MENTIONS = {

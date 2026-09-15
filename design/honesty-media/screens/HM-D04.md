@@ -1,7 +1,8 @@
 # HM-D04 — Reconstruction status (HM-03)
 
 **Ticket:** HM-03 · **Route:** `/host/listings/:listingId/scan/status`
-· **Surface today:** none. **Status:** specified.
+· **Surface today:** `src/pages/HostListingScanStatus.tsx` (HM-03).
+**Status:** built, with the deviations in §10.
 
 ## 1. Purpose and primary action
 
@@ -101,5 +102,30 @@ Email bodies restate the sentence and link to this page. No marketing.
   the locked message.
 - Playwright: each state renders the right action with a stubbed scan
   endpoint.
+
+## 10. As built (HM-03)
+
+- **`needs_mask` has no link yet.** HM-04 (the mask page) is not built, so
+  the card shows the sentence plus "Marking private rooms isn't ready on
+  Stead yet. Nothing from this walk is public until you have." instead of
+  a dead **Mark private rooms** link. The verb lands with HM-04.
+- **`verified` links to the listing, not `/walk`.** No function can set
+  `verified` before HM-04/05, so the state is unreachable today; the
+  action is **View this home** → `/listing/:id` until HM-05 adds the
+  walkthrough route.
+- **A "Processing attempts" row** (`{attempt} of {maxAttempts}`) joins
+  the `DataList` once processing has been tried; the cap is
+  `scan_max_attempts` (app_config, default 3), so the exhausted message
+  reads "We've tried 3 times…" from the number, not a hard-coded "three".
+- **Stills** load only when the worker recorded any; otherwise the page
+  says "The worker didn't save any frames from this walk." Frames are
+  keyed under the scan prefix and served through 300-second signed URLs
+  (`GET …/stills`).
+- **Refetch on window focus** is enabled for this query only (the app
+  default is off); **Check again** refetches once and announces
+  "Still processing." or "Ready for you to check." politely.
+- Retry is `POST …/scans/:scanId/retry`; the button is busy "Queuing…"
+  and disabled once `canRetry` is false. The state shown afterwards is the
+  server's response, never assumed.
 
 Copyright 2026 Stead contributors.

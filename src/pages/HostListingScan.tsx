@@ -966,7 +966,16 @@ function UploadStep({
 function Receipt({ scan, listingId, onWalkAgain }: { scan: ListingScan; listingId: string; onWalkAgain: () => void }) {
   if (scan.state === "uploaded") {
     return (
-      <StatusMessage tone="success" title="Uploaded. Location confirmed — queued for processing." testId="scan-receipt">
+      <StatusMessage
+        tone="success"
+        title="Uploaded. Location confirmed — queued for processing."
+        testId="scan-receipt"
+        action={
+          <ButtonLink to={`/host/listings/${listingId}/scan/status`} variant="secondary" size="sm">
+            Check progress
+          </ButtonLink>
+        }
+      >
         <p>Processing can take a while — often hours. We'll email you when it's done.</p>
       </StatusMessage>
     );

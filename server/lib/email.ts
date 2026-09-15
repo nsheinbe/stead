@@ -8,6 +8,7 @@
  * deposit correctly has done the important part; a bounced notification must
  * not roll that back or fail the job.
  */
+import { SCAN_EMAIL_SUBJECTS } from "../../src/lib/honestyCopy";
 import { EmailFromError, authEmailFromForSend } from "./emailFrom";
 import { brandedEmailHtml } from "./emailLayout";
 import { deliverViaProvider, selectEmailProvider } from "./emailProvider";
@@ -243,6 +244,41 @@ export function hostCanceledEmail(input: {
   }
   return mail("You canceled a stay", "Cancellations", `You canceled ${input.listingTitle}`, [
     `The guest is refunded ${figure}, fee included. The deposit is released. Those dates are blacked out, and this counts as a host cancel on your Trust Passport.`,
+  ]);
+}
+
+/** Where every scan email points: the host's status page for that home (HM-D04). */
+export function scanStatusUrl(listingId: string): string {
+  const appUrl = (process.env.APP_URL ?? "http://localhost:5173").replace(/\/+$/, "");
+  return `${appUrl}/host/listings/${listingId}/scan/status`;
+}
+
+/**
+ * HM-03: one email per terminal scan state (DECISIONS D14). Subjects are the
+ * locked strings; bodies restate the status sentence and link to the status
+ * page. No marketing, no "live".
+ */
+export function scanReadyToCheckEmail(input: { listingTitle: string; statusUrl: string }): Omit<Message, "to"> {
+  return mail(SCAN_EMAIL_SUBJECTS.needs_mask(input.listingTitle), "Honesty scan", "Your walkthrough is ready to check", [
+    `The walk you filmed at ${input.listingTitle} has been processed into a walkthrough.`,
+    "Before it can be verified, mark anything private — those parts are cut before anyone else sees it.",
+    `Check it here: ${input.statusUrl}`,
+  ]);
+}
+
+export function scanFailedEmail(input: { listingTitle: string; statusUrl: string; reason: string }): Omit<Message, "to"> {
+  return mail(SCAN_EMAIL_SUBJECTS.failed(input.listingTitle), "Honesty scan", "We couldn't process the walk", [
+    `Processing the walk you filmed at ${input.listingTitle} didn't finish.`,
+    input.reason,
+    `See what happened, and try again or walk again, here: ${input.statusUrl}`,
+  ]);
+}
+
+export function scanRejectedEmail(input: { listingTitle: string; statusUrl: string; reason: string }): Omit<Message, "to"> {
+  return mail(SCAN_EMAIL_SUBJECTS.rejected(input.listingTitle), "Honesty scan", "We couldn't confirm the location", [
+    `The walk you filmed at ${input.listingTitle} was uploaded, but its location readings didn't confirm it was at the home.`,
+    input.reason,
+    `Walk again from here: ${input.statusUrl}`,
   ]);
 }
 
