@@ -176,6 +176,13 @@ export const listings = pgTable(
      * refuses a confirmation without a point.
      */
     coordinatesConfirmedAt: timestamp("coordinates_confirmed_at", { mode: "date", withTimezone: true }),
+    /**
+     * HM-05: which walk a guest sees, and since when. Written only by the
+     * SECURITY DEFINER transitions — app_user's UPDATE grant is a column list
+     * that leaves these two out, so a host cannot stamp their own verification.
+     */
+    scanVerifiedAt: timestamp("scan_verified_at", { mode: "date", withTimezone: true }),
+    verifiedScanId: uuid("verified_scan_id"),
   },
   (table) => [index("listings_status_idx").on(table.status)],
 );

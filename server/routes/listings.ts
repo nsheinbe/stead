@@ -1,15 +1,19 @@
+import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
+import { listings } from "../db/schema";
 import { sessionUser, tenantQuery, type AppEnv } from "../lib/http";
 import { parseListingFilters } from "../../src/lib/filters";
 import { HONESTY_REFUSALS } from "../../src/lib/honestyCopy";
-import type { ListingScanStatus } from "../../src/lib/types";
+import type { ListingScanStatus, Walkthrough } from "../../src/lib/types";
 import { policyVersionFromConfig, scanThresholdsFromConfig } from "../lib/geofence";
 import { pgCode } from "../lib/pgError";
+import { presignGetOrNull, SCAN_MAX_STILLS, SCAN_URL_TTL_SECONDS } from "../lib/scanStorage";
 import { isHiddenSeedListing } from "../lib/seedInventory";
 import { getConfigMap, getListingForViewer, listActiveListings } from "../queries/listings";
 import { createScan, getScanTarget, latestScanForOwner } from "../queries/scans";
+import { walkthroughForViewer } from "../queries/walkthrough";
 import { scanRoutes } from "./scans";
 import {
   addListingPhoto,
@@ -156,6 +160,60 @@ listingsRoutes.patch("/:id", async (c) => {
  * thresholds for the on-device meter, and the latest scan row. Owner only —
  * a stranger gets the same 404 as for any listing that is not theirs.
  */
+/**
+ * HM-05: the walkthrough a guest may load. Public for an active listing with
+ * a verified scan, and for that listing's own host previewing a draft; a 404
+ * for everything else, including a guessed id, a rejected scan and a hidden
+ * demo row. The URLs are signed and short-lived, so no bucket path or raw
+ * upload prefix ever leaves the server.
+ */
+listingsRoutes.get("/:id/walkthrough", async (c) => {
+  const listingId = c.req.param("id");
+  const missing = new HTTPException(404, { message: "We couldn't find this walkthrough." });
+  if (isHiddenSeedListing(listingId)) throw missing;
+  if (!storageConfigured()) throw missing;
+
+  const found = await tenantQuery(c, async (tx) => {
+    const walk = await walkthroughForViewer(tx, listingId);
+    if (!walk) return null;
+    const listing = await tx.query.listings.findFirst({
+      where: eq(listings.id, listingId),
+      columns: { title: true },
+    });
+    return listing ? { walk, title: listing.title } : null;
+  });
+  if (!found) throw missing;
+  const { walk } = found;
+  const splatKey = walk.splatKey;
+  // No artifact, no walkthrough: there is never a stand-in for a missing one.
+  if (!splatKey) throw missing;
+
+  // Bucket signing is a local HMAC, so this holds no transaction open.
+  const [splatUrl, stills] = await Promise.all([
+    presignGetOrNull(splatKey),
+    Promise.all(walk.stillsKeys.slice(0, SCAN_MAX_STILLS).map((key) => presignGetOrNull(key))),
+  ]);
+  if (!splatUrl) throw missing;
+
+  const body: Walkthrough = {
+    listingId,
+    title: found.title,
+    timezone: walk.timezone,
+    capturedOn: walk.capturedOn,
+    verifiedAt: walk.verifiedAt,
+    coverage: walk.coverage,
+    policyVersion: walk.policyVersion,
+    ownerPreview: walk.ownerPreview,
+    posterUrl: stills[0] ?? null,
+    splatUrl,
+    stills: stills
+      .map((url, index) => (url ? { index, url } : null))
+      .filter((s): s is { index: number; url: string } => s !== null),
+    expiresInSeconds: SCAN_URL_TTL_SECONDS,
+  };
+  return c.json(body);
+});
+
 listingsRoutes.get("/:id/scan", async (c) => {
   const host = sessionUser(c);
   const listingId = c.req.param("id");

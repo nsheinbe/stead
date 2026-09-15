@@ -33,6 +33,15 @@ process.env.PORT = port;
 process.env.APP_URL ??= `http://127.0.0.1:${port}`;
 // Lifecycle and UI specs create bookings. Production Soft Dist leaves this unset.
 process.env.ALLOW_GUEST_BOOKINGS ??= "1";
+// Presigning is a local HMAC, so signed URLs can be produced without a bucket
+// behind them. That is what the walkthrough surfaces need to be reachable in
+// e2e: the artifact fetch then fails honestly and the page falls back to the
+// stills it is supposed to, which is the path CI can actually prove.
+process.env.S3_BUCKET ??= "stead-e2e";
+process.env.S3_ACCESS_KEY_ID ??= "e2e";
+process.env.S3_SECRET_ACCESS_KEY ??= "e2e-secret";
+process.env.S3_REGION ??= "us-east-1";
+
 if (process.env.STRIPE_E2E !== "1") {
   delete process.env.STRIPE_SECRET_KEY;
   delete process.env.VITE_STRIPE_PUBLISHABLE_KEY;

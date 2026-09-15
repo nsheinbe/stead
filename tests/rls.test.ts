@@ -1638,3 +1638,124 @@ describeDb("HM-04: a mask is the host's own row, writable only while the scan wa
     expect(await send(hostId)).toHaveLength(0);
   });
 });
+
+describeDb("HM-05: a host cannot stamp their own verification, and a guest cannot read the queue", () => {
+  afterAll(async () => {
+    await closeTestDb();
+  });
+
+  async function aVerifiedScan(hostId: string, status: "draft" | "active" = "active") {
+    const listingId = id();
+    const scanId = id();
+    await insertListing({ id: listingId, hostId, title: "Walk RLS cottage", status });
+    await asOwner(async (db) => {
+      await db.execute(sql`
+        INSERT INTO public.listing_scans (
+          id, listing_id, host_id, state, honesty_policy_version,
+          accuracy_max_m, geofence_radius_m, bookend_window_seconds, bookend_min_samples,
+          min_indoor_seconds, max_seconds, target_lat, target_lng,
+          captured_on, completed_at, verified_at, attempt, job
+        ) VALUES (
+          ${scanId}::uuid, ${listingId}::uuid, ${hostId}::uuid, 'verified', 1,
+          35, 100, 90, 15, 60, 600, 42.2529, -73.791,
+          '2026-09-14'::date, now(), now(), 1, 'crop'
+        )
+      `);
+      await db.execute(sql`
+        INSERT INTO public.scan_artifacts (scan_id, kind, object_key, content_type, size_bytes)
+        VALUES (${scanId}::uuid, 'splat', ${`listings/${listingId}/scans/${scanId}/splat.ply`}, 'application/octet-stream', 10)
+      `);
+    });
+    return { listingId, scanId };
+  }
+
+  it("refuses a host writing scan_verified_at or verified_scan_id, while their own fields still save", async () => {
+    const hostId = id();
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    const { listingId, scanId } = await aVerifiedScan(hostId);
+
+    // The two verification columns are simply not in the UPDATE grant.
+    await expect(
+      rawAsMember(hostId, (tx) => tx`UPDATE public.listings SET scan_verified_at = now() WHERE id = ${listingId}::uuid`),
+    ).rejects.toThrow(/permission denied/);
+    await expect(
+      rawAsMember(
+        hostId,
+        (tx) => tx`UPDATE public.listings SET verified_scan_id = ${scanId}::uuid WHERE id = ${listingId}::uuid`,
+      ),
+    ).rejects.toThrow(/permission denied/);
+    // Nor the columns that were never theirs.
+    await expect(
+      rawAsMember(hostId, (tx) => tx`UPDATE public.listings SET host_id = ${id()}::uuid WHERE id = ${listingId}::uuid`),
+    ).rejects.toThrow(/permission denied/);
+
+    // The editor still works: the fields a host actually edits are granted.
+    await expect(
+      rawAsMember(
+        hostId,
+        (tx) => tx`UPDATE public.listings SET title = 'Renamed', nightly_rate_cents = 21000, status = 'paused' WHERE id = ${listingId}::uuid`,
+      ),
+    ).resolves.toBeDefined();
+    const [row] = await rawAsMember(hostId, (tx) => tx`SELECT title FROM public.listings WHERE id = ${listingId}::uuid`);
+    expect((row as { title: string }).title).toBe("Renamed");
+  });
+
+  it("opens the viewer door for an active verified home and for its host, and for nobody else", async () => {
+    const hostId = id();
+    const otherHost = id();
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    await insertMember(otherHost, `host-${otherHost}@stead.example`, "Other host", true);
+
+    const live = await aVerifiedScan(hostId, "active");
+    const draft = await aVerifiedScan(hostId, "draft");
+    await asOwner(async (db) => {
+      for (const s of [live, draft]) {
+        await db.execute(sql`
+          UPDATE public.listings SET scan_verified_at = now(), verified_scan_id = ${s.scanId}::uuid
+           WHERE id = ${s.listingId}::uuid
+        `);
+      }
+    });
+
+    const door = (viewer: string | null, listingId: string) =>
+      rawAsMember(viewer, (tx) => tx`SELECT scan_id, owner_preview FROM app.walkthrough_for_viewer(${listingId}::uuid)`);
+
+    // Published: everyone, and nobody is told it is a preview.
+    expect(await door(null, live.listingId)).toEqual([{ scan_id: live.scanId, owner_preview: false }]);
+    expect(await door(otherHost, live.listingId)).toHaveLength(1);
+
+    // Draft: its host only.
+    expect(await door(hostId, draft.listingId)).toEqual([{ scan_id: draft.scanId, owner_preview: true }]);
+    expect(await door(null, draft.listingId)).toHaveLength(0);
+    expect(await door(otherHost, draft.listingId)).toHaveLength(0);
+
+    // The scan queue itself stays closed to everyone but its host.
+    const readScan = (viewer: string | null) =>
+      rawAsMember(viewer, (tx) => tx`SELECT id FROM public.listing_scans WHERE id = ${live.scanId}::uuid`);
+    expect(await readScan(hostId)).toHaveLength(1);
+    expect(await readScan(otherHost)).toHaveLength(0);
+    expect(await readScan(null)).toHaveLength(0);
+  });
+
+  it("closes the door again when the scan is no longer verified", async () => {
+    const hostId = id();
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    const { listingId, scanId } = await aVerifiedScan(hostId, "active");
+    await asOwner(async (db) => {
+      await db.execute(sql`
+        UPDATE public.listings SET scan_verified_at = now(), verified_scan_id = ${scanId}::uuid WHERE id = ${listingId}::uuid
+      `);
+    });
+    const door = () =>
+      rawAsMember(null, (tx) => tx`SELECT scan_id FROM app.walkthrough_for_viewer(${listingId}::uuid)`);
+    expect(await door()).toHaveLength(1);
+
+    // A re-mask puts the scan back to work; the pointer alone must not serve it.
+    await asOwner(async (db) => {
+      await db.execute(
+        sql`UPDATE public.listing_scans SET state = 'reconstructing', verified_at = NULL WHERE id = ${scanId}::uuid`,
+      );
+    });
+    expect(await door()).toHaveLength(0);
+  });
+});

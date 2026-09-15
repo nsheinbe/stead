@@ -747,6 +747,168 @@ test.describe("private rooms (HM-04)", () => {
   });
 });
 
+test.describe("the guest walk (HM-05)", () => {
+  /** A published home with a verified walkthrough. Owner writes: no route sets these. */
+  async function aVerifiedHome(hostId: string, listingId: string, opts: { status?: string } = {}) {
+    const scanId = id();
+    const prefix = `listings/${listingId}/scans/${scanId}/`;
+    await asOwner(async (db) => {
+      await db.execute(sql`
+        INSERT INTO public.listing_scans (
+          id, listing_id, host_id, state, honesty_policy_version,
+          accuracy_max_m, geofence_radius_m, bookend_window_seconds, bookend_min_samples,
+          min_indoor_seconds, max_seconds, target_lat, target_lng,
+          captured_on, completed_at, verified_at, attempt, job
+        ) VALUES (
+          ${scanId}::uuid, ${listingId}::uuid, ${hostId}::uuid, 'verified', 1,
+          35, 100, 90, 15, 60, 600, 42.2529, -73.791,
+          '2026-09-14'::date, now(), now(), 1, 'crop'
+        )
+      `);
+      await db.execute(sql`
+        INSERT INTO public.scan_artifacts (scan_id, kind, object_key, content_type, size_bytes) VALUES
+          (${scanId}::uuid, 'splat_compressed', ${`${prefix}splat.compressed.ply`}, 'application/octet-stream', 900),
+          (${scanId}::uuid, 'stills', ${`${prefix}stills/00.jpg`}, 'image/jpeg', 10),
+          (${scanId}::uuid, 'stills', ${`${prefix}stills/01.jpg`}, 'image/jpeg', 10)
+      `);
+      await db.execute(sql`
+        INSERT INTO public.listing_rental_masks (scan_id, host_id, segments, whole_home_confirmed_at)
+        VALUES (${scanId}::uuid, ${hostId}::uuid, '[]'::jsonb, now())
+      `);
+      await db.execute(sql`
+        UPDATE public.listings
+           SET scan_verified_at = now(), verified_scan_id = ${scanId}::uuid, status = ${opts.status ?? "active"}::public.listing_status
+         WHERE id = ${listingId}::uuid
+      `);
+    });
+    return scanId;
+  }
+
+  test("a guest sees the badge and the disclosure, and the walk falls back to real frames", async ({ page, request }) => {
+    await ensureDb();
+    const owner = await seedHost();
+    const created = await request.post("/api/listings", {
+      headers: { cookie: owner.cookie, "content-type": "application/json" },
+      data: {
+        title: "Walk cottage",
+        type: "entire_home",
+        city: "Hudson",
+        country: "US",
+        timezone: "America/New_York",
+        nightlyRateCents: 20_000,
+        depositCents: 0,
+        maxGuests: 2,
+        lat: 42.2529,
+        lng: -73.791,
+        confirmCoordinates: true,
+      },
+    });
+    expect(created.status()).toBe(201);
+    const { id: listingId } = (await created.json()) as { id: string };
+    await aVerifiedHome(owner.hostId, listingId);
+
+    // Signed out, on the public detail page: the entry, the badge, the facts.
+    await page.goto(`/listing/${listingId}`);
+    await expect(page.getByRole("heading", { name: "Walk through this home" })).toBeVisible();
+    await expect(page.getByTestId("walk-badge-detail")).toContainText("Geo-proven walkthrough");
+    await expect(page.getByTestId("walk-captured-detail")).toHaveText("Captured 14 Sep 2026");
+    await expect(page.getByTestId("walk-coverage-detail")).toContainText("Whole home");
+    await expect(page.getByTestId("walk-owner-note")).toHaveCount(0);
+
+    // The disclosure is reachable without leaving the page.
+    await page.getByText("About this walkthrough").click();
+    await expect(page.getByText(/never add rooms, furniture, windows or views/)).toBeVisible();
+
+    // Into the walk. There is no real artifact behind the signed URL here, so
+    // this exercises the honest fallback rather than the renderer.
+    await page.getByTestId("walk-enter").click();
+    await expect(page).toHaveURL(new RegExp(`/listing/${listingId}/walk$`));
+    await expect(page.getByRole("heading", { level: 1, name: /Walk cottage — walkthrough/ })).toBeVisible();
+    await expect(page.getByTestId("walk-coverage")).toContainText("Whole home");
+    await expect(page.getByTestId("walk-captured")).toHaveText("Captured 14 Sep 2026");
+
+    // On a device that can render, the first run puts the control map over the
+    // walk, and dismissing it is the first thing a guest does. A device without
+    // WebGL never sees it, because there is nothing to control — so this asserts
+    // the overlay's copy where it appears rather than requiring it everywhere.
+    const gotIt = page.getByRole("button", { name: "Got it" });
+    if (await gotIt.isVisible()) {
+      await expect(page.getByText(/Look around: drag, or arrow keys/)).toBeVisible();
+      await gotIt.click();
+      await expect(gotIt).toBeHidden();
+    }
+
+    // Leaving works, and lands back on the home.
+    await page.getByRole("link", { name: "Leave the walkthrough" }).click();
+    await expect(page).toHaveURL(new RegExp(`/listing/${listingId}$`));
+  });
+
+  test("reduced motion shows stills first, with the 3D walk as an opt-in", async ({ page, request }) => {
+    await ensureDb();
+    const owner = await seedHost();
+    const created = await request.post("/api/listings", {
+      headers: { cookie: owner.cookie, "content-type": "application/json" },
+      data: {
+        title: "Still cottage",
+        type: "apartment",
+        city: "Hudson",
+        country: "US",
+        timezone: "America/New_York",
+        nightlyRateCents: 20_000,
+        depositCents: 0,
+        maxGuests: 2,
+        lat: 42.2529,
+        lng: -73.791,
+        confirmCoordinates: true,
+      },
+    });
+    const { id: listingId } = (await created.json()) as { id: string };
+    await aVerifiedHome(owner.hostId, listingId);
+
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto(`/listing/${listingId}/walk`);
+
+    // Real frames, said plainly, and nothing has moved on its own.
+    await expect(page.getByTestId("walk-stills")).toBeVisible();
+    await expect(page.getByText("Stills from the host's walk")).toBeVisible();
+    await expect(page.getByTestId("walk-canvas")).toHaveCount(0);
+  });
+
+  test("a draft home's walk is the host's alone", async ({ page, request }) => {
+    await ensureDb();
+    const owner = await seedHost();
+    const created = await request.post("/api/listings", {
+      headers: { cookie: owner.cookie, "content-type": "application/json" },
+      data: {
+        title: "Draft cottage",
+        type: "entire_home",
+        city: "Hudson",
+        country: "US",
+        timezone: "America/New_York",
+        nightlyRateCents: 20_000,
+        depositCents: 0,
+        maxGuests: 2,
+        lat: 42.2529,
+        lng: -73.791,
+        confirmCoordinates: true,
+      },
+    });
+    const { id: listingId } = (await created.json()) as { id: string };
+    await aVerifiedHome(owner.hostId, listingId, { status: "draft" });
+
+    // Signed out: the walk is not there at all.
+    await page.goto(`/listing/${listingId}/walk`);
+    await expect(page.getByRole("heading", { name: "We couldn't find this walkthrough." })).toBeVisible();
+
+    // Its host sees it, and is told it is a preview.
+    await signIn(page, owner.token);
+    await page.goto(`/listing/${listingId}/walk`);
+    await expect(page.getByTestId("walk-owner-preview")).toContainText(
+      "Guests will see this walk once the home is published.",
+    );
+  });
+});
+
 test.describe("payout readiness (HOST-03)", () => {
   test("a return from Stripe never claims the account is live", async ({ page }) => {
     await ensureDb();

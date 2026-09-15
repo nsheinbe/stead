@@ -34,6 +34,11 @@ const HostListingScanPage = lazy(() =>
 const HostListingScanStatusPage = lazy(() =>
   import("./pages/HostListingScanStatus").then((m) => ({ default: m.HostListingScanStatusPage })),
 );
+// HM-05: the walk pulls in Three.js and Spark. Its own chunk, so Explore and
+// listing detail never download a renderer they do not use.
+const ListingWalkPage = lazy(() =>
+  import("./pages/ListingWalk").then((m) => ({ default: m.ListingWalkPage })),
+);
 // HM-04: the mask page pulls in the frame strip; hosting-only, so its own chunk.
 const HostListingScanMaskPage = lazy(() =>
   import("./pages/HostListingScanMask").then((m) => ({ default: m.HostListingScanMaskPage })),
@@ -48,6 +53,20 @@ export function App() {
         <Route path="/explore" element={<ExplorePage />} />
         <Route path="/for-homeowners" element={<ForHomeownersPage />} />
         <Route path="/listing/:id" element={<ListingDetailPage />} />
+        <Route
+          path="/listing/:id/walk"
+          element={
+            <Suspense
+              fallback={
+                <p role="status" className="sr-only">
+                  Loading the walkthrough
+                </p>
+              }
+            >
+              <ListingWalkPage />
+            </Suspense>
+          }
+        />
         <Route path="/book/:listingId" element={<BookPage />} />
         <Route path="/trips" element={<TripsPage />} />
         <Route path="/trips/:bookingId" element={<TripDetailPage />} />

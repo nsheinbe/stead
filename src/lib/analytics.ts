@@ -29,6 +29,7 @@ export const ROUTE_NAMES = [
   "home",
   "explore",
   "listing_detail",
+  "listing_walk",
   "checkout",
   "login",
   "trips",
@@ -220,6 +221,7 @@ export function routeNameFor(pathname: string): RouteName {
   if (clean === "/host/listings") return "host_listings";
   if (clean === "/host/payouts") return "host_payouts";
   if (clean === "/host/claims") return "host_claims";
+  if (/^\/listing\/[^/]+\/walk$/.test(clean)) return "listing_walk";
   if (/^\/listing\/[^/]+$/.test(clean)) return "listing_detail";
   if (/^\/book\/[^/]+$/.test(clean)) return "checkout";
   if (/^\/trips\/[^/]+$/.test(clean)) return "trip_detail";

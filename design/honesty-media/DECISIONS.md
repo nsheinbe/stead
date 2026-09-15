@@ -67,7 +67,7 @@ HM-08, HM-09 bar from BUILD-PLAN §9.
 | **D17** | C2PA content credentials | Sign the attestation package in the MVP or later | **Later.** The geofence verdict is the MVP signal; c2pa-js at pin is an HM-09 candidate. Copy never mentions it until it exists. | HM-09 |
 | **D18** | Does scanning require Stripe Identity tier 2? | Yes / no | **No.** Scan proves the walk; identity proves the person; payouts prove the account. Keeping them separate is the whole point of the four-facts rule. | HM-01 |
 | **D19** | Neighbourhood walk entry | (a) `/explore?walk=1`; (b) a dedicated `/walk?city=` route | **(b).** A dedicated route lazy-loads MapLibre away from Explore, is bookmarkable, and can show the honest empty state without pretending to be a filter. Explore offers **Walk {city}** only when a verified home is in the results. | HM-07 |
-| **D20** | Indoor viewer placement | (a) inline on `/listing/:id`; (b) a full-viewport `/listing/:id/walk` route with a poster + CTA on detail | **(b).** A 3D canvas inside a scrolling page fights touch gestures and pays the Three.js cost on every detail view. The route is focused-shell with a Back to the home. | HM-05 |
+| **D20** | Indoor viewer placement | (a) inline on `/listing/:id`; (b) a full-viewport `/listing/:id/walk` route with a poster + CTA on detail | **(b).** A 3D canvas inside a scrolling page fights touch gestures and pays the Three.js cost on every detail view. The route is focused-shell with a Back to the home. | HM-05 **As built (HM-05):** `/listing/:id/walk` is a focused-shell route with a lazy viewer chunk; listing detail carries a poster and the badge only. |
 | **D21** | Third-party outdoor imagery in the MVP | Include Panoramax / Photo Sphere Viewer in HM-06 or host footage only | **Host footage first.** The outdoor bookends the geofence already requires are the approach capture. Third-party imagery is an HM-07 layer, labelled with its source, never the only layer, never a façade stand-in. | HM-06 / HM-07 |
 
 ### Known limits recorded on purpose
@@ -161,7 +161,7 @@ export type ListingScan = {
 | `POST /listings/:id/scans/:scanId/mask` | owner | **As built (HM-04):** `{ segments: [{fromMs,toMs}] }` or `{ wholeHomeConfirmed: true }`; merged and clamped server-side; `400` on an all-private mask or whole-home for a private room | HM-D05 |
 | `POST /listings/:id/scans/:scanId/send` | owner | **As built (HM-04):** `needs_mask → verified` when nothing is marked, else `→ reconstructing` with a crop job | HM-D05 |
 | `POST /listings/:id/scans/:scanId/retry` | owner | idempotent retry of a `failed` job | HM-D04 |
-| `GET /listings/:id/walkthrough` | public (owner for own drafts) | `WalkthroughResponse`; 404 unless verified + active, or owner | HM-D06/D07, D08 |
+| `GET /listings/:id/walkthrough` | public (owner for own drafts) | **As built (HM-05):** signed short-lived URLs for the compressed artifact and the stills, plus captured date, coverage and `ownerPreview`; 404 for a draft, a paused home, an unverified or unpointed scan, a missing artifact, a hidden seed row, a guessed id, and a deployment with no storage | HM-D06/D07, D08 |
 | `GET /walk/nearby?lat&lng&radiusM` | public | pins over verified, active, non-seed listings; public-safe fields; pin precision per D09 | HM-D09 |
 | `POST /scan-worker/jobs/claim` | worker (bearer `SCAN_WORKER_SECRET`) | **As built (HM-03):** `{ workerId }` → `{ job: ScanJob }` or `204`; `uploaded → reconstructing`, `attempt + 1`, whole packages only, `SKIP LOCKED` | HM-03 |
 | `POST /scan-worker/jobs/:scanId/finish` | worker (bearer secret) | **As built (HM-03):** `{ attempt, outcome: "needs_mask" \| "failed", reason?, artifacts[] }`; `409` on a stale attempt, `400` on a key outside the scan prefix or a raw kind; emails the host (D14) | HM-03 |
@@ -177,7 +177,7 @@ export type ListingScan = {
 | `scan_geo_samples` | server at completion (from the uploaded attestation) | nothing (no SELECT grant for guests; owner SELECT optional for debugging) | sequential samples with accuracy and whether each cleared the fence; **never** served to other members |
 | `scan_artifacts` | worker via function | SELECT own; public read only through the walkthrough endpoint's signed URLs | object keys for video, frames, cameras, splat, compressed splat, stills, approach |
 | `listing_rental_masks` | host (upsert own while `needs_mask`) | SELECT / INSERT / UPDATE own | **As built (HM-04):** `segments` (integer ms ranges), `whole_home_confirmed_at`; one answer or the other, never both; no boxes until the viewer lands |
-| `listings` | — | — | add `scan_verified_at timestamptz`, `coordinates_confirmed_at timestamptz`; **revoke** column UPDATE on `status` from `app_user` (D04) |
+| `listings` | — | — | **As built:** `coordinates_confirmed_at` (HM-01), `scan_verified_at` + `verified_scan_id` (HM-05, written only by the transitions — `app_user`'s UPDATE is a column list that omits them). Revoking `status` is still D04's, in HM-08 |
 
 RLS probes to add in `tests/rls.test.ts`: another host cannot read or
 update a scan row, a mask, or an artifact pointer; a guest cannot read

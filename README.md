@@ -77,6 +77,7 @@ The landing fee slider uses `quoteStay` for Stead's column so it cannot disagree
 | `GET` | `/api/config` | public — fee policy |
 | `GET` | `/api/listings` | public — active listings; `q`, `city`, `type`, `guests`, `maxRate` (cents), `instant=1` |
 | `GET` | `/api/listings/:id` | public if active; the host also sees their own draft/paused |
+| `GET` | `/api/listings/:id/walkthrough` | public for an active home with a verified scan; its host also sees their own draft. Signed, short-lived artifact URLs (HM-05) |
 | `GET` | `/api/me` | current session, or `{ user: null }` |
 | `GET` | `/api/trips` · `/api/trips/:id` | signed-in guest; `/:id` also the listing host |
 | `GET`/`POST` | `/api/trips/:id/cancellation` · `/cancel` | stay parties — preview / cancel-booking. Cancel is rate-limited. |

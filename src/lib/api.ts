@@ -21,6 +21,7 @@ import type {
   ScanUploadKind,
   ScanUploadTarget,
   ScanUploadedPart,
+  Walkthrough,
   Passport,
   PassportExport,
   PresignedUpload,
@@ -218,6 +219,9 @@ export const api = {
   /** Short-lived signed URLs to real frames from the walk, for the failed-state page. */
   scanStills: (listingId: string, scanId: string) =>
     request<ScanStills>(`/api/listings/${listingId}/scans/${scanId}/stills`),
+
+  /** HM-05. Public for a verified, active home; the owner also sees their own draft. */
+  walkthrough: (listingId: string) => request<Walkthrough>(`/api/listings/${listingId}/walkthrough`),
 
   // --- HM-04: what guests may walk through ----------------------------------
   /** Save the host's marks, or their whole-home confirmation. Normalised server-side. */

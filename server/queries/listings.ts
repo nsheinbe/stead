@@ -14,10 +14,14 @@ import { and, asc, desc, eq, gte, ilike, lte, notInArray, or } from "drizzle-orm
 import type { Tx } from "../db/client";
 import { appConfig, listingPhotos, listings } from "../db/schema";
 import { allowGuestBookings } from "../lib/guestBookings";
+import { presignGetOrNull } from "../lib/scanStorage";
+import { storageConfigured } from "../lib/storage";
 import { allowDemoListings, isHiddenSeedListing, SEED_LISTING_IDS } from "../lib/seedInventory";
+import { walkthroughForViewer } from "./walkthrough";
 import type { ListingFilters } from "../../src/lib/filters";
 import type {
   ListingDetail,
+  ListingHonesty,
   ListingPhoto,
   ListingSummary,
   PublicConfig,
@@ -99,7 +103,26 @@ export async function getListingForViewer(
   if (isHiddenSeedListing(row.id) && viewerId !== row.hostId) return null;
   const owner = viewerId !== null && viewerId === row.hostId;
 
+  // HM-05: the honesty facts, if this viewer may see a walk at all. The keys
+  // stay here; only the poster is signed, and signing is a local HMAC.
+  //
+  // Without object storage there is no artifact to load, and the walk route
+  // says so with a 404 — so the entry is absent rather than a button into a
+  // dead end. Detail and the walk must agree about what exists.
+  const walk = storageConfigured() ? await walkthroughForViewer(tx, row.id) : null;
+  const honesty: ListingHonesty | null = walk
+    ? {
+        capturedOn: walk.capturedOn,
+        verifiedAt: walk.verifiedAt,
+        coverage: walk.coverage,
+        policyVersion: walk.policyVersion,
+        ownerPreview: walk.ownerPreview,
+        posterUrl: walk.stillsKeys[0] ? await presignGetOrNull(walk.stillsKeys[0]) : null,
+      }
+    : null;
+
   return {
+    honesty,
     id: row.id,
     title: row.title,
     type: row.type,
