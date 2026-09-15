@@ -99,14 +99,15 @@ async function main(): Promise<void> {
        WHERE n.nspname = 'public' AND c.relkind = 'r'
          AND c.relname IN ('app_config','profiles','listings','listing_photos','listing_blackouts',
                            'bookings','escrow_deposits','escrow_audit','stripe_events','cron_heartbeats',
-                           'refunds','payouts','claims','claim_evidence')
+                           'refunds','payouts','claims','claim_evidence',
+                           'listing_scans','scan_geo_samples')
        ORDER BY c.relname
     `;
     const unprotected = tables.filter((t) => !t.relrowsecurity).map((t) => t.relname);
     const forced = tables.filter((t) => t.relforcerowsecurity).map((t) => t.relname);
     record(
       "RLS is enabled on tenant tables",
-      tables.length === 14 && unprotected.length === 0,
+      tables.length === 16 && unprotected.length === 0,
       unprotected.length ? `no RLS on ${unprotected.join(", ")}` : `${tables.length} tables`,
     );
     record("RLS is not forced", forced.length === 0, forced.length ? forced.join(", ") : "owner can migrate");
@@ -121,7 +122,7 @@ async function main(): Promise<void> {
     );
 
     // 7. Tables app_user must not reach at all.
-    for (const table of ["stripe_events", "cron_heartbeats", "users"]) {
+    for (const table of ["stripe_events", "cron_heartbeats", "users", "scan_geo_samples"]) {
       const denied = await app
         .unsafe(`SELECT 1 FROM public.${table} LIMIT 1`)
         .then(() => false)
