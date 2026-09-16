@@ -1759,3 +1759,128 @@ describeDb("HM-05: a host cannot stamp their own verification, and a guest canno
     expect(await door()).toHaveLength(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+
+/**
+ * HM-06 — the front door, probed as `app_user` rather than through the API.
+ *
+ * The HTTP tests prove the route does not leak the point. These prove the
+ * layer underneath: that the rounding is not something a client could opt out
+ * of by asking the database a different question, and that the raw
+ * entitlement check is not callable at all.
+ */
+describeDb("HM-06: the exact pin is the database's to withhold", () => {
+  afterAll(async () => {
+    await closeTestDb();
+  });
+
+  const DOOR = { lat: 42.25291, lng: -73.79107 };
+
+  async function aHome(hostId: string, visibility: "confirmed_stay" | "everyone" = "confirmed_stay") {
+    const listingId = id();
+    await insertListing({ id: listingId, hostId, title: "Pin RLS cottage", status: "active" });
+    await asOwner(async (db) => {
+      await db.execute(sql`
+        UPDATE public.listings
+           SET lat = ${DOOR.lat}, lng = ${DOOR.lng}, coordinates_confirmed_at = now(),
+               approach_visibility = ${visibility}::public.approach_visibility
+         WHERE id = ${listingId}::uuid
+      `);
+    });
+    return listingId;
+  }
+
+  type StreetRow = { pin_lat: number; pin_lng: number; precision_m: number; sees_door: boolean };
+
+  /** The one row the function returns for a listing this viewer may open. */
+  async function street(viewer: string | null, listingId: string): Promise<StreetRow> {
+    const rows = (await rawAsMember(
+      viewer,
+      (tx) => tx`SELECT pin_lat, pin_lng, precision_m, sees_door FROM app.street_for_viewer(${listingId}::uuid)`,
+    )) as StreetRow[];
+    const row = rows[0];
+    if (!row) throw new Error("street_for_viewer returned no row");
+    return row;
+  }
+
+  it("hands a stranger a moved point, and its own host the real one", async () => {
+    const hostId = id();
+    const otherHost = id();
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    await insertMember(otherHost, `other-${otherHost}@stead.example`, "Other", true);
+    const listingId = await aHome(hostId);
+
+    const owner = await street(hostId, listingId);
+    expect(owner.sees_door).toBe(true);
+    expect(Number(owner.pin_lat)).toBe(DOOR.lat);
+    expect(owner.precision_m).toBe(0);
+
+    for (const viewer of [null, otherHost]) {
+      const row = await street(viewer, listingId);
+      expect(row.sees_door, `viewer ${viewer ?? "signed out"}`).toBe(false);
+      expect(Number(row.pin_lat)).not.toBe(DOOR.lat);
+      expect(Number(row.pin_lng)).not.toBe(DOOR.lng);
+      expect(row.precision_m).toBe(150);
+    }
+  });
+
+  it("gives the same cell for two doors a few metres apart, so repeat reads cannot average out", async () => {
+    const hostId = id();
+    const stranger = id();
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    await insertMember(stranger, `stranger-${stranger}@stead.example`, "Stranger", true);
+
+    const first = await aHome(hostId);
+    const second = id();
+    await insertListing({ id: second, hostId, title: "Next door", status: "active" });
+    await asOwner(async (db) => {
+      await db.execute(sql`
+        UPDATE public.listings
+           SET lat = ${DOOR.lat + 0.00002}, lng = ${DOOR.lng - 0.00002}, coordinates_confirmed_at = now()
+         WHERE id = ${second}::uuid
+      `);
+    });
+
+    const a = await street(stranger, first);
+    const b = await street(stranger, second);
+    // Same cell, so asking twice — or asking about a neighbour — reveals no
+    // more than asking once. Jitter would not have this property.
+    expect(Number(a.pin_lat)).toBe(Number(b.pin_lat));
+    expect(Number(a.pin_lng)).toBe(Number(b.pin_lng));
+  });
+
+  it("refuses app_user the raw entitlement check", async () => {
+    const hostId = id();
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    const listingId = await aHome(hostId);
+    await expect(
+      rawAsMember(hostId, (tx) => tx`SELECT app.viewer_sees_door(${listingId}::uuid)`),
+    ).rejects.toThrow(/permission denied/);
+  });
+
+  it("lets a host open their own door and nobody else's", async () => {
+    const hostId = id();
+    const otherHost = id();
+    await insertMember(hostId, `host-${hostId}@stead.example`, "Host", true);
+    await insertMember(otherHost, `other-${otherHost}@stead.example`, "Other", true);
+    const mine = await aHome(hostId);
+
+    await expect(
+      rawAsMember(
+        hostId,
+        (tx) => tx`UPDATE public.listings SET approach_visibility = 'everyone' WHERE id = ${mine}::uuid`,
+      ),
+    ).resolves.toBeDefined();
+    const after = await street(null, mine);
+    expect(after.sees_door).toBe(true);
+
+    // Another host's row is invisible to the UPDATE, so it changes nothing.
+    await rawAsMember(
+      otherHost,
+      (tx) => tx`UPDATE public.listings SET approach_visibility = 'confirmed_stay' WHERE id = ${mine}::uuid`,
+    );
+    const unchanged = await street(null, mine);
+    expect(unchanged.sees_door).toBe(true);
+  });
+});
