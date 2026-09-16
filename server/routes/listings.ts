@@ -82,6 +82,8 @@ const listingSchema = z.object({
   status: z.enum(["draft", "active", "paused"]).optional(),
   // HM-01. A recorded action, so a boolean here becomes a timestamp there.
   confirmCoordinates: z.boolean().optional(),
+  // HM-06. The host's own choice about who sees the door (D09).
+  approachVisibility: z.enum(["confirmed_stay", "everyone"]).optional(),
 });
 
 const photoUploadSchema = z.object({

@@ -307,6 +307,38 @@ export const SCAN_EMAIL_SUBJECTS = {
 } as const;
 
 /**
+ * HM-06 — "The street" on listing detail (HM-D08).
+ *
+ * The precision note is not decoration: a guest is told, in metres, how much
+ * the pin was moved, and the alternative sentence is only shown when it was
+ * not moved at all. Saying "approximate" without a number would be the sort
+ * of soft claim this product exists to avoid.
+ */
+export const STREET_COPY = {
+  heading: "The street",
+  /** Reuses the locked imagery labels; the approach is the host's own footage. */
+  imagery: HONESTY_NEARBY.imagery,
+  /** The host filmed an approach, but this viewer is not entitled to it yet. */
+  approachWithheld: "The host shows the approach to guests with a confirmed stay.",
+  pinRounded: (metres: number) => `Pin shown to the nearest ${metres} m until a stay is confirmed.`,
+  pinExact: "Pin shows the front door.",
+  mapLabel: (title: string) => `Map showing the area of ${title}`,
+  mapFailed: "The map couldn't load.",
+  /** Shown in place of the map, so a failed tile fetch still leaves a fact. */
+  place: (city: string, region: string | null) => (region ? `${city}, ${region}` : city),
+  ownerPreview: "Guests see this pin at the precision you chose below.",
+  /** The editor setting, in "Where it is". */
+  setting: {
+    label: "Who can see the approach and exact pin",
+    hint: "The walkthrough inside is unaffected by this.",
+    options: {
+      confirmed_stay: "Guests with a confirmed stay (default)",
+      everyone: "Everyone",
+    },
+  },
+} as const;
+
+/**
  * The guest's walk (HM-D06 / HM-D07). Nothing here promises motion, a tour or
  * a preview: the camera is stationary until the guest moves it, and every
  * fallback shows real frames rather than a stand-in.

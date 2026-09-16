@@ -1136,3 +1136,86 @@ test.describe("profiles and reviews (LIFE-02)", () => {
     await expect(page.getByText("14 days after checkout").first()).toBeVisible();
   });
 });
+
+test.describe("the street (HM-06)", () => {
+  /** A published home whose front door the host has confirmed. */
+  async function aHomeWithADoor(cookie: string, request: APIRequestContext, title: string) {
+    const created = await request.post("/api/listings", {
+      headers: { cookie, "content-type": "application/json" },
+      data: {
+        title,
+        type: "entire_home",
+        city: "Hudson",
+        region: "NY",
+        country: "US",
+        timezone: "America/New_York",
+        nightlyRateCents: 20_000,
+        depositCents: 0,
+        maxGuests: 2,
+        lat: 42.25291,
+        lng: -73.79107,
+        confirmCoordinates: true,
+        status: "active",
+      },
+    });
+    expect(created.status()).toBe(201);
+    const { id: listingId } = (await created.json()) as { id: string };
+    await request.patch(`/api/listings/${listingId}`, {
+      headers: { cookie, "content-type": "application/json" },
+      data: { status: "active" },
+    });
+    return listingId;
+  }
+
+  test("a guest is told how far the pin was moved, and a blocked tile server is said out loud", async ({
+    page,
+    request,
+  }) => {
+    await ensureDb();
+    const owner = await seedHost();
+    const listingId = await aHomeWithADoor(owner.cookie, request, "Street cottage");
+
+    // Tiles come from a third party, so the honest state when they cannot be
+    // reached is a sentence and a place name — never a grey box. Blocking the
+    // request here makes that state deterministic rather than dependent on
+    // whether this runner can reach the internet.
+    await page.route(/openfreemap\.org|tiles\./, (route) => route.abort());
+
+    await page.goto(`/listing/${listingId}`);
+    await expect(page.getByRole("heading", { name: "The street" })).toBeVisible();
+    await expect(page.getByTestId("street-precision")).toHaveText(
+      "Pin shown to the nearest 150 m until a stay is confirmed.",
+    );
+    // Nobody filmed an approach, and the page says exactly that.
+    await expect(page.getByTestId("street-imagery")).toHaveText(
+      "No street imagery here yet. We do not draw what nobody filmed.",
+    );
+    const failed = page.getByTestId("street-map-failed");
+    await expect(failed).toBeVisible();
+    await expect(failed).toContainText("The map couldn't load.");
+    await expect(failed).toContainText("Hudson, NY");
+  });
+
+  test("the host decides who sees the door, and the page changes for everyone", async ({ page, request }) => {
+    await ensureDb();
+    const owner = await seedHost();
+    const listingId = await aHomeWithADoor(owner.cookie, request, "Open door cottage");
+    await page.route(/openfreemap\.org|tiles\./, (route) => route.abort());
+
+    // Default: even signed out, the pin is rounded and says so.
+    await page.goto(`/listing/${listingId}`);
+    await expect(page.getByTestId("street-precision")).toContainText("nearest 150 m");
+
+    // The host changes it in the editor, where the setting lives.
+    await signIn(page, owner.token);
+    await page.goto(`/host/listings/${listingId}`);
+    await page.getByLabel("Who can see the approach and exact pin").selectOption("everyone");
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await expect(page.getByText("Saved")).toBeVisible();
+
+    // And now a signed-out guest gets the door itself.
+    await page.context().clearCookies();
+    await page.goto(`/listing/${listingId}`);
+    await expect(page.getByTestId("street-precision")).toHaveText("Pin shows the front door.");
+  });
+});

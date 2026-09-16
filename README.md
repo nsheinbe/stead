@@ -238,6 +238,7 @@ Required environment variables:
 | `PASSPORT_SIGNING_KEY` | Ed25519 PKCS8 PEM, base64 — `openssl genpkey -algorithm ed25519 \| base64 -w0` |
 | `OPS_ALERT_EMAIL` | watchdog destination when a cron heartbeat is stale or errored |
 | `SCAN_WORKER_SECRET` | bearer the honesty-media reconstruction worker presents to `/api/scan-worker/*` (HM-03). The worker holds no database credential; see `worker/README.md` |
+| `VITE_MAP_STYLE_URL` | optional MapLibre style for the listing map (HM-06). Defaults to OpenFreeMap, which needs no key and no account; set this to self-host the same style or to use a vendor |
 
 Point the Stripe webhook endpoint at `https://<deployment>/api/stripe/webhook`. Subscribe to `payment_intent.succeeded`, `charge.dispute.created`, `charge.dispute.closed`, `identity.verification_session.verified`, `identity.verification_session.requires_input`, and `account.updated`.
 

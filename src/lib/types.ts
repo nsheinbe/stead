@@ -90,6 +90,45 @@ export type ListingDetail = ListingSummary & {
    * only when the viewer owns the listing; never on a public read.
    */
   coordinates?: ListingCoordinates | null;
+  /**
+   * HM-06: the map pin and what the host filmed outside, at the precision
+   * this viewer is entitled to. Null when there is nothing true to show —
+   * no confirmed point and no approach footage.
+   */
+  street?: ListingStreet | null;
+  /**
+   * HM-06: the host's own setting, for the editor to render. Present only
+   * when the viewer owns the listing — what a guest needs is already decided
+   * for them in `street`.
+   */
+  approachVisibility?: ApproachVisibility;
+};
+
+/**
+ * HM-06 — who may see the front door: the exact pin and the host's approach
+ * footage. The default keeps the same promise the editor's address hint makes
+ * (DECISIONS D09); a host may open it to everyone, and a guest with a
+ * confirmed stay is entitled either way.
+ */
+export type ApproachVisibility = "confirmed_stay" | "everyone";
+
+/**
+ * HM-06: where the home is, as this viewer is allowed to know it.
+ *
+ * `pin` is already rounded by the server when `exact` is false — the browser
+ * never receives the front door and rounds it for display, because a value
+ * that reached the client has left. `hasApproach` without a `posterUrl` is
+ * the honest "the host filmed this, but not for you yet".
+ */
+export type ListingStreet = {
+  pin: { lat: number; lng: number } | null;
+  /** Metres of rounding applied. 0 when the pin is the front door itself. */
+  precisionM: number;
+  exact: boolean;
+  hasApproach: boolean;
+  /** A frame from the host's approach, signed and short-lived. */
+  posterUrl: string | null;
+  ownerPreview: boolean;
 };
 
 /** Whether the walk covers the whole rental or only the part the host kept. */
@@ -596,6 +635,8 @@ export type ListingInput = {
   lng?: number | null;
   /** HM-01: record "this is the front door". Refused without both lat and lng. */
   confirmCoordinates?: boolean;
+  /** HM-06: who may see the exact pin and the approach footage. */
+  approachVisibility?: ApproachVisibility;
 };
 
 /** Whether Stripe will actually let this host be paid. */

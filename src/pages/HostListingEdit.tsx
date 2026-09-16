@@ -28,7 +28,7 @@ import {
 import { useAuth } from "../hooks/useAuth";
 import { api, ApiError } from "../lib/api";
 import { formatCoordinate, validateCoordinates } from "../lib/coordinates";
-import { LOCATION_READOUT } from "../lib/honestyCopy";
+import { LOCATION_READOUT, STREET_COPY } from "../lib/honestyCopy";
 import {
   diffListingInput,
   LISTING_FIELD_ORDER,
@@ -63,6 +63,7 @@ const FIELD_ID: Record<ListingFormField, string> = {
   courtyard: "listing-courtyard",
   instantBook: "listing-instant-book",
   cancellationPolicy: "listing-policy",
+  approachVisibility: "listing-approach-visibility",
 };
 
 function summaryErrors(errors: ListingFormErrors): FieldErrorItem[] {
@@ -504,6 +505,18 @@ export function HostListingEditPage() {
                       onChange={(e) => update("timezone", e.target.value)}
                     />
                   </div>
+                  <Select
+                    id={FIELD_ID.approachVisibility}
+                    label={STREET_COPY.setting.label}
+                    hint={STREET_COPY.setting.hint}
+                    value={form.approachVisibility}
+                    onChange={(e) =>
+                      update("approachVisibility", e.target.value as ListingFormValues["approachVisibility"])
+                    }
+                  >
+                    <option value="confirmed_stay">{STREET_COPY.setting.options.confirmed_stay}</option>
+                    <option value="everyone">{STREET_COPY.setting.options.everyone}</option>
+                  </Select>
                 </div>
 
                 {door ? (

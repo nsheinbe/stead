@@ -40,6 +40,7 @@ function fullListing(overrides: Partial<ListingDetail> = {}): ListingDetail {
     cancellationPolicy: "strict",
     photos: [{ id: "p1", storagePath: "https://example.test/a.jpg", sortOrder: 0 }],
     status: "draft",
+    approachVisibility: "everyone",
     host: { id: "22222222-2222-2222-2222-222222222222", displayName: "Ada", avatarUrl: null },
     ...overrides,
   };
@@ -71,7 +72,17 @@ describe("hydrating the editor from listing detail", () => {
       amenities: listing.amenities,
       instantBook: listing.instantBook,
       cancellationPolicy: listing.cancellationPolicy,
+      approachVisibility: listing.approachVisibility,
     });
+  });
+
+  it("hydrates a missing approach setting to the private default, never to everyone", () => {
+    // A read that carries no setting is a read that is not the owner's, or one
+    // from before HM-06. Either way the safe reading is the closed one: the
+    // editor must not show "Everyone" to a host who never chose it.
+    const listing = fullListing();
+    delete listing.approachVisibility;
+    expect(listingFormFromDetail(listing).approachVisibility).toBe("confirmed_stay");
   });
 
   it("produces an empty patch when nothing was touched", () => {

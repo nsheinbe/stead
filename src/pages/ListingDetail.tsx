@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { BookingsClosed } from "../components/BookingsClosed";
 import { CancellationPolicyCard } from "../components/CancellationPolicyCard";
@@ -15,14 +15,25 @@ import { estimateMinimumStay } from "../lib/estimate";
 import { feePercent } from "../lib/fees";
 import { guestBookingsOpen } from "../lib/guestBookings";
 import { formatUsd, MIN_STAY_NIGHTS } from "../lib/money";
-import { POLICY_LABEL, TYPE_LABEL, type ListingDetail, type ListingHonesty } from "../lib/types";
+import { precisionNote, streetView, zoomFor } from "../lib/streetMap";
+import {
+  POLICY_LABEL,
+  TYPE_LABEL,
+  type ListingDetail,
+  type ListingHonesty,
+  type ListingStreet,
+} from "../lib/types";
 import { formatInTimeZone } from "date-fns-tz";
 import {
   HONESTY_BADGE,
   HONESTY_CAPTURED,
   HONESTY_GUEST_DISCLOSURE,
+  STREET_COPY,
   WALK_COPY,
 } from "../lib/honestyCopy";
+
+// HM-06: MapLibre is only ever downloaded by a page that has a pin to show.
+const StreetMap = lazy(() => import("../components/street/StreetMap").then((m) => ({ default: m.StreetMap })));
 
 /** Amenities the contract actually carries. Absent is not the same as false. */
 function amenityList(listing: ListingDetail): string[] {
@@ -180,6 +191,9 @@ export function ListingDetailPage() {
 
         {/* --- the walkthrough (HM-D06) -------------------------------- */}
         {listing.honesty ? <WalkthroughEntry listing={listing} honesty={listing.honesty} /> : null}
+
+        {/* --- the street (HM-D08) ------------------------------------ */}
+        {listing.street ? <StreetSection listing={listing} street={listing.street} /> : null}
 
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1.6fr)_minmax(320px,1fr)] lg:items-start">
           {/* --- the home ---------------------------------------------- */}
@@ -401,6 +415,88 @@ function WalkthroughEntry({ listing, honesty }: { listing: ListingDetail; honest
                 ))}
               </div>
             </details>
+          </div>
+        </div>
+      </Card>
+    </section>
+  );
+}
+
+/**
+ * HM-06 — "The street" (HM-D08).
+ *
+ * The map is a lazy chunk, so a listing page without this section never
+ * downloads MapLibre. When tiles fail — blocked, rate-limited, or the provider
+ * is down — the map is replaced by the place name rather than a grey box, and
+ * the precision sentence still stands: the pin's honesty does not depend on
+ * whether anyone could draw it.
+ */
+function StreetSection({ listing, street }: { listing: ListingDetail; street: ListingStreet }) {
+  const [mapFailed, setMapFailed] = useState(false);
+  const view = streetView(street);
+  const place = STREET_COPY.place(listing.city, listing.region ?? null);
+
+  return (
+    <section aria-labelledby="street-heading">
+      <h2 id="street-heading" className="m-0 mb-3 text-card-title">
+        {STREET_COPY.heading}
+      </h2>
+      <Card>
+        <div className="grid gap-5 sm:grid-cols-2 sm:items-start">
+          <div className="flex flex-col gap-2">
+            <div className="aspect-[4/3] w-full overflow-hidden rounded-surface bg-surface sm:aspect-[16/10]">
+              {street.pin && !mapFailed ? (
+                <Suspense fallback={<Skeleton className="h-full w-full" />}>
+                  <StreetMap
+                    lat={street.pin.lat}
+                    lng={street.pin.lng}
+                    zoom={zoomFor(street)}
+                    label={STREET_COPY.mapLabel(listing.title)}
+                    onFailed={() => setMapFailed(true)}
+                  />
+                </Suspense>
+              ) : (
+                <div className="flex h-full flex-col justify-center gap-2 p-4" data-testid="street-map-failed">
+                  <StatusMessage tone="info" live={false} title={STREET_COPY.mapFailed} />
+                  <p className="m-0 font-semibold">{place}</p>
+                </div>
+              )}
+            </div>
+            {street.pin ? (
+              <p className="m-0 text-sm text-ink-secondary" data-testid="street-precision">
+                {precisionNote(street, STREET_COPY)}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="flex flex-col gap-3">
+            {view === "approach" ? (
+              <>
+                <ListingPhoto
+                  src={street.posterUrl}
+                  alt=""
+                  aspect="16/9"
+                  className="rounded-surface"
+                  sizes="(min-width: 640px) 520px, 100vw"
+                />
+                <p className="m-0 text-sm" data-testid="street-imagery">
+                  {STREET_COPY.imagery.host}
+                </p>
+              </>
+            ) : view === "withheld" ? (
+              <p className="m-0 text-sm" data-testid="street-imagery">
+                {STREET_COPY.approachWithheld}
+              </p>
+            ) : (
+              <p className="m-0 text-sm" data-testid="street-imagery">
+                {STREET_COPY.imagery.none}
+              </p>
+            )}
+            {street.ownerPreview ? (
+              <p className="m-0 text-sm text-ink-secondary" data-testid="street-owner-note">
+                {STREET_COPY.ownerPreview}
+              </p>
+            ) : null}
           </div>
         </div>
       </Card>
