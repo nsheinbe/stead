@@ -12,6 +12,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import type { Tx } from "../db/client";
 import { listingPhotos, listings } from "../db/schema";
 import type {
+  ApproachVisibility,
   CancellationPolicy,
   ListingAmenities,
   ListingStatus,
@@ -38,6 +39,8 @@ export interface ListingInput {
   status?: ListingStatus;
   /** HM-01: record "this is the front door". The DB refuses it without lat and lng. */
   confirmCoordinates?: boolean;
+  /** HM-06: who may see the exact pin and the approach footage (D09). */
+  approachVisibility?: ApproachVisibility;
 }
 
 export interface HostListing {
@@ -152,6 +155,10 @@ export async function updateListing(
       // sets, never a boolean the client can leave true. Moving lat / lng
       // without confirming clears it (trigger in 0015).
       ...(patch.confirmCoordinates ? { coordinatesConfirmedAt: new Date() } : {}),
+      // HM-06: the host's own column, granted to app_user by name in 0020.
+      ...(patch.approachVisibility !== undefined
+        ? { approachVisibility: patch.approachVisibility }
+        : {}),
     })
     .where(and(eq(listings.id, listingId), eq(listings.hostId, hostId)))
     .returning({ id: listings.id });

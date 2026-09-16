@@ -26,6 +26,8 @@ import type { GeofenceStatsJson, ListingAmenities, MaskSegment } from "../../src
 export const listingType = pgEnum("listing_type", ["entire_home", "apartment", "private_room"]);
 export const cancellationPolicy = pgEnum("cancellation_policy", ["flexible", "moderate", "strict"]);
 export const listingStatus = pgEnum("listing_status", ["draft", "active", "paused"]);
+/** HM-06: who may see the exact pin and the approach footage (D09). */
+export const approachVisibility = pgEnum("approach_visibility", ["confirmed_stay", "everyone"]);
 export const bookingStatus = pgEnum("booking_status", [
   "pending_payment",
   "confirmed",
@@ -183,6 +185,11 @@ export const listings = pgTable(
      */
     scanVerifiedAt: timestamp("scan_verified_at", { mode: "date", withTimezone: true }),
     verifiedScanId: uuid("verified_scan_id"),
+    /**
+     * HM-06: who may see the exact pin and the host's approach footage. The
+     * default keeps the promise the editor's address hint makes (D09).
+     */
+    approachVisibility: approachVisibility("approach_visibility").notNull().default("confirmed_stay"),
   },
   (table) => [index("listings_status_idx").on(table.status)],
 );

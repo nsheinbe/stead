@@ -17,6 +17,7 @@ import { allowGuestBookings } from "../lib/guestBookings";
 import { presignGetOrNull } from "../lib/scanStorage";
 import { storageConfigured } from "../lib/storage";
 import { allowDemoListings, isHiddenSeedListing, SEED_LISTING_IDS } from "../lib/seedInventory";
+import { streetForViewer } from "./street";
 import { walkthroughForViewer } from "./walkthrough";
 import type { ListingFilters } from "../../src/lib/filters";
 import type {
@@ -110,6 +111,9 @@ export async function getListingForViewer(
   // says so with a 404 — so the entry is absent rather than a button into a
   // dead end. Detail and the walk must agree about what exists.
   const walk = storageConfigured() ? await walkthroughForViewer(tx, row.id) : null;
+  // HM-06: the pin does not depend on object storage — a map with no footage
+  // is still true — so this is not gated the way the walk entry is.
+  const street = await streetForViewer(tx, row.id);
   const honesty: ListingHonesty | null = walk
     ? {
         capturedOn: walk.capturedOn,
@@ -123,6 +127,7 @@ export async function getListingForViewer(
 
   return {
     honesty,
+    street,
     id: row.id,
     title: row.title,
     type: row.type,
@@ -149,6 +154,7 @@ export async function getListingForViewer(
     ...(owner
       ? {
           addressLine: row.addressLine,
+          approachVisibility: row.approachVisibility,
           coordinates:
             row.lat !== null && row.lng !== null
               ? {
