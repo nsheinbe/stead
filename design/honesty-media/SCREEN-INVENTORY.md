@@ -32,7 +32,7 @@ Copyright 2026 Stead contributors.
 | HM-D05 | HM-04 | `/host/listings/:listingId/scan/mask` | built (HM-04): `src/pages/HostListingScanMask.tsx` | [screens/HM-D05.md](screens/HM-D05.md) | D10, D11 |
 | HM-D06 | HM-05 | `/listing/:id` (walk entry section) | `ListingDetailPage` | [screens/HM-D06-D07.md](screens/HM-D06-D07.md) | D20 |
 | HM-D07 | HM-05 | `/listing/:id/walk` | built (HM-05): `src/pages/ListingWalk.tsx` | [screens/HM-D06-D07.md](screens/HM-D06-D07.md) | D20 |
-| HM-D08 | HM-06 | `/listing/:id` ("The street") + tether in `/listing/:id/walk` | none | [screens/HM-D08.md](screens/HM-D08.md) | D08, D09, D21 |
+| HM-D08 | HM-06 | `/listing/:id` ("The street") + tether in `/listing/:id/walk` | part-built (HM-06): the section and map in `src/pages/ListingDetail.tsx`; no tether yet | [screens/HM-D08.md](screens/HM-D08.md) | D08, D09, D21 |
 | HM-D09 | HM-07 | `/walk?city=` (entry from `/explore`) | `ExplorePage`, `ExploreFilters` | [screens/HM-D09.md](screens/HM-D09.md) | D08, D09, D19 |
 | HM-D10 | HM-08 | `/host/listings/:listingId?setup=review` | `ReviewStep` | [screens/HM-D10.md](screens/HM-D10.md) | D04, D12, D13 |
 | HM-D11 | HM-08 | `/book/:listingId` + action card on `/listing/:id` | `BookPage`, `BookingsClosed` | [screens/HM-D11.md](screens/HM-D11.md) | D12 |

@@ -1,8 +1,12 @@
 # HM-D08 — Approach and door tether (HM-06)
 
 **Ticket:** HM-06 · **Route:** `/listing/:id` (approach section) and the
-walk at `/listing/:id/walk` (tether) · **Surface today:** none.
-**Status:** specified; depends on D08 (tiles) and D09 (precision).
+walk at `/listing/:id/walk` (tether) · **Surface today:**
+`src/pages/ListingDetail.tsx` (the section) and
+`src/components/street/StreetMap.tsx` (the map).
+**Status:** the pin, the precision rules and the host setting are built —
+see §10. The approach footage and the door tether are not; they wait on
+the worker slice.
 
 ## 1. Purpose and primary action
 
@@ -108,5 +112,45 @@ gets the suffix "· Approach filmed by the host".
 - Playwright: tiles-unavailable panel; approach-hidden text; tether
   buttons enable / disable with a stubbed door volume.
 - Manual: the crossfade and door alignment on a WebGL device.
+
+## 10. As built (HM-06, first half)
+
+This slice built the rules about who may see the door. The door itself —
+the approach footage and the tether in and out of the indoor walk — is
+the second half, and is not here.
+
+- **Tiles are OpenFreeMap** (D08, decided by Nick): OpenStreetMap data
+  under ODbL, no key and no account, and its terms permit production use,
+  so a fresh clone renders a map without anyone signing up for anything.
+  `VITE_MAP_STYLE_URL` overrides it for a deployment that self-hosts the
+  same style or buys a vendor's. MapLibre is a lazy chunk, so only a page
+  with a pin downloads it.
+- **The pin is rounded in the database**, by `app.street_for_viewer`, to
+  the grid in `app_config.street_pin_precision_m` (150 m). Rounding to a
+  fixed grid rather than jittering is the point: repeated reads, or reads
+  of a neighbouring listing in the same cell, return the same cell, so
+  nothing can be averaged back to the true point. A test asserts that.
+- **Entitlement is `app.viewer_sees_door`**, and `app_user` has no EXECUTE
+  on it — the only way to ask is the wrapper that already rounds. Its
+  booking-status rule is the same set `addressIsShared` uses for the
+  street address, asserted against that function rather than restated.
+- **No pin at all until the host has confirmed the point.** An unconfirmed
+  lat/lng is a half-typed field, and drawing it would be drawing a place
+  nobody stood at.
+- **"Exists" and "may watch" are separate facts.** A guest without a
+  confirmed stay is told the host filmed an approach (§4) and is handed no
+  key to it; `hasApproach` is true while `posterUrl` is null.
+- **The host setting lives in the editor's "Where it is"**, saved through
+  the normal PATCH. `approach_visibility` joins the column list that 0019
+  replaced the table-level UPDATE grant with.
+- **Deferred to the worker slice:** the `approach` artifact itself. The
+  enum has carried the kind since 0016, but `finish_scan_job` still
+  refuses it, so no worker can record one yet — the read path here is
+  proven against artifacts inserted directly. The door pose and door
+  volume (§3, §6) come with it, and so does **Step outside**.
+- **Not verified here:** the map with real tiles. CI blocks the tile
+  request on purpose so the "couldn't load" state is deterministic, which
+  means the drawn map is untested. It needs a look on a real browser
+  before anyone calls it working.
 
 Copyright 2026 Stead contributors.
