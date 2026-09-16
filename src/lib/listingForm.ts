@@ -24,6 +24,7 @@
  */
 import { dollarsToCents } from "./cents";
 import type {
+  ApproachVisibility,
   CancellationPolicy,
   ListingAmenities,
   ListingDetail,
@@ -53,6 +54,8 @@ export type ListingFormValues = {
   courtyard: boolean;
   instantBook: boolean;
   cancellationPolicy: CancellationPolicy;
+  /** HM-06: who may see the exact pin and the approach footage (D09). */
+  approachVisibility: ApproachVisibility;
 };
 
 export type ListingFormField = keyof ListingFormValues;
@@ -98,6 +101,9 @@ export function listingFormFromDetail(listing: ListingDetail): ListingFormValues
     courtyard: a.courtyard === true,
     instantBook: listing.instantBook,
     cancellationPolicy: listing.cancellationPolicy,
+    // Only the owner's read carries the setting, and the server's default is
+    // the private one — so an absent field reads as private, never as open.
+    approachVisibility: listing.approachVisibility ?? "confirmed_stay",
   };
 }
 
@@ -215,6 +221,7 @@ export function listingFormToInput(values: ListingFormValues): ListingFormResult
       amenities,
       instantBook: values.instantBook,
       cancellationPolicy: values.cancellationPolicy,
+      approachVisibility: values.approachVisibility,
     },
   };
 }
@@ -251,6 +258,7 @@ export function diffListingInput(original: ListingInput, next: ListingInput): Pa
     "maxGuests",
     "instantBook",
     "cancellationPolicy",
+    "approachVisibility",
   ] as const;
 
   for (const key of keys) {
@@ -313,6 +321,7 @@ export function emptyListingForm(suggestedTimeZone: string): ListingFormValues {
     courtyard: false,
     instantBook: false,
     cancellationPolicy: "moderate",
+    approachVisibility: "confirmed_stay",
   };
 }
 
